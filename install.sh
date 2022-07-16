@@ -2,18 +2,6 @@
 
 set -Ceuxo pipefail
 
-is_mac() {
-  [ "$(uname)" == 'Darwin' ]
-}
-
-is_linux() {
-  [ "$(expr substr $(uname -s) 1 5)" == 'Linux' ]
-}
-
-is_ubuntu() {
-  grep '^NAME="Ubuntu' /etc/os-release >/dev/null 2>&1
-}
-
 download() {
   if [ -d "${dotfiles_path}" ]; then
     echo "haoblackj/dotfiles already exists in '${dotfiles_path}'"
