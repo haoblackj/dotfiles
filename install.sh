@@ -1,59 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-set -Ceuxo pipefail
+# 未定義な変数があったら途中で終了する
+set -u
 
-download() {
-  if [ -d "${dotfiles_path}" ]; then
-    echo "haoblackj/dotfiles already exists in '${dotfiles_path}'"
-    local yn
-    read -p 'Do you want to re-download haoblackj/dotfiles and continue the installation? (y/N)' yn
-    if [ "${yn}" != 'y' ]; then
-      echo 'The installation was canceled.'
-      exit 1
-    fi
-    echo "Downloading haoblackj/dotfiles to '${dotfiles_path}'..."
-    git -C "${dotfiles_path}" pull origin master
-    git -C "${dotfiles_path}" submodule update
-  else
-    echo "Downloading haoblackj/dotfiles to '${dotfiles_path}'..."
-    git clone https://github.com/haoblackj/dotfiles.git "${dotfiles_path}"
-    git -C "${dotfiles_path}" submodule init
-    git -C "${dotfiles_path}" submodule update
-  fi
-}
+# 今のディレクトリ
+# dotfilesディレクトリに移動する
+BASEDIR=$(dirname $0)
+cd $BASEDIR
 
-backup() {
-  local -r backup_date="$(date +%Y%m%d_%H%M%S)"
-  find "${dotfiles_path}" \
-    -mindepth 1 -maxdepth 1 \
-    -name '.*' \
-    -not -name '.bashrc_ubuntu' \
-    -not -name '.git' \
-    -not -name '.gitconfig_linux' \
-    -not -name '.gitconfig_mac' \
-    -not -name '.gitmodules' \
-    | xargs -I {} basename {} \
-    | xargs -I {} git -C "${dotfiles_path}" ls-tree --name-only HEAD {} \
-    | xargs -I {} find "${HOME}" -maxdepth 1 -name {} -not -type l \
-    | xargs -I {} mv -v {} "{}.${backup_date}"
-}
+# dotfilesディレクトリにある、ドットから始まり2文字以上の名前のファイルに対して
+for f in .??*; do
+    [ "$f" = ".git" ] && continue
+    [ "$f" = ".gitconfig.local.template" ] && continue
+    [ "$f" = ".gitmodules" ] && continue
 
-install() {
-  find "${dotfiles_path}" \
-    -mindepth 1 -maxdepth 1 \
-    -name '.*' \
-    -not -name '.git' \
-    | xargs -I {} basename {} \
-    | xargs -I {} git -C "${dotfiles_path}" ls-tree --name-only HEAD {} \
-    | xargs -I {} ln -fnsv "${dotfiles_path}/{}" "${HOME}/{}"
-}
-
-main() {
-  local -r dotfiles_path="$(realpath "${1:-"${HOME}/dotfiles"}")"
-
-  download
-  backup
-  install
-}
-
-main "$@"
+    # シンボリックリンクを貼る
+    ln -snfv ${PWD}/"$f" ~/
+done
