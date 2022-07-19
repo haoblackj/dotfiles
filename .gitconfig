@@ -8,5 +8,3 @@
 	email = yagu001@scientia-lebensborn.com
 [core]
 	autocrlf = false
-[credential]
-	helper = manager
