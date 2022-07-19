@@ -8,3 +8,5 @@
 	email = yagu001@scientia-lebensborn.com
 [core]
 	autocrlf = false
+[credential]
+	helper = /mnt/c/Program\\ Files/Git/mingw64/bin/git-credential-manager-core.exe
