@@ -8,7 +8,7 @@ set -u
 BASEDIR=$(dirname $0)
 cd $BASEDIR
 
-ln -snfv ${PWD}/"config.yml" ~/.config/gh/
+ln -snfv ${PWD}/config.yml ~/.config/gh/
 
 # dotfilesディレクトリにある、ドットから始まり2文字以上の名前のファイルに対して
 for f in .??*; do
