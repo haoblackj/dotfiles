@@ -27,7 +27,17 @@ fi
 BASEDIR=$(dirname $0)
 cd $BASEDIR
 
-git pull
+# check-head(commit-id)
+CID0=`git log --pretty=format:"%H"|head -n 1`
+echo $CID0
+CID1=`git ls-remote origin HEAD|awk '{print $1}'`
+echo $CID1
+
+if [ $CID0 = $CID1 ]; then
+  echo "Already up-to-date";
+else
+  git pull origin master
+fi
 
 mkdir -p ~/.config/gh
 
