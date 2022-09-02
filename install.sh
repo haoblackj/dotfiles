@@ -39,6 +39,7 @@ else
   git pull origin master
 fi
 
+
 mkdir -p ~/.config/gh
 
 export GH_CONFIG_DIR=~/.config/gh
@@ -54,3 +55,11 @@ for f in .??*; do
     # シンボリックリンクを貼る
     ln -snfv ${PWD}/"$f" ~/
 done
+
+
+if [ -n "$(which wslpath)" ]; then
+  # WSLでのみ実行する処理
+  WINHOME="$(wslpath "$(wslvar USERPROFILE)")"
+  cp -f .wslconfig $WINHOME/
+  cp -f ${PWD}/config.yml "$WINHOME/Appdata/Roaming/GitHub CLI/config.yml"
+fi
