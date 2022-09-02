@@ -36,7 +36,7 @@ echo $CID1
 if [ $CID0 = $CID1 ]; then
   echo "Already up-to-date";
 else
-  git pull origin master
+  git pull origin main
 fi
 
 
