@@ -57,7 +57,7 @@ for f in .??*; do
 done
 
 
-if [ -f /proc/sys/fs/binfmt_misc/WSLInterop ]; then
+if [ -n "$(which wslpath)" ]; then
   # WSLでのみ実行する処理
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   cp -f .wslconfig ${WINHOME}/
