@@ -57,9 +57,9 @@ for f in .??*; do
 done
 
 
-if [ -n "$(which wslpath)" ]; then
+if [ -f /proc/sys/fs/binfmt_misc/WSLInterop ]; then
   # WSLでのみ実行する処理
-  WINHOME="$(wslpath "$(wslvar USERPROFILE)")"
-  cp -f .wslconfig $WINHOME/
-  cp -f ${PWD}/config.yml "$WINHOME/Appdata/Roaming/GitHub CLI/config.yml"
+  WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
+  cp -f .wslconfig ${WINHOME}/
+  cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
 fi
