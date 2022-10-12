@@ -64,7 +64,7 @@ if [ -n "$(which wslpath)" ]; then
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
 
   type curl >/dev/null 2>&1
-  if [ $? = 0]; then
+  if [ $? = 0 ]; then
   echo "パッケージインストール済み"
   else
   sudo apt update -y && sudo apt install -y \
