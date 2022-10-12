@@ -62,6 +62,11 @@ if [ -n "$(which wslpath)" ]; then
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   cp -f .wslconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
+
+  type curl --version >/dev/null 2>&1
+  if [ $? = 0];then
+  echo "パッケージインストール済み"
+  else
   sudo apt update -y && sudo apt install -y \
     apt-transport-https \
     ca-certificates \
@@ -73,8 +78,19 @@ if [ -n "$(which wslpath)" ]; then
     tig \
     tree \
     zip unzip
+  echo "パッケージインストール完了"
+  fi
+
+  type gh >/dev/null 2>&1
+
+  if [ $? = 0 ]; then
+  echo "ghはインストール済み"
+  else
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
   sudo apt update -y
   sudo apt install gh -y
+
+  echo "ghインストール完了"
+  fi
 fi
