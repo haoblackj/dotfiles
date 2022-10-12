@@ -63,7 +63,7 @@ if [ -n "$(which wslpath)" ]; then
   cp -f .wslconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
 
-  type curl --version >/dev/null 2>&1
+  type curl >/dev/null 2>&1
   if [ $? = 0];then
   echo "パッケージインストール済み"
   else
