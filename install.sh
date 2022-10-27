@@ -61,6 +61,7 @@ if [ -n "$(which wslpath)" ]; then
   # WSLでのみ実行する処理
   echo "動作環境はWSLです"
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
+  echo ${WINHOME}
   cp -f .wslconfig ${WINHOME}/
   cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
