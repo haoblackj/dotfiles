@@ -62,6 +62,7 @@ if [ -n "$(which wslpath)" ]; then
   echo "動作環境はWSLです"
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   cp -f .wslconfig ${WINHOME}/
+  cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
 
   type curl >/dev/null 2>&1
