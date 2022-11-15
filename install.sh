@@ -79,11 +79,19 @@ if [ -n "$(which wslpath)" ]; then
     software-properties-common \
     git \
     make \
-    nodejs \
-    npm \
     tig \
     tree \
     zip unzip
+  echo "パッケージインストール完了"
+  fi
+
+  type node >/dev/null 2>&1
+  if [ $? = 0 ]; then
+  echo "nodejsインストール済み"
+  else
+  echo "nodejsインストールします"
+  sudo apt install -y nodejs \
+    npm
   sudo npm install -g n
   sudo n lts
   sudo apt purge -y nodejs npm
@@ -91,7 +99,7 @@ if [ -n "$(which wslpath)" ]; then
   node -v
   sudo npm install -g yarn
   yarn --version
-  echo "パッケージインストール完了"
+  echo "nodejsインストール完了"
   fi
 
   type gh >/dev/null 2>&1
