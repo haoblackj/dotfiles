@@ -93,11 +93,7 @@ if [ -n "$(which wslpath)" ]; then
   else
   echo "nodejsインストールします"
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
-  nvm install -lts
-  node --version
-  npm --version
-  npm install --global yarn
-  yarn --version
+  source ~/.bashrc
   echo "nodejsインストール完了"
   fi
 
