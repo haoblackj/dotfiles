@@ -79,9 +79,18 @@ if [ -n "$(which wslpath)" ]; then
     software-properties-common \
     git \
     make \
+    nodejs \
+    npm \
     tig \
     tree \
     zip unzip
+  sudo npm install -g n
+  sudo n lts
+  sudo apt purge -y nodejs npm
+  sudo apt autoremove -y
+  node -v
+  sudo npm install -g yarn
+  yarn --version
   echo "パッケージインストール完了"
   fi
 
