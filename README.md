@@ -9,7 +9,7 @@ bash <(curl -LSs https://raw.githubusercontent.com/haoblackj/dotfiles/main/insta
 ## Manual Setting
 
 ```bash
-nvm install --lts
+nvm install v14.21.1
 node --version
 npm --version
 npm install --global yarn
