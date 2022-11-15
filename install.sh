@@ -39,9 +39,6 @@ else
   git pull
 fi
 
-sudo apt-get update -y && sudo apt-get upgrade -y
-
-
 mkdir -p ~/.config/gh
 
 export GH_CONFIG_DIR=~/.config/gh
@@ -62,6 +59,7 @@ done
 if [ -n "$(which wslpath)" ]; then
   # WSLでのみ実行する処理
   echo "動作環境はWSLです"
+  sudo apt-get update -y && sudo apt-get upgrade -y
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   echo ${WINHOME}
   cp -f .wslconfig ${WINHOME}/
