@@ -87,7 +87,7 @@ if [ -n "$(which wslpath)" ]; then
   echo "パッケージインストール完了"
   fi
 
-  type yarn >/dev/null 2>&1
+  type node >/dev/null 2>&1
   if [ $? = 0 ]; then
   echo "nodejsインストール済み"
   else
