@@ -39,6 +39,8 @@ else
   git pull
 fi
 
+sudo apt-get update -y && sudo apt-get upgrade -y
+
 
 mkdir -p ~/.config/gh
 
@@ -71,7 +73,7 @@ if [ -n "$(which wslpath)" ]; then
   echo "パッケージインストール済み"
   else
   echo "パッケージインストールします"
-  sudo apt update -y && sudo apt install -y \
+  sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt install -y \
     apt-transport-https \
     ca-certificates \
     curl \
@@ -90,7 +92,7 @@ if [ -n "$(which wslpath)" ]; then
   echo "nodejsインストール済み"
   else
   echo "nodejsインストールします"
-  sudo apt update -y && sudo apt install -y
+  sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt install -y
     nodejs \
     npm
   sudo npm install -g n
