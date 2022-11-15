@@ -90,7 +90,8 @@ if [ -n "$(which wslpath)" ]; then
   echo "nodejsインストール済み"
   else
   echo "nodejsインストールします"
-  sudo apt install -y nodejs \
+  sudo apt update -y && sudo apt install -y
+    nodejs \
     npm
   sudo npm install -g n
   sudo n lts
