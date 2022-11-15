@@ -87,20 +87,16 @@ if [ -n "$(which wslpath)" ]; then
   echo "パッケージインストール完了"
   fi
 
-  type node >/dev/null 2>&1
+  type yarn >/dev/null 2>&1
   if [ $? = 0 ]; then
   echo "nodejsインストール済み"
   else
   echo "nodejsインストールします"
-  sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt install -y
-    nodejs \
-    npm
-  sudo npm install -g n
-  sudo n lts
-  sudo apt purge -y nodejs npm
-  sudo apt autoremove -y
-  node -v
-  sudo npm install -g yarn
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
+  nvm install -lts
+  node --version
+  npm --version
+  npm install --global yarn
   yarn --version
   echo "nodejsインストール完了"
   fi
