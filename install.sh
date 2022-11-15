@@ -111,3 +111,5 @@ if [ -n "$(which wslpath)" ]; then
   echo "ghインストール完了"
   fi
 fi
+
+chmod +x nvm-setup.sh
