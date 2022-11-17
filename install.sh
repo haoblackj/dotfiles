@@ -59,7 +59,7 @@ done
 if [ -n "$(which wslpath)" ]; then
   # WSLでのみ実行する処理
   echo "動作環境はWSLです"
-  sudo apt-get update -y && sudo apt-get upgrade -y
+  #sudo apt-get update -y && sudo apt-get upgrade -y
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   echo ${WINHOME}
   cp -f .wslconfig ${WINHOME}/
@@ -85,15 +85,15 @@ if [ -n "$(which wslpath)" ]; then
   echo "パッケージインストール完了"
   fi
 
-  type node >/dev/null 2>&1
-  if [ $? = 0 ]; then
-  echo "nodejsインストール済み"
-  else
-  echo "nodejsインストールします"
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
-  source ~/.bashrc
-  echo "nodejsインストール完了"
-  fi
+  #type node >/dev/null 2>&1
+  #if [ $? = 0 ]; then
+  #echo "nodejsインストール済み"
+  #else
+  #echo "nodejsインストールします"
+  #curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
+  #source ./.bashrc
+  #echo "nodejsインストール完了"
+  #fi
 
   type gh >/dev/null 2>&1
 
@@ -109,5 +109,3 @@ if [ -n "$(which wslpath)" ]; then
   echo "ghインストール完了"
   fi
 fi
-
-chmod +x nvm-setup.sh
