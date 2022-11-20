@@ -45,6 +45,8 @@ export GH_CONFIG_DIR=~/.config/gh
 
 ln -snfv ${PWD}/config.yml ~/.config/gh/
 
+
+
 # dotfilesディレクトリにある、ドットから始まり2文字以上の名前のファイルに対して
 for f in .??*; do
     [ "$f" = ".git" ] && continue
@@ -59,6 +61,8 @@ done
 if [ -n "$(which wslpath)" ]; then
   # WSLでのみ実行する処理
   echo "動作環境はWSLです"
+  # wsl.confに対して
+  sudo ln -snfv ${PWD}/wsl.conf /etc/wsl.conf
   #sudo apt-get update -y && sudo apt-get upgrade -y
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   echo ${WINHOME}
@@ -107,5 +111,23 @@ if [ -n "$(which wslpath)" ]; then
   sudo apt install gh -y
 
   echo "ghインストール完了"
+
+
   fi
+  read -n1 -p "Dockerをインストールしますか? (y/N): " yn
+if [[ $yn = [yY] ]]; then
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg lsb-release
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt update
+sudo apt install -y docker-ce docker-compose-plugin
+sudo service docker start
+sudo usermod -aG docker $USER
+sudo systemctl enable docker
+else
+  echo abort
+  sudo systemctl enable docker
+fi
 fi
