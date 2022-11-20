@@ -125,6 +125,7 @@ sudo apt update
 sudo apt install -y docker-ce docker-compose-plugin
 sudo service docker start
 sudo usermod -aG docker $USER
+sudo systemctl enable docker
 else
   echo abort
 fi
