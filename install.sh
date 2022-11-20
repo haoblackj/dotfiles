@@ -112,6 +112,8 @@ if [ -n "$(which wslpath)" ]; then
 
   echo "ghインストール完了"
 
+
+  fi
   read -n1 -p "Dockerをインストールしますか? (y/N): " yn
 if [[ $yn = [yY] ]]; then
 sudo apt update
@@ -126,6 +128,4 @@ sudo usermod -aG docker $USER
 else
   echo abort
 fi
-
-  fi
 fi
