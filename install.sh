@@ -128,6 +128,7 @@ sudo usermod -aG docker $USER
 sudo systemctl enable docker
 else
   echo abort
+  sudo service docker start
   sudo systemctl enable docker
 fi
 fi
