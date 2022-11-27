@@ -114,6 +114,11 @@ if [ -n "$(which wslpath)" ]; then
 
 
   fi
+  type docker >/dev/null 2>&1
+
+  if [ $? = 0 ]; then
+  echo "Dockerはインストール済み"
+  else
   read -n1 -p "Dockerをインストールしますか? (y/N): " yn
 if [[ $yn = [yY] ]]; then
 sudo apt update
@@ -130,5 +135,6 @@ else
   echo abort
   sudo service docker start
   sudo systemctl enable docker
+fi
 fi
 fi
