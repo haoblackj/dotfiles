@@ -11,6 +11,8 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 service docker status > /dev/null 2>&1
+if [ -n "$(which wslpath)" ]; then
 if [ $? = 1 ]; then
     sudo service docker start
+fi
 fi
