@@ -70,7 +70,7 @@ if [ -n "$(which wslpath)" ]; then
   cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
 
-  type curl >/dev/null 2>&1
+  type wslview >/dev/null 2>&1
   if [ $? = 0 ]; then
   echo "wsluインストール済み"
   else
