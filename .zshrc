@@ -1,3 +1,10 @@
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
 if [[ ! -f $HOME/.zi/bin/zi.zsh ]]; then
   print -P "%F{33}▓▒░ %F{160}Installing (%F{33}z-shell/zi%F{160})…%f"
   command mkdir -p "$HOME/.zi" && command chmod go-rwX "$HOME/.zi"
@@ -18,4 +25,6 @@ SCRIPT_DIR=$HOME/dotfiles
 source $SCRIPT_DIR/zsh/plugins.zsh
 source $SCRIPT_DIR/zsh/config.zsh
 source $SCRIPT_DIR/zsh/alias.zsh
-source $SCRIPT_DIR/zsh/p10k.zsh
+
+# To customize prompt, run `p10k configure` or edit ~/dotfiles/zsh/p10k.zsh.
+[[ ! -f ~/dotfiles/zsh/p10k.zsh ]] || source ~/dotfiles/zsh/p10k.zsh
