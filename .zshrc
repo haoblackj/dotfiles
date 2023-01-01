@@ -9,6 +9,8 @@ SCRIPT_DIR=$HOME/dotfiles
 
 source $SCRIPT_DIR/zsh/plugins.zsh
 source $SCRIPT_DIR/zsh/config.zsh
+source $SCRIPT_DIR/zsh/alias.zsh
+source $SCRIPT_DIR/zsh/p10k.zsh
 
 if [[ ! -f $HOME/.zi/bin/zi.zsh ]]; then
   print -P "%F{33}▓▒░ %F{160}Installing (%F{33}z-shell/zi%F{160})…%f"
