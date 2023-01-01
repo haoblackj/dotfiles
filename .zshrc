@@ -5,13 +5,6 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-SCRIPT_DIR=$HOME/dotfiles
-
-source $SCRIPT_DIR/zsh/plugins.zsh
-source $SCRIPT_DIR/zsh/config.zsh
-source $SCRIPT_DIR/zsh/alias.zsh
-source $SCRIPT_DIR/zsh/p10k.zsh
-
 if [[ ! -f $HOME/.zi/bin/zi.zsh ]]; then
   print -P "%F{33}▓▒░ %F{160}Installing (%F{33}z-shell/zi%F{160})…%f"
   command mkdir -p "$HOME/.zi" && command chmod go-rwX "$HOME/.zi"
@@ -26,6 +19,13 @@ autoload -Uz _zi
 zicompinit # <- https://wiki.zshell.dev/docs/guides/commands
 
 zinit ice depth=1; zinit light romkatv/powerlevel10k
+
+SCRIPT_DIR=$HOME/dotfiles
+
+source $SCRIPT_DIR/zsh/plugins.zsh
+source $SCRIPT_DIR/zsh/config.zsh
+source $SCRIPT_DIR/zsh/alias.zsh
+source $SCRIPT_DIR/zsh/p10k.zsh
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
