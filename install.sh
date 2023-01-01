@@ -69,6 +69,11 @@ if [ -n "$(which wslpath)" ]; then
   cp -f .wslconfig ${WINHOME}/
   cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
+  
+  echo "wsluインストール"
+  sudo add-apt-repository ppa:wslutilities/wslu
+  sudo apt update
+  sudo apt install wslu -y
 
   type curl >/dev/null 2>&1
   if [ $? = 0 ]; then
