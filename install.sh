@@ -151,4 +151,5 @@ type zsh >/dev/null 2>&1
   else
   sudo apt install zsh -y
   chsh -s /usr/bin/zsh
+  fi
 fi
