@@ -69,7 +69,7 @@ if [ -n "$(which wslpath)" ]; then
   cp -f .wslconfig ${WINHOME}/
   cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
-  
+
   echo "wsluインストール"
   sudo add-apt-repository ppa:wslutilities/wslu
   sudo apt update
@@ -143,4 +143,12 @@ else
   sudo systemctl enable docker
 fi
 fi
+type zsh >/dev/null 2>&1
+
+
+  if [ $? = 0 ]; then
+  echo "zshはインストール済み"
+  else
+  sudo apt install zsh -y
+  chsh -s /usr/bin/zsh
 fi
