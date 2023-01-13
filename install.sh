@@ -63,7 +63,7 @@ if [ -n "$(which wslpath)" ]; then
   echo "動作環境はWSLです"
   # wsl.confに対して
   sudo ln -snfv ${PWD}/wsl.conf /etc/wsl.conf
-  sudo ln -snfv ${PWD}/resolv.conf /etc/resolv.conf
+  #sudo ln -snfv ${PWD}/resolv.conf /etc/resolv.conf
   #sudo chattr +i /etc/resolv.conf
   #sudo apt-get update -y && sudo apt-get upgrade -y
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
