@@ -133,7 +133,9 @@ if [ -n "$(which wslpath)" ]; then
   else
   read -n1 -p "Dockerをインストールしますか? (y/N): " yn
 if [[ $yn = [yY] ]]; then
-sudo apt update
+sudo ln -snfv ${PWD}/my-settings.service /etc/systemd/system/my-settings.service
+sudo ln -snfv ${PWD}/my-settings.sh /usr/local/bin/my-settings.sh
+sudo systemctl enable my-settings.service
 sudo apt install -y ca-certificates curl gnupg lsb-release
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg

@@ -1,0 +1,9 @@
+[Unit]
+Description=Making my settings
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/bin/my-settings.sh
+
+[Install]
+WantedBy=multi-user.target
