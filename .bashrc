@@ -16,3 +16,7 @@ if [ $? = 1 ]; then
     sudo service docker start
 fi
 fi
+
+# Go Path設定
+export GOPATH=$HOME
+export PATH=$PATH:$GOPATH/bin
