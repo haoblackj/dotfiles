@@ -70,7 +70,6 @@ if [ -n "$(which wslpath)" ]; then
   cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
   
-  
 
   type wslview >/dev/null 2>&1
   if [ $? = 0 ]; then
@@ -171,6 +170,7 @@ type peco >/dev/null 2>&1
   tar xzvf peco_linux_386.tar.gz
   cd peco_linux_386
   sudo cp peco /usr/local/bin
+  source ~/.bashrc
   go install github.com/x-motemen/ghq@latest
   fi
 
