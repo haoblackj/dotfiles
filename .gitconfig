@@ -14,3 +14,5 @@
 [alias]
 	cob = checkout -b
   co = checkout
+[ghq]
+	root = ~/repo
