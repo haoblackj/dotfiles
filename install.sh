@@ -57,6 +57,8 @@ for f in .??*; do
     ln -snfv ${PWD}/"$f" ~/
 done
 
+chmod +x ${PWD}/postinstall.sh
+
 
 if [ -n "$(which wslpath)" ]; then
   # WSLでのみ実行する処理
