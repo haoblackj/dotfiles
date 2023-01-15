@@ -63,5 +63,5 @@ function ghq_peco {
     code .
   fi
 }
-zle -N ghq-peco
-bindkey '^]' ghq-peco
+zle -N ghq_peco
+bindkey '^]' ghq_peco

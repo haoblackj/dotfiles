@@ -164,7 +164,7 @@ type peco >/dev/null 2>&1
   else
   sudo add-apt-repository ppa:longsleep/golang-backports
   sudo apt install golang-go -y
-  cd ${PWD}
+  cd ~
   wget https://github.com/peco/peco/releases/download/v0.5.7/peco_linux_386.tar.gz
   tar xzvf peco_linux_386.tar.gz
   cd peco_linux_386
