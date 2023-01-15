@@ -152,12 +152,23 @@ else
 fi
 fi
 type zsh >/dev/null 2>&1
-
-
   if [ $? = 0 ]; then
   echo "zshはインストール済み"
   else
   sudo apt install zsh -y
   chsh -s /usr/bin/zsh
   fi
+type peco >/dev/null 2>&1
+  if [ $? = 0 ]; then
+  echo "pecoはインストール済み"
+  else
+  sudo add-apt-repository ppa:longsleep/golang-backports
+  sudo apt install golang-go -y
+  wget https://github.com/peco/peco/releases/download/v0.5.7/peco_linux_386.tar.gz
+  tar xzvf peco_linux_386.tar.gz
+  cd peco_linux_386
+  sudo cp peco /usr/local/bin
+  go install github.com/x-motemen/ghq@latest
+  fi
+
 fi
