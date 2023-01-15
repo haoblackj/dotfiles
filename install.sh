@@ -75,7 +75,7 @@ if [ -n "$(which wslpath)" ]; then
   echo "wsluインストール済み"
   else
   echo "wsluインストール"
-  sudo add-apt-repository ppa:wslutilities/wslu
+  sudo add-apt-repository ppa:wslutilities/wslu -y
   sudo apt update
   sudo apt install wslu -y
   fi
