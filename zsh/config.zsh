@@ -50,3 +50,18 @@ setopt list_packed
 # コマンドの打ち間違いを指摘してくれる
 setopt correct
 SPROMPT="correct: $RED%R$DEFAULT -> $GREEN%r$DEFAULT ? [Yes/No/Abort/Edit] => "
+
+# Go Path設定
+export GOPATH=$HOME
+export PATH=$PATH:$GOPATH/bin
+
+# ghq設定
+function ghq_peco {
+  local dir="$( ghq list -p | peco )"
+  if [ ! -z "$dir" ] ; then
+    cd "$dir"
+    code .
+  fi
+}
+zle -N ghq-peco
+bindkey '^]' ghq-peco
