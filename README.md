@@ -3,15 +3,12 @@
 ## Installation
 
 ```bash
-bash <(curl -LSs https://raw.githubusercontent.com/haoblackj/dotfiles/main/install.sh)
+git clone https://github.com/haoblackj/dotfiles.git
+dotfiles/install.sh
 ```
 
 ## Manual Setting
 
-```bash
-nvm install v14.21.1
-node --version
-npm --version
-npm install --global yarn
-yarn --version
+```zsh
+dotfiles/postinstall.sh
 ```
