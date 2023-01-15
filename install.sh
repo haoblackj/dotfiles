@@ -170,8 +170,6 @@ type peco >/dev/null 2>&1
   tar xzvf peco_linux_386.tar.gz
   cd peco_linux_386
   sudo cp peco /usr/local/bin
-  source ~/.bashrc
-  go install github.com/x-motemen/ghq@latest
   fi
 
 fi
