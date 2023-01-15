@@ -162,7 +162,7 @@ type peco >/dev/null 2>&1
   if [ $? = 0 ]; then
   echo "pecoはインストール済み"
   else
-  sudo add-apt-repository ppa:longsleep/golang-backports
+  sudo add-apt-repository ppa:longsleep/golang-backports -y
   sudo apt install golang-go -y
   cd ~
   wget https://github.com/peco/peco/releases/download/v0.5.7/peco_linux_386.tar.gz
