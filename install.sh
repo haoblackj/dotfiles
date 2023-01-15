@@ -69,6 +69,8 @@ if [ -n "$(which wslpath)" ]; then
   cp -f .wslconfig ${WINHOME}/
   cp -f .gitconfig ${WINHOME}/
   cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
+  
+  
 
   type wslview >/dev/null 2>&1
   if [ $? = 0 ]; then
