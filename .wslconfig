@@ -1,3 +1,4 @@
 [wsl2]
 memory=4GB
 guiapplications=false
+swap=0
