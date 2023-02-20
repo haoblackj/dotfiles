@@ -162,5 +162,12 @@ if [ -n "$(which wslpath)" ]; then
     cd peco_linux_386
     sudo cp peco /usr/local/bin
   fi
+  type nvm >/dev/null 2>&1
+  if [ $? = 0 ]; then
+    echo "nvmはインストール済み"
+  else
+    # Install NVM
+    curl https://raw.github.com/creationix/nvm/master/install.sh | sh
+  fi
 
 fi
