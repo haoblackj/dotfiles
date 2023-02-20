@@ -130,25 +130,18 @@ if [ -n "$(which wslpath)" ]; then
   if [ $? = 0 ]; then
     echo "Dockerはインストール済み"
   else
-    read -n1 -p "Dockerをインストールしますか? (y/N): " yn
-    if [[ $yn = [yY] ]]; then
-      sudo ln -snfv ${PWD}/my-settings.service /etc/systemd/system/my-settings.service
-      sudo ln -snfv ${PWD}/my-settings.sh /usr/local/bin/my-settings.sh
-      sudo systemctl enable my-settings.service
-      sudo apt install -y ca-certificates curl gnupg lsb-release
-      sudo mkdir -p /etc/apt/keyrings
-      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
-      sudo apt update
-      sudo apt install -y docker-ce docker-compose-plugin
-      sudo service docker start
-      sudo usermod -aG docker $USER
-      sudo systemctl enable docker
-    else
-      echo abort
-      sudo service docker start
-      sudo systemctl enable docker
-    fi
+    sudo ln -snfv ${PWD}/my-settings.service /etc/systemd/system/my-settings.service
+    sudo ln -snfv ${PWD}/my-settings.sh /usr/local/bin/my-settings.sh
+    sudo systemctl enable my-settings.service
+    sudo apt install -y ca-certificates curl gnupg lsb-release
+    sudo mkdir -p /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+    sudo apt update
+    sudo apt install -y docker-ce docker-compose-plugin
+    sudo service docker start
+    sudo usermod -aG docker $USER
+    sudo systemctl enable docker
   fi
   type zsh >/dev/null 2>&1
   if [ $? = 0 ]; then
