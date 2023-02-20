@@ -167,7 +167,7 @@ if [ -n "$(which wslpath)" ]; then
     echo "nvmはインストール済み"
   else
     # Install NVM
-    curl https://raw.github.com/creationix/nvm/master/install.sh | sh
+    curl https://raw.github.com/creationix/nvm/master/install.sh | bash
   fi
 
 fi
