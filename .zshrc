@@ -20,7 +20,7 @@ zicompinit # <- https://wiki.zshell.dev/docs/guides/commands
 
 zinit ice depth=1; zinit light romkatv/powerlevel10k
 
-SCRIPT_DIR=$HOME/dotfiles
+SCRIPT_DIR=$(cd $(dirname $0);pwd)
 
 source $SCRIPT_DIR/zsh/plugins.zsh
 source $SCRIPT_DIR/zsh/config.zsh
