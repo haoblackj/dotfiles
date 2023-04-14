@@ -94,7 +94,8 @@ if [ -n "$(which wslpath)" ]; then
       make \
       tig \
       tree \
-      zip unzip
+      zip unzip \
+      xdg-utils
     echo "パッケージインストール完了"
   fi
 
