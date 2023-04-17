@@ -84,7 +84,7 @@ if [ -n "$(which wslpath)" ]; then
     echo "パッケージインストール済み"
   else
     echo "パッケージインストールします"
-    sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt install -y \
+    sudo apt update -y && sudo apt upgrade -y && sudo apt install -y \
       apt-transport-https \
       ca-certificates \
       curl \
