@@ -94,8 +94,9 @@ if [ -n "$(which wslpath)" ]; then
       make \
       tig \
       tree \
-      zip unzip \
-      xdg-utils
+      zip unzip
+    sudo apt-get update -y
+    sudo apt install -y xdg-utils
     echo "パッケージインストール完了"
   fi
 
