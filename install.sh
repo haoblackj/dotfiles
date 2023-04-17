@@ -62,7 +62,9 @@ if [ -n "$(which wslpath)" ]; then
   echo "動作環境はWSLです"
   # wsl.confに対して
   sudo ln -snfv ${PWD}/wsl.conf /etc/wsl.conf
-  sudo sed -i.bak_$(date +%Y%m%d%H%M) -r 's!deb http://archive\S+!deb mirror://mirrors.ubuntu.com/mirrors.txt!' /etc/apt/sources.list
+  #sudo sed -i.bak_$(date +%Y%m%d%H%M) -r 's!deb http://archive\S+!deb mirror://mirrors.ubuntu.com/mirrors.txt!' /etc/apt/sources.list
+  sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
+  sudo apt update
   WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   echo ${WINHOME}
   cp -f .wslconfig ${WINHOME}/
