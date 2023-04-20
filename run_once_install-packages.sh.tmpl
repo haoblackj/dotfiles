@@ -61,10 +61,6 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     sudo systemctl enable docker
 
 
-    sudo apt install zsh -y
-    chsh -s /usr/bin/zsh
-
-
     # sudo add-apt-repository ppa:longsleep/golang-backports -y
     # sudo apt install golang-go -y
     cd ~
@@ -85,6 +81,10 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     make install
     gh auth login -h github.com -p https -w
     gh extension install kawarimidoll/gh-q
+
+
+    sudo apt install zsh -y
+    chsh -s /usr/bin/zsh
 
 
 {{   end }}
