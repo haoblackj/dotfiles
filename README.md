@@ -3,12 +3,7 @@
 ## Installation
 
 ```bash
-git clone https://github.com/haoblackj/dotfiles.git
-dotfiles/install.sh
+sh -c "$(curl -fsLS get.chezmoi.io)"
+chezmoi init --apply haoblackj
 ```
 
-## Manual Setting
-
-```zsh
-dotfiles/postinstall.sh
-```
