@@ -77,10 +77,12 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
 
     curl https://raw.github.com/creationix/nvm/master/install.sh | bash
 
-    cd ~
-    git clone https://github.com/x-motemen/ghq
-    cd ghq
-    make install
+    #cd ~
+    #git clone https://github.com/x-motemen/ghq
+    #cd ghq
+    #make install
+    go version
+    go install github.com/x-motemen/ghq@latest
     gh auth login -h github.com -p https -w
     gh extension install kawarimidoll/gh-q
 
