@@ -20,11 +20,9 @@ zicompinit # <- https://wiki.zshell.dev/docs/guides/commands
 
 zinit ice depth=1; zinit light romkatv/powerlevel10k
 
-SCRIPT_DIR="~/.local/share/chezmoi"
-
-source $SCRIPT_DIR/zsh/plugins.zsh
-source $SCRIPT_DIR/zsh/config.zsh
-source $SCRIPT_DIR/zsh/alias.zsh
+source ~/.local/share/chezmoi/zsh/plugins.zsh
+source ~/.local/share/chezmoi/zsh/config.zsh
+source ~/.local/share/chezmoi/zsh/alias.zsh
 
 # To customize prompt, run `p10k configure` or edit .../zsh/p10k.zsh.
 [[ ! -f ~/.local/share/chezmoi/zsh/p10k.zsh ]] || source ~/.local/share/chezmoi/zsh/p10k.zsh
