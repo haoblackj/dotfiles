@@ -65,8 +65,13 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     chsh -s /usr/bin/zsh
 
 
-    sudo add-apt-repository ppa:longsleep/golang-backports -y
-    sudo apt install golang-go -y
+    # sudo add-apt-repository ppa:longsleep/golang-backports -y
+    # sudo apt install golang-go -y
+    cd ~
+    wget https://dl.google.com/go/go1.17.linux-amd64.tar.gz
+    sudo tar -C /usr/local -xzf go1.17.linux-amd64.tar.gz
+    source .profile
+
     cd ~
     wget https://github.com/peco/peco/releases/download/v0.5.7/peco_linux_386.tar.gz
     tar xzvf peco_linux_386.tar.gz
