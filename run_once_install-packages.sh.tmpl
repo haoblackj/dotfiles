@@ -2,14 +2,11 @@
 # 未定義な変数があったら途中で終了する
 set -u
 
-BASEDIR=$(dirname $0)
-cd $BASEDIR
-
 mkdir -p ~/.config/gh
 
 export GH_CONFIG_DIR=~/.config/gh
 
-ln -snfv ${sourceDir}/config.yml ~/.config/gh/
+ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
 
 
 
@@ -49,8 +46,8 @@ ln -snfv ${sourceDir}/config.yml ~/.config/gh/
     sudo apt install gh -y
     sudo apt-get install fzf -y
 
-    sudo ln -snfv ${sourceDir}/my-settings.service /etc/systemd/system/my-settings.service
-    sudo ln -snfv ${sourceDir}/my-settings.sh /usr/local/bin/my-settings.sh
+    sudo ln -snfv ~/.local/share/chezmoi/my-settings.service /etc/systemd/system/my-settings.service
+    sudo ln -snfv ~/.local/share/chezmoi/my-settings.sh /usr/local/bin/my-settings.sh
     sudo systemctl enable my-settings.service
     sudo apt install -y ca-certificates curl gnupg lsb-release
     sudo mkdir -p /etc/apt/keyrings
