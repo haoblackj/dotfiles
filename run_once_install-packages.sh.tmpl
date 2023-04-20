@@ -12,6 +12,7 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
 
 {{ if eq .chezmoi.os "linux" }}
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+  sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
   sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
   sudo apt update
   # WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
