@@ -61,14 +61,14 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     sudo systemctl enable docker
 
 
-    # sudo add-apt-repository ppa:longsleep/golang-backports -y
-    # sudo apt install golang-go -y
-    cd ~
-    wget https://dl.google.com/go/go1.20.3.linux-amd64.tar.gz
-    sudo tar -C /usr/local -xzf go1.20.3.linux-amd64.tar.gz
-    export PATH=$PATH:/usr/local/go/bin
-    #export GOPATH=$HOME
-    #export PATH=$PATH:$GOPATH/bin
+    sudo add-apt-repository ppa:longsleep/golang-backports -y
+    sudo apt install golang-go -y
+    #cd ~
+    #wget https://dl.google.com/go/go1.20.3.linux-amd64.tar.gz
+    #sudo tar -C /usr/local -xzf go1.20.3.linux-amd64.tar.gz
+    #export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=$HOME
+    export PATH=$PATH:$GOPATH/bin
     source .profile
 
     cd ~
