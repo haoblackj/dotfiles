@@ -4,6 +4,7 @@
 
 ```bash
 sh -c "$(curl -fsLS get.chezmoi.io)"
+source .profile
 chezmoi init --apply haoblackj
 ```
 
