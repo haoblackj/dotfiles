@@ -3,6 +3,7 @@
 ## Installation
 
 ```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply haoblackj
+sh -c "$(curl -fsLS get.chezmoi.io)"
+chezmoi init --apply haoblackj
 ```
 
