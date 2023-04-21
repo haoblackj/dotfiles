@@ -54,7 +54,10 @@ SPROMPT="correct: $RED%R$DEFAULT -> $GREEN%r$DEFAULT ? [Yes/No/Abort/Edit] => "
 # Go Path設定
 #export GOPATH=$HOME
 #export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:/usr/local/go/bin
+# export PATH=$PATH:/usr/local/go/bin
+
+# asdf Path設定
+. "$HOME/.asdf/asdf.sh"
 
 # ghq設定
 function ghq_peco {
