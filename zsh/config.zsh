@@ -56,6 +56,9 @@ SPROMPT="correct: $RED%R$DEFAULT -> $GREEN%r$DEFAULT ? [Yes/No/Abort/Edit] => "
 #export PATH=$PATH:$GOPATH/bin
 # export PATH=$PATH:/usr/local/go/bin
 
+# Path設定
+PATH="$HOME/.local/bin:$PATH"
+
 # asdf Path設定
 . "$HOME/.asdf/asdf.sh"
 
