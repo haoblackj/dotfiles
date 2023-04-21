@@ -69,3 +69,5 @@ function ghq_peco {
 }
 zle -N ghq_peco
 bindkey '^]' ghq_peco
+
+export BW_SESSION=$(bw {login,unlock} --raw)
