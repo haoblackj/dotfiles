@@ -87,8 +87,8 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     cd peco_linux_386
     sudo cp peco /usr/local/bin
 
-    curl https://raw.github.com/creationix/nvm/master/install.sh | bash
-    source ~/.nvm/nvm.sh
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
+    source ~/.bashrc
 
     command -v nvm
 
