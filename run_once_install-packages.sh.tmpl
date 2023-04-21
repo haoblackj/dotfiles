@@ -88,6 +88,17 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     sudo cp peco /usr/local/bin
 
     curl https://raw.github.com/creationix/nvm/master/install.sh | bash
+    source .profile
+
+    command -v nvm
+
+    nvm install --lts
+
+    npm --version
+
+    npm install -g @bitwarden/cli
+
+    bw login
 
     #cd ~
     #git clone https://github.com/x-motemen/ghq
