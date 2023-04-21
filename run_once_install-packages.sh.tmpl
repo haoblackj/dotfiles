@@ -10,8 +10,10 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
 
 
 
+
 {{ if eq .chezmoi.os "linux" }}
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
   sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
   sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
   sudo apt update
@@ -111,5 +113,6 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     gh extension install kawarimidoll/gh-q
 
 
+{{     end }}
 {{   end }}
 {{ end }}
