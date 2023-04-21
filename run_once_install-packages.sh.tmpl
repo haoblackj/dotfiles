@@ -72,6 +72,7 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     # source .profile
 
     git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
+    source .profile
 
     asdf plugin add ghq
     asdf install ghq latest
@@ -88,8 +89,8 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     #git clone https://github.com/x-motemen/ghq
     #cd ghq
     #make install
-    go version
-    go install github.com/x-motemen/ghq@latest
+    # go version
+    # go install github.com/x-motemen/ghq@latest
     gh auth login -h github.com -p https -w
     gh extension install kawarimidoll/gh-q
 
