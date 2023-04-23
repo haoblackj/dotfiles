@@ -22,15 +22,15 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
   # cp -f .wslconfig ${WINHOME}/
   # cp -f .gitconfig ${WINHOME}/
   # cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
-{{ zshCheckPath := $(dpkg -s zsh >/dev/null 2>&1) }}
-{{ if $zshCheckPath -eq 0 }}
+{{ $zshPath := exec "command" "-v" "zsh" }}
+{{ if $zshPath }}
 echo "zshインストール済"
 {{ else }}
     echo "zshインストール"
     sudo apt install zsh -y
     chsh -s /usr/bin/zsh
 {{ end }}
-{{ wsluPath := $(dpkg -s xdg-open >/dev/null 2>&1) }}
+{{ $wsluPath := exec "command" "-v" "xdg-open" }}
 {{ if $wsluPath }}
 echo "wsluインストール済"
 {{ else }}
@@ -54,7 +54,7 @@ echo "wsluインストール済"
     sudo apt install -y xdg-utils
 {{ end }}
 
-{{ $ghPath := $(dpkg -s gh >/dev/null 2>&1) }}
+{{ $ghPath := exec "command" "-v" "gh" }}
 {{ if $ghPath }}
 echo "ghインストール済"
 {{ else }}
@@ -66,7 +66,7 @@ echo "ghインストール済"
     sudo apt-get install fzf -y
 {{ end }}
 
-{{ $dockerPath := $(which docker >/dev/null 2>&1) }}
+{{ $dockerPath := exec "command" "-v" "docker" }}
 {{ if $dockerPath }}
 echo "dockerインストール済"
 {{ else }}
@@ -94,7 +94,7 @@ echo "dockerインストール済"
     # export Path := $PATH:$GOPATH/bin
     # source .profile
 
-{{ $asdfPath := $(which asdf >/dev/null 2>&1) }}
+{{ $asdfPath := exec "command" "-v" "asdf" }}
 {{ if $asdfPath }}
 echo "asdfインストール済"
 {{ else }}
@@ -106,7 +106,7 @@ echo "asdfインストール済"
     asdf global ghq latest
 {{ end }}
 
-{{ $pecoPath := $(which peco >/dev/null 2>&1) }}
+{{ $pecoPath := exec "command" "-v" "peco" }}
 {{ if $pecoPath }}
 echo "pecoインストール済"
 {{ else }}
@@ -117,7 +117,7 @@ echo "pecoインストール済"
     sudo cp peco /usr/local/bin
 {{ end }}
 
-{{ $nvmPath := $(which nvm >/dev/null 2>&1) }}
+{{ $nvmPath := exec "command" "-v" "nvm" }}
 {{ if $nvmPath }}
 echo "nvmインストール済"
 {{ else }}
