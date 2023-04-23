@@ -22,11 +22,18 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
   # cp -f .wslconfig ${WINHOME}/
   # cp -f .gitconfig ${WINHOME}/
   # cp -f ${PWD}/config.yml "${WINHOME}/Appdata/Roaming/GitHub CLI/config.yml"
-
+{{ $zshPath := exec "command" "-v" "zsh" }}
+{{ if $zshPath }}
+echo "zshインストール済"
+{{ else }}
     echo "zshインストール"
     sudo apt install zsh -y
     chsh -s /usr/bin/zsh
-
+{{ end }}
+{{ $wsluPath := exec "command" "-v" "xdg-open" }}
+{{ if $wsluPath }}
+echo "wsluインストール済"
+{{ else }}
     echo "wsluインストール"
     sudo add-apt-repository ppa:wslutilities/wslu -y
     sudo apt update
@@ -45,14 +52,24 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
       zip unzip
     sudo apt-get update -y
     sudo apt install -y xdg-utils
+{{ end }}
 
+{{ $ghPath := exec "command" "-v" "gh" }}
+{{ if $ghPath }}
+echo "ghインストール済"
+{{ else }}
     echo "ghインストールします"
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
     sudo apt update -y
     sudo apt install gh -y
     sudo apt-get install fzf -y
+{{ end }}
 
+{{ $dockerPath := exec "command" "-v" "docker" }}
+{{ if $dockerPath }}
+echo "dockerインストール済"
+{{ else }}
     sudo ln -snfv ~/.local/share/chezmoi/my-settings.service /etc/systemd/system/my-settings.service
     sudo ln -snfv ~/.local/share/chezmoi/my-settings.sh /usr/local/bin/my-settings.sh
     sudo systemctl enable my-settings.service
@@ -65,7 +82,7 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     sudo service docker start
     sudo usermod -aG docker $USER
     sudo systemctl enable docker
-
+{{ end }}
 
     # sudo add-apt-repository ppa:longsleep/golang-backports -y
     # sudo apt install golang-go -y
@@ -77,19 +94,33 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     # export PATH=$PATH:$GOPATH/bin
     # source .profile
 
+{{ $asdfPath := exec "command" "-v" "asdf" }}
+{{ if $asdfPath }}
+echo "asdfインストール済"
+{{ else }}
     git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
     source ~/.profile
 
     asdf plugin add ghq
     asdf install ghq latest
     asdf global ghq latest
+{{ end }}
 
+{{ $pecoPath := exec "command" "-v" "peco" }}
+{{ if $pecoPath }}
+echo "pecoインストール済"
+{{ else }}
     cd ~
     wget https://github.com/peco/peco/releases/download/v0.5.7/peco_linux_386.tar.gz
     tar xzvf peco_linux_386.tar.gz
     cd peco_linux_386
     sudo cp peco /usr/local/bin
+{{ end }}
 
+{{ $nvmPath := exec "command" "-v" "nvm" }}
+{{ if $nvmPath }}
+echo "nvmインストール済"
+{{ else }}
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
     source ~/.bashrc
 
@@ -102,7 +133,7 @@ ln -snfv ~/.local/share/chezmoi/config.yml ~/.config/gh/
     npm install -g @bitwarden/cli
 
     bw login
-
+{{ end }}
     #cd ~
     #git clone https://github.com/x-motemen/ghq
     #cd ghq
