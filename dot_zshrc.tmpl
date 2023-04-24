@@ -1,3 +1,4 @@
+ZINIT_CONFIG_SCREEN=0
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
@@ -16,7 +17,7 @@ source "$HOME/.zi/bin/zi.zsh"
 autoload -Uz _zi
 (( ${+_comps} )) && _comps[zi]=_zi
 # examples here -> https://wiki.zshell.dev/ecosystem/category/-annexes
-zinit self-update --quiet && zinit update --all --quiet
+# zinit self-update --quiet && zinit update --all --quiet
 zicompinit # <- https://wiki.zshell.dev/docs/guides/commands
 
 zinit ice depth=1; zinit light romkatv/powerlevel10k
