@@ -160,8 +160,8 @@ fi
 
     extension_name="kawarimidoll/gh-q"
 
-    if ! gh_extension_installed "${extension_name}"; then
-        gh extension install "${extension_name}"
+    if ! gh_extension_installed ${extension_name}; then
+        gh extension install ${extension_name}
     fi
 
 {{     end }}
