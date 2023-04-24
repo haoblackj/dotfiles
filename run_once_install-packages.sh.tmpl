@@ -160,6 +160,12 @@ fi
 
     extension_name="kawarimidoll/gh-q"
 
+    if ! gh_extension_installed "${extension_name}"; then
+      gh extension install ${extension_name}
+    else
+      echo "GitHub CLI extension '${extension_name}' is installed."
+    fi
+
 {{     end }}
 {{   end }}
 {{ end }}
