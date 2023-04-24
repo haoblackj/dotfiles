@@ -102,11 +102,25 @@ echo "asdfインストール済"
 {{ else }}
     git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
     source ~/.profile
+{{ end }}
 
+# asdfで指定したプラグインがインストールされているか確認する関数
+asdf_plugin_installed() {
+  local plugin_name="$1"
+  asdf plugin-list | grep -q "^${plugin_name}\s"
+}
+
+# ghqのインストールを確認し、インストールされていなければインストールする関数
+install_ghq_if_not_exists() {
+  if ! asdf_plugin_installed "ghq"; then
     asdf plugin add ghq
     asdf install ghq latest
     asdf global ghq latest
-{{ end }}
+  fi
+}
+
+# ghqのインストールを確認し、インストールされていなければインストールする
+install_ghq_if_not_exists
 
 {{ $pecoPath := lookPath "peco" }}
 {{ if $pecoPath }}
