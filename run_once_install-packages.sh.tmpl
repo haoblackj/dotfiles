@@ -155,8 +155,7 @@ fi
 
     gh_extension_installed() {
         local extension_name="$1"
-        local extension_path="${GH_CONFIG_DIR:-$HOME/.config/gh}/extensions/${extension_name}"
-        [ -d "${extension_path}" ]
+        gh extension list 2> /dev/null | grep -q "^${extension_name}\s"
     }
 
     extension_name="kawarimidoll/gh-q"
