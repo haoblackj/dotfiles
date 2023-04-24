@@ -64,6 +64,8 @@ echo "ghインストール済"
     sudo apt update -y
     sudo apt install gh -y
     sudo apt-get install fzf -y
+    gh extension install "kawarimidoll/gh-q"
+
 {{ end }}
 
 {{ $dockerPath := lookPath "docker" }}
@@ -151,19 +153,6 @@ fi
 
     if ! gh_signed_in; then
         gh auth login -h github.com -p https -w
-    fi
-
-    gh_extension_installed() {
-        local extension_name="$1"
-        gh extension list 2> /dev/null | grep -q "^${extension_name}\s"
-    }
-
-    extension_name="kawarimidoll/gh-q"
-
-    if ! gh_extension_installed "${extension_name}"; then
-      gh extension install ${extension_name}
-    else
-      echo "GitHub CLI extension '${extension_name}' is installed."
     fi
 
 {{     end }}
