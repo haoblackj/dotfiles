@@ -107,7 +107,7 @@ echo "asdfインストール済"
 # asdfで指定したプラグインがインストールされているか確認する関数
 asdf_plugin_installed() {
   local plugin_name="$1"
-  asdf plugin-list | grep -q "^${plugin_name}\s"
+  asdf plugin-list | grep -F "${plugin_name}"
 }
 
 # ghqのインストールを確認し、インストールされていなければインストールする関数
