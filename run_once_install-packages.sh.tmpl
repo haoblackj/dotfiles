@@ -174,7 +174,7 @@ fi
 # GitHub CLI の拡張機能がインストールされているか確認する関数
 gh_extension_installed() {
   local extension_name="$1"
-  gh extension list | grep -q "^${extension_name}\s"
+  gh extension list | grep "^${extension_name}\s"
 }
 
 # GitHub CLI の拡張機能がインストールされていなければインストールする関数
