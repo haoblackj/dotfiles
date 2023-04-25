@@ -168,8 +168,8 @@ fi
     if ! gh_signed_in; then
         gh auth login -h github.com -p https -w
     fi
-    
-    
+
+
 
 # GitHub CLI の拡張機能がインストールされているか確認する関数
 gh_extension_installed() {
@@ -188,7 +188,7 @@ install_gh_extension_if_not_exists() {
 }
 
 # 拡張機能のインストール状況を確認し、インストールされていなければインストールする
-install_gh_extension_if_not_exists "gh-q" "https://github.com/kawarimidoll/gh-q"
+install_gh_extension_if_not_exists "kawarimidoll/gh-q" "https://github.com/kawarimidoll/gh-q"
 
 {{     end }}
 {{   end }}
