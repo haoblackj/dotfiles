@@ -1,13 +1,4 @@
 alias sudo='sudo '
 alias systemctl='/usr/libexec/nslogin systemctl'
-alias dotfilespull='git -C dotfiles/ pull'
-alias gh=ghf
-alias glab=glabf
-alias ghco="ghf pr checkout"
-alias ghprw="ghf pr view -w"
-alias ghprc="ghf pr create -w"
-alias ghrw="ghf repo view -w"
-alias ghcscreate="ghf codespace create"
-alias ghcscode="ghf codespace code"
 alias gco="git checkout"
 alias gcob="git checkout -b"
