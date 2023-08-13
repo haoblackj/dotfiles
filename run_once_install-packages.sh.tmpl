@@ -133,28 +133,6 @@ echo "pecoインストール済"
     sudo cp peco /usr/local/bin
 {{ end }}
 
-nvm_installed() {
-  if [ -d "$HOME/.nvm" ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
-    return 0
-  else
-    return 1
-  fi
-}
-
-if ! nvm_installed; then
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
-    source ~/.bashrc
-
-    command -v nvm
-
-    nvm install --lts
-
-    npm --version
-
-    npm install -g @bitwarden/cli
-
-    bw login
-fi
     #cd ~
     #git clone https://github.com/x-motemen/ghq
     #cd ghq
