@@ -86,16 +86,6 @@ echo "dockerインストール済"
     sudo systemctl enable docker
 {{ end }}
 
-    # sudo add-apt-repository ppa:longsleep/golang-backports -y
-    # sudo apt install golang-go -y
-    #cd ~
-    #wget https://dl.google.com/go/go1.20.3.linux-amd64.tar.gz
-    #sudo tar -C /usr/local -xzf go1.20.3.linux-amd64.tar.gz
-    #export Path := $PATH:/usr/local/go/bin
-    # export GOPath := $HOME
-    # export Path := $PATH:$GOPATH/bin
-    # source .profile
-
 {{ $asdfPath := lookPath "asdf" }}
 {{ if $asdfPath }}
 echo "asdfインストール済"
@@ -133,12 +123,6 @@ echo "pecoインストール済"
     sudo cp peco /usr/local/bin
 {{ end }}
 
-    #cd ~
-    #git clone https://github.com/x-motemen/ghq
-    #cd ghq
-    #make install
-    # go version
-    # go install github.com/x-motemen/ghq@latest
     gh_signed_in() {
         gh auth status >/dev/null 2>&1
         }
