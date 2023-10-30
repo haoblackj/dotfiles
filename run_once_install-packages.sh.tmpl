@@ -54,10 +54,6 @@ echo "wsluインストール済"
       unzip
     sudo apt-get update -y
     sudo apt install -y xdg-utils
-    mkdir ~/.fonts
-    curl -L -o https://okoneya.jp/font/GenEiChikuMin_v3.zip > ~/.fonts/GenEiChikuMin_v3.zip
-    unzip ~/.fonts/GenEiChikuMin_v3.zip -d ~/fonts
-    fc-cache -fv
 {{ end }}
 
 {{ $ghPath := lookPath "gh" }}
