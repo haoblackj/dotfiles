@@ -25,3 +25,9 @@ if [ -d "$HOME/.local/bin" ] ; then
 fi
 
 export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
+
+# Windowsのユーザー名を取得
+WINDOWS_USER=$(powershell.exe 'echo $env:UserName' | tr -d '\r')
+
+# zenhanのパスを設定
+export zenhan="/mnt/c/Users/$WINDOWS_USER/scoop/apps/zenhan/current/zenhan.exe"
