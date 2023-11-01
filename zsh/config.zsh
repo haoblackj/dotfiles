@@ -63,3 +63,6 @@ if [ -d "${PYENV_ROOT}" ]; then
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
 fi
+
+# gh設定
+export GH_CONFIG_DIR=~/.config/gh
