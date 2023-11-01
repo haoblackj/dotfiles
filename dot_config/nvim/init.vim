@@ -42,21 +42,6 @@ if executable('zenhan')
   autocmd CmdlineLeave * :call system('zenhan 0')
 endif
 
-" Use windows clipboard.
-set clipboard+=unnamedplus
-let g:clipboard = {
-  \   'name': 'win32yank-wsl',
-  \   'copy': {
-  \      '+': 'win32yank -i --crlf',
-  \      '*': 'win32yank -i --crlf',
-  \    },
-  \   'paste': {
-  \      '+': 'win32yank -o --lf',
-  \      '*': 'win32yank -o --lf',
-  \   },
-  \   'cache_enabled': 0,
-  \ }
-
 "行番号を表示
 set number
 

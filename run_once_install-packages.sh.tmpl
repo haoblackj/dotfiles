@@ -105,6 +105,10 @@ curl -fsSL https://deno.land/x/install/install.sh | sh
 
 # neovimをインストールするセクション
 # Install neovim 0.5.
+{{$neovimPath := lookPath "nvim"}}
+{{if $neovimPath}}
+echo "neovimインストール済"
+{{else}}
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
 chmod u+x nvim.appimage
 ./nvim.appimage --appimage-extract
@@ -114,14 +118,6 @@ sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
 # Install vim-jetpack.
 curl -fLo ~/.local/share/nvim/site/pack/jetpack/opt/vim-jetpack/plugin/jetpack.vim --create-dirs https://raw.githubusercontent.com/tani/vim-jetpack/master/plugin/jetpack.vim
 
-# Install win32yank.
-# クリップボード操作プログラム。
-curl -fLO https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip
-unzip win32yank-x64.zip -d win32yank
-chmod u+x win32yank/win32yank.exe
-sudo mv win32yank/win32yank.exe /usr/local/bin/win32yank
-rm -rf win32yank-x64.zip win32yank
-
 # Install zenhan.
 # IME操作プログラム。
 curl -fLO https://github.com/iuchim/zenhan/releases/download/v0.0.1/zenhan.zip
@@ -129,6 +125,7 @@ unzip zenhan.zip
 chmod u+x zenhan/bin64/zenhan.exe
 sudo mv zenhan/bin64/zenhan.exe /usr/local/bin/zenhan
 rm -rf zenhan.zip zenhan
+{{end}}
 
 # ghqのインストールを確認し、インストールされていなければインストールする関数
 install_ghq_if_not_exists() {
