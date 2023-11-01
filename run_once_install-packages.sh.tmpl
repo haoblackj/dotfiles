@@ -97,6 +97,9 @@ asdf_plugin_installed() {
   asdf plugin-list | grep -Fq "${plugin_name}"
 }
 
+# nvmをインストールするセクション
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+
 # denoをインストールするセクション
 curl -fsSL https://deno.land/x/install/install.sh | sh
 
