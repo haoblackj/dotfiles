@@ -101,7 +101,9 @@ asdf_plugin_installed() {
 # Install neovim 0.5.
 curl -fLO https://github.com/neovim/neovim/releases/download/nightly/nvim.appimage
 chmod u+x nvim.appimage
-sudo mv nvim.appimage /usr/local/bin/nvim
+./nvim.appimage --appimage-extract
+sudo mv squashfs-root /
+sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
 
 # Install vim-plug.
 sh -c 'curl -fLo "${XDG_DATA_HOME:-$HOME/.local/share}"/nvim/site/autoload/plug.vim --create-dirs \
