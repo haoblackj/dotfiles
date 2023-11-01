@@ -63,6 +63,9 @@ inoremap <Esc> <Esc>lh
 " ヤンクするとクリップボードに保存される
 set clipboard+=unnamed
 
+"deno Path
+g:denops#deno = ~/.deno/bin/deno
+
 call jetpack#begin()
  " bootstrap
  Jetpack 'tani/vim-jetpack', { 'opt': 1 }
