@@ -98,10 +98,20 @@ asdf_plugin_installed() {
 }
 
 # nvmをインストールするセクション
+{{ $asdfPath := lookPath "asdf" }}
+{{ if $asdfPath }}
+echo "nvmインストール済"
+{{ else }}
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+{{ end }}
 
 # denoをインストールするセクション
+{{ $asdfPath := lookPath "asdf" }}
+{{ if $asdfPath }}
+echo "denoインストール済"
+{{ else }}
 curl -fsSL https://deno.land/x/install/install.sh | sh
+{{ end}}
 
 # neovimをインストールするセクション
 # Install neovim 0.5.
