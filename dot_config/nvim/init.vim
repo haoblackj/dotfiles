@@ -61,7 +61,19 @@ let &t_EI = "\<Esc>]50;CursorShape=0\x7"
 inoremap <Esc> <Esc>lh
 
 " ヤンクするとクリップボードに保存される
-set clipboard+=unnamed
+set clipboard+=unnamedplus
+let g:clipboard = {
+  \   'name': 'win32yank-wsl',
+  \   'copy': {
+  \      '+': 'win32yank -i --crlf',
+  \      '*': 'win32yank -i --crlf',
+  \    },
+  \   'paste': {
+  \      '+': 'win32yank -o --lf',
+  \      '*': 'win32yank -o --lf',
+  \   },
+  \   'cache_enabled': 0,
+  \ }
 
 "deno Path
 let g:denops#deno = $HOME . '/.deno/bin/deno'
