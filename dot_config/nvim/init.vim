@@ -64,7 +64,7 @@ inoremap <Esc> <Esc>lh
 set clipboard+=unnamed
 
 "deno Path
-g:denops#deno = ~/.deno/bin/deno
+let g:denops#deno = '~/.deno/bin/deno'
 
 call jetpack#begin()
  " bootstrap
