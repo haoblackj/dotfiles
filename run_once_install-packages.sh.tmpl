@@ -97,17 +97,19 @@ asdf_plugin_installed() {
   asdf plugin-list | grep -Fq "${plugin_name}"
 }
 
+# denoをインストールするセクション
+curl -fsSL https://deno.land/x/install/install.sh | sh
+
 # neovimをインストールするセクション
 # Install neovim 0.5.
-curl -fLO https://github.com/neovim/neovim/releases/download/nightly/nvim.appimage
+curl -fLO https://github.com/neovim/neovim/releases/download/latest/nvim.appimage
 chmod u+x nvim.appimage
 ./nvim.appimage --appimage-extract
 sudo mv squashfs-root /
 sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
 
-# Install vim-plug.
-sh -c 'curl -fLo "${XDG_DATA_HOME:-$HOME/.local/share}"/nvim/site/autoload/plug.vim --create-dirs \
-       https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
+# Install vim-jetpack.
+curl -fLo ~/.local/share/nvim/site/pack/jetpack/opt/vim-jetpack/plugin/jetpack.vim --create-dirs https://raw.githubusercontent.com/tani/vim-jetpack/master/plugin/jetpack.vim
 
 # Install win32yank.
 # クリップボード操作プログラム。
