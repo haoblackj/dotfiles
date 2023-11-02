@@ -15,6 +15,23 @@ for name in jetpack#names()
   endif
 endfor
 
+"deno Path
+let g:denops#deno = $HOME . '/.deno/bin/deno'
+
+call jetpack#begin()
+ Jetpack 'tani/vim-jetpack', { 'opt': 1 } "bootstrap
+ Jetpack 'junegunn/goyo.vim'
+ Jetpack 'junegunn/limelight.vim'
+ Jetpack 'vim-denops/denops.vim'
+ Jetpack 'lambdalisue/kensaku.vim'
+ Jetpack 'echasnovski/mini.nvim'
+ Jetpack 'lambdalisue/kensaku-search.vim'
+ Jetpack 'yuki-yano/fuzzy-motion.vim'
+call jetpack#end()
+
+
+
+
 " バックアップファイルを作らない
 set nobackup
 
@@ -36,15 +53,19 @@ inoremap <silent> っj <ESC>
 "help日本語化
 set helplang=ja
 
-"IME有効化
-set iminsert=1
-set imsearch=-1
+" spzenhan.exe のパスを指定
+let g:spzenhan#executable = '/mnt/c/WorkTmp/spzenhan.vim/zenhan/spzenhan.exe'
 
-"挿入モードを抜ける時にIMEをオフにする設定"
-if executable('zenhan')
-  autocmd InsertLeave * :call system('zenhan 0')
-  autocmd CmdlineLeave * :call system('zenhan 0')
-endif
+" グローバル変数を定義して、直前のインサートモードでのIMEの状態を追跡します
+let g:previous_ime_state = 0
+
+" インサートモードに入るたびに、直前のIMEの状態を復元します
+autocmd InsertEnter * call system(g:spzenhan#executable . ' ' . g:previous_ime_state)
+
+" インサートモードを離れるたびに、現在のIMEの状態を保存し、IMEを無効にします
+autocmd InsertLeave * let g:previous_ime_state = system(g:spzenhan#executable . ' --get')[:-2] | call system(g:spzenhan#executable . ' 0')
+
+
 
 "行番号を表示
 set number
@@ -83,16 +104,13 @@ let g:clipboard = {
   \   'cache_enabled': 0,
   \ }
 
-"deno Path
-let g:denops#deno = $HOME . '/.deno/bin/deno'
+" 以下のコードはコマンドラインモードでEnterキーが押されたときに、
+" kensakuプラグインの検索と置換の機能を実行するように設定します。
+cnoremap <CR> <Plug>(kensaku-search-replace)<CR>
 
-call jetpack#begin()
- " bootstrap
- Jetpack 'tani/vim-jetpack', { 'opt': 1 }
- Jetpack 'junegunn/goyo.vim'
- Jetpack 'junegunn/limelight.vim'
- Jetpack 'vim-denops/denops.vim'
- Jetpack 'lambdalisue/kensaku.vim'
- Jetpack 'echasnovski/mini.nvim'
- Jetpack 'lambdalisue/kensaku-search.vim'
-call jetpack#end()
+" 以下のコードはノーマルモードでSキーが押されたときに、
+" FuzzyMotionコマンドを実行するように設定します。
+nnoremap S :FuzzyMotion<CR>
+
+" 以下のコードはfuzzy_motionプラグインのマッチャーとしてkensakuとfzfを設定します。
+let g:fuzzy_motion_matchers = ['kensaku', 'fzf']
