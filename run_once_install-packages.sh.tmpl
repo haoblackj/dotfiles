@@ -6,7 +6,6 @@ set -u
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
   sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
-  sudo ln -snfv ~/.local/share/chezmoi/local.conf /etc/fonts/local.conf
   sudo ln -snfv ~/.local/share/chezmoi/keyboard.conf /etc/default/keyboard
   sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
   # WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
