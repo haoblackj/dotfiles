@@ -8,14 +8,18 @@ endif
 " vim-jetpack
 packadd vim-jetpack
 
+for name in jetpack#names()
+  if !jetpack#tap(name)
+    call jetpack#sync()
+    break
+  endif
+endfor
+
 " バックアップファイルを作らない
 set nobackup
 
 " スワップファイルを作らない
  set noswapfile
-
-" init.vimを保存したら自動反映
-autocmd BufWritePost  ~/.config/nvim/init.vim  so ~/.config/nvim/init.vim
 
 "インデント可視化
 set list
@@ -54,6 +58,10 @@ inoremap [ []<LEFT>
 inoremap ( ()<LEFT>
 inoremap " ""<LEFT>
 inoremap ' ''<LEFT>
+inoremap 「 「」<LEFT>
+inoremap 『 『』<LEFT>
+inoremap 〈 〈〉<LEFT>
+inoremap 《 《》<LEFT>
 
 "棒状カーソル"
 let &t_SI = "\<Esc>]50;CursorShape=1\x7"
@@ -88,10 +96,3 @@ call jetpack#begin()
  Jetpack 'echasnovski/mini.nvim'
  Jetpack 'lambdalisue/kensaku-search.vim'
 call jetpack#end()
-
-for name in jetpack#names()
-  if !jetpack#tap(name)
-    call jetpack#sync()
-    break
-  endif
-endfor
