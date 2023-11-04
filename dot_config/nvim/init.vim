@@ -96,13 +96,11 @@ let g:clipboard = {
   \   'cache_enabled': 0,
   \ }
 
-" 以下のコードはコマンドラインモードでEnterキーが押されたときに、
-" kensakuプラグインの検索と置換の機能を実行するように設定します。
+"以下のコードは検索でEnterを押下したときに、
+"英数字入力で日本語を検索できるようにするためのもの
 cnoremap <CR> <Plug>(kensaku-search-replace)<CR>
 
-" 以下のコードはノーマルモードでSキーが押されたときに、
-" FuzzyMotionコマンドを実行するように設定します。
+"以下のコードは、「S」を押すと、画面内の文字列に英数字入力で
+"fuzzymotionできるようにするためのもの
 nnoremap S :FuzzyMotion<CR>
-
-" 以下のコードはfuzzy_motionプラグインのマッチャーとしてkensakuとfzfを設定します。
 let g:fuzzy_motion_matchers = ['kensaku', 'fzf']
