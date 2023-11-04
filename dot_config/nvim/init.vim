@@ -103,3 +103,9 @@ cnoremap <CR> <Plug>(kensaku-search-replace)<CR>
 "fuzzymotionできるようにするためのもの
 nnoremap S :FuzzyMotion<CR>
 let g:fuzzy_motion_matchers = ['kensaku', 'fzf']
+
+"論理行と表示行移動をスワップしました
+nnoremap k gk
+nnoremap gk k
+nnoremap j gj
+nnoremap gj j
