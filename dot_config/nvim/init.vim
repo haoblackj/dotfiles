@@ -1,33 +1,25 @@
-"neovim + vim
-let s:jetpackfile = stdpath('data') .. '/site/pack/jetpack/opt/vim-jetpack/plugin/jetpack.vim'
-let s:jetpackurl = "https://raw.githubusercontent.com/tani/vim-jetpack/master/plugin/jetpack.vim"
-if !filereadable(s:jetpackfile)
-  call system(printf('curl -fsSLo %s --create-dirs %s', s:jetpackfile, s:jetpackurl))
+" vim-plug なかったら落としてくる
+if empty(glob('$HOME/.local/share/nvim/site/autoload/plug.vim'))
+  silent !curl -fLo $HOME/.local/share/nvim/site/autoload/plug.vim --create-dirs
+    \ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
 endif
 
-" vim-jetpack
-packadd vim-jetpack
-
-for name in jetpack#names()
-  if !jetpack#tap(name)
-    call jetpack#sync()
-    break
-  endif
-endfor
+" 足りないプラグインがあれば :PlugInstall を実行
+autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
+  \| PlugInstall --sync | source $MYVIMRC
+\| endif
 
 "deno Path
 let g:denops#deno = $HOME . '/.deno/bin/deno'
 
-call jetpack#begin()
- Jetpack 'tani/vim-jetpack', { 'opt': 1 } "bootstrap
- Jetpack 'junegunn/goyo.vim'
- Jetpack 'junegunn/limelight.vim'
- Jetpack 'vim-denops/denops.vim'
- Jetpack 'lambdalisue/kensaku.vim'
- Jetpack 'echasnovski/mini.nvim'
- Jetpack 'lambdalisue/kensaku-search.vim'
- Jetpack 'yuki-yano/fuzzy-motion.vim'
-call jetpack#end()
+call plug#begin('$HOME/.local/share/nvim/plugged')
+ Plug 'vim-denops/denops.vim'
+ Plug 'lambdalisue/kensaku.vim'
+ Plug 'echasnovski/mini.nvim'
+ Plug 'lambdalisue/kensaku-search.vim'
+ Plug 'yuki-yano/fuzzy-motion.vim'
+call plug#end()
 
 
 
