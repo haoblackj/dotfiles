@@ -18,6 +18,11 @@ call plug#begin('$HOME/.local/share/nvim/plugged')
  Plug 'echasnovski/mini.nvim'
  Plug 'lambdalisue/kensaku-search.vim'
  Plug 'yuki-yano/fuzzy-motion.vim'
+ Plug 'vim-skk/denops-skkeleton.vim'
+ Plug 'Shougo/ddc.vim'
+ Plug 'Shougo/ddc-matcher_head'
+ Plug 'Shougo/ddc-sorter_rank'
+ Plug 'delphinus/skkeleton_indicator.nvim'
 call plug#end()
 
 
@@ -118,3 +123,24 @@ if !exists('g:vscode')
   nnoremap $ g$
   nnoremap g$ $
 endif
+
+"skkeletonの設定
+imap <C-j> <Plug>(skkeleton-toggle)
+cmap <C-j> <Plug>(skkeleton-toggle)
+
+call skkeleton#config({'eggLikeNewline':v:true})
+call skkeleton#config({'globalJisyo':'/usr/share/skk/SKK-JISYO.L'})
+
+"ddc.vimの設定
+call ddc#custom#patch_global('sources', ['skkeleton'])
+call ddc#custom#patch_global('sourceOptions', {
+    \   '_': {
+    \     'matchers': ['matcher_head'],
+    \     'sorters': ['sorter_rank']
+    \   },
+    \   'skkeleton': {
+    \     'mark': 'skkeleton',
+    \     'matchers': ['skkeleton'],
+    \     'sorters': []
+    \   },
+    \ })
