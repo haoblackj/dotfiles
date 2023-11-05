@@ -105,7 +105,16 @@ nnoremap S :FuzzyMotion<CR>
 let g:fuzzy_motion_matchers = ['kensaku', 'fzf']
 
 "論理行と表示行移動をスワップしました
-nnoremap k gk
-nnoremap gk k
-nnoremap j gj
-nnoremap gj j
+"vscodeでは読み込みません
+if !exists('g:vscode')
+  nnoremap k gk
+  nnoremap gk k
+  nnoremap j gj
+  nnoremap gj j
+  nnoremap 0 g0
+  nnoremap g0 0
+  nnoremap ^ g^
+  nnoremap g^ ^
+  nnoremap $ g$
+  nnoremap g$ $
+endif
