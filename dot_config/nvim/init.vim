@@ -174,8 +174,5 @@ nnoremap <silent> <leader>gg :LazyGit<CR>
 "シンタックスハイライトを有効にするための箇所
 filetype plugin indent on
 
-"シンタックスハイライトdebug用
-au FileType * echom "Filetype set to " . &filetype
-
 "シンタックスハイライト強制設定
 au BufRead,BufNewFile *.txt set filetype=txtjp
