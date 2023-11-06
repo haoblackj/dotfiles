@@ -13,14 +13,25 @@ autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
 let g:denops#deno = $HOME . '/.deno/bin/deno'
 
 call plug#begin('$HOME/.local/share/nvim/plugged')
- Plug 'vim-denops/denops.vim'
- Plug 'lambdalisue/kensaku.vim'
- Plug 'echasnovski/mini.nvim'
- Plug 'lambdalisue/kensaku-search.vim'
- Plug 'yuki-yano/fuzzy-motion.vim'
+  Plug 'vim-denops/denops.vim'
+  Plug 'lambdalisue/kensaku.vim'
+  Plug 'echasnovski/mini.nvim'
+  Plug 'lambdalisue/kensaku-search.vim'
+  Plug 'yuki-yano/fuzzy-motion.vim'
+  Plug 'vim-airline/vim-airline'
+  Plug 'vim-airline/vim-airline-themes'
+  Plug 'tomasiser/vim-code-dark'
+  Plug 'lambdalisue/fern.vim'
+  Plug 'lambdalisue/fern-git-status.vim'
+  Plug 'lambdalisue/nerdfont.vim'
+  Plug 'lambdalisue/fern-renderer-nerdfont.vim'
+  Plug 'lambdalisue/glyph-palette.vim'
+  Plug 'airblade/vim-gitgutter'
+  Plug 'kdheepak/lazygit.nvim'
 call plug#end()
 
-
+"leaderキーを設定
+let mapleader = " "
 
 
 " バックアップファイルを作らない
@@ -118,3 +129,53 @@ if !exists('g:vscode')
   nnoremap $ g$
   nnoremap g$ $
 endif
+
+"vim-airline
+let g:airline#extensions#tabline#enabled = 1
+" ステータスラインに表示する項目を変更する
+let g:airline#extensions#default#layout = [
+  \ [ 'a', 'b', 'c' ],
+  \ ['z']
+  \ ]
+let g:airline_section_c = '%t %M'
+let g:airline_section_z = get(g:, 'airline_linecolumn_prefix', '').'%3l:%-2v'
+" 変更がなければdiffの行数を表示しない
+let g:airline#extensions#hunks#non_zero_only = 1
+
+" タブラインの表示を変更する
+let g:airline#extensions#tabline#fnamemod = ':t'
+let g:airline#extensions#tabline#show_buffers = 1
+let g:airline#extensions#tabline#show_splits = 0
+let g:airline#extensions#tabline#show_tabs = 1
+let g:airline#extensions#tabline#show_tab_nr = 0
+let g:airline#extensions#tabline#show_tab_type = 1
+let g:airline#extensions#tabline#show_close_button = 0
+
+"カラーテーマ
+colorscheme codedark
+let g:airline_theme = 'codedark'
+
+" Ctrl+nでファイルツリーを表示/非表示する
+nnoremap <C-n> :Fern . -reveal=% -drawer -toggle -width=40<CR>
+
+" アイコンを表示する
+let g:fern#renderer = 'nerdfont'
+
+" アイコンに色をつける
+augroup my-glyph-palette
+  autocmd! *
+  autocmd FileType fern call glyph_palette#apply()
+  autocmd FileType nerdtree,startify call glyph_palette#apply()
+augroup END
+
+"lazygitを呼び出すキーマップ
+nnoremap <silent> <leader>gg :LazyGit<CR>
+
+"シンタックスハイライトを有効にするための箇所
+filetype plugin indent on
+
+"シンタックスハイライトdebug用
+au FileType * echom "Filetype set to " . &filetype
+
+"シンタックスハイライト強制設定
+au BufRead,BufNewFile *.txt set filetype=txtjp
