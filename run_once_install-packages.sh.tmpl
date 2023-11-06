@@ -139,6 +139,19 @@ sudo mv win32yank/win32yank.exe /usr/local/bin/win32yank
 rm -rf win32yank-x64.zip win32yank
 {{ end }}
 
+# Install lazyGit
+# gitのGUIツール
+{{$lazyGitPath := lookPath "lazygit"}}
+{{if $lazyGitPath}}
+echo "lazyGitインストール済"
+{{else}}
+LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
+tar xf lazygit.tar.gz lazygit
+sudo install lazygit /usr/local/bin
+rm -rf lazygit.tar.gz
+{{ end }}
+
 # ghqのインストールを確認し、インストールされていなければインストールする関数
 install_ghq_if_not_exists() {
   if ! asdf_plugin_installed "ghq"; then
