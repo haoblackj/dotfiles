@@ -24,6 +24,7 @@ function chezmoi_edit {
 }
 function chezmoi_apply {
     chezmoi apply
+    echo "Chezmoi Apply Done!"
 }
 
 zle -N ghq_peco
