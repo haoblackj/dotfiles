@@ -25,6 +25,10 @@ function chezmoi_edit {
 function chezmoi_apply {
     chezmoi apply
     echo "Chezmoi Apply Done!"
+   echo "\n"
+
+  zle reset-prompt
+  return 0
 }
 
 zle -N ghq_peco
