@@ -17,5 +17,18 @@ function ghq_peco {
     code .
   fi
 }
+
+# chezmoi設定
+function chezmoi_edit {
+    chezmoi edit
+}
+function chezmoi_apply {
+    chezmoi apply
+}
+
 zle -N ghq_peco
+zle -N chezmoi_edit
+zle -N chezmoi_apply
 bindkey '^]' ghq_peco
+bindkey '^[' chezmoi_edit
+bindkey '^\' chezmoi_apply
