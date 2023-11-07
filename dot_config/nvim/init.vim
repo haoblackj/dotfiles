@@ -128,6 +128,8 @@ if !exists('g:vscode')
   nnoremap g^ ^
   nnoremap $ g$
   nnoremap g$ $
+  inoremap <Down> <C-o>gj
+  inoremap <Up>   <C-o>gk
 endif
 
 "vim-airline
@@ -176,3 +178,12 @@ filetype plugin indent on
 
 "シンタックスハイライト強制設定
 au BufRead,BufNewFile *.txt set filetype=txtjp
+
+"Terminalのインサートモードからの離脱をescキーにマッピング
+:tnoremap <Esc> <C-\><C-n>
+
+"TerminalをVSCodeのように現在のウィンドウの下に開く
+command! -nargs=* T split | wincmd j | resize 8 | terminal <args>
+
+"常にインサートモードでTerminalを開く
+autocmd TermOpen * startinsert
