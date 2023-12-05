@@ -43,5 +43,5 @@ end
 map('n', '<leader>gg', ':LazyGit<CR>', opts)
 
 -- nvim-tree
-key('n', '<C-n>', ':NvimTreeToggle<CR>', {silent = true, noremap = true})
-key('n', '<C-j>w', ':NvimTreeFindFile<CR>', {silent = true, noremap = true})
+map('n', '<C-n>', ':NvimTreeToggle<CR>', opts)
+map('n', '<C-j>w', ':NvimTreeFindFile<CR>', opts)
