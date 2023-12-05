@@ -1,6 +1,10 @@
 -- Neovimの主要設定
 -- ここには他の一般的な設定やキーマッピングなどを追加できます
 
+-- package.pathにpluginsフォルダのパスを追加する
+local user_plugins_path = vim.fn.stdpath('config') .. '/plugins/?.lua'
+package.path = package.path .. ';' .. user_plugins_path
+
 -- pluginsフォルダをruntimepathに追加する
 vim.opt.runtimepath:append(vim.fn.stdpath('config') .. '/plugins')
 
