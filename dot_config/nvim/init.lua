@@ -66,8 +66,8 @@ vim.api.nvim_set_keymap('i', '〈', '〈〉<LEFT>', {})
 vim.api.nvim_set_keymap('i', '《', '《》<LEFT>', {})
 
 -- 棒状カーソルの設定
-vim.g.t_SI = "\<Esc>]50;CursorShape=1\x7"
-vim.g.t_EI = "\<Esc>]50;CursorShape=0\x7"
+vim.g.t_SI = "\\<Esc>]50;CursorShape=1\\x7"
+vim.g.t_EI = "\\<Esc>]50;CursorShape=0\\x7"
 vim.api.nvim_set_keymap('i', '<Esc>', '<Esc>lh', {})
 
 -- ヤンクするとクリップボードに保存される設定
