@@ -39,8 +39,9 @@ if not vim.g.vscode then
   map('i', '<Up>', '<C-o>gk', opts)
 end
 
--- Ctrl+nでファイルツリーを表示/非表示する
-map('n', '<C-n>', ':Fern . -reveal=% -drawer -toggle -width=40<CR>', opts)
-
 -- lazygitを呼び出すキーマップ
 map('n', '<leader>gg', ':LazyGit<CR>', opts)
+
+-- nvim-tree
+key('n', '<C-n>', ':NvimTreeToggle<CR>', {silent = true, noremap = true})
+key('n', '<C-j>w', ':NvimTreeFindFile<CR>', {silent = true, noremap = true})

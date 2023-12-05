@@ -1,2 +1,10 @@
--- empty setup using defaults
-require("nvim-tree").setup()
+use {
+    'nvim-tree/nvim-tree.lua',
+    requires = {
+      'nvim-tree/nvim-web-devicons'
+    },
+    config = function()
+      require("nvim-tree").setup()
+    end
+  }
+
