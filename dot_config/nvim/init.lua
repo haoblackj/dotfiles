@@ -1,6 +1,9 @@
 -- Neovimの主要設定
 -- ここには他の一般的な設定やキーマッピングなどを追加できます
 
+-- pluginsフォルダをruntimepathに追加する
+vim.opt.runtimepath:append(vim.fn.stdpath('config') .. '/plugins')
+
 -- pluginsフォルダ内のsetup_plugin.luaをrequireする
 -- 相対パスは 'plugins.setup_plugin' となる（Luaではドットを使って階層を表現します）
 require('plugins.setup_plugin')
