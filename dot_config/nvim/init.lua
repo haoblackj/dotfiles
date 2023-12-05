@@ -10,7 +10,7 @@ vim.opt.runtimepath:append(vim.fn.stdpath('config') .. '/plugins')
 
 -- pluginsフォルダ内のsetup_plugin.luaをrequireする
 -- 相対パスは 'plugins.setup_plugin' となる（Luaではドットを使って階層を表現します）
-require('plugins.setup_plugin')
+require('setup_plugin')
 
 -- 他の設定や機能をここに追加することができます
 -- 例: require('some_other_config')
