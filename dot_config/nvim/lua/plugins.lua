@@ -25,4 +25,7 @@ require("lazy").setup({
   "tomasiser/vim-code-dark",
   "kdheepak/lazygit.nvim",
   "kihachi2000/yash.nvim",
+  'lambdalisue/nerdfont.vim',
+  'nvim-tree/nvim-tree.lua',
+  'nvim-tree/nvim-web-devicons',
 })
