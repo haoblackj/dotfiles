@@ -24,4 +24,5 @@ require("lazy").setup({
   "vim-airline/vim-airline-themes",
   "tomasiser/vim-code-dark",
   "kdheepak/lazygit.nvim",
+  "kihachi2000/yash.nvim",
 })
