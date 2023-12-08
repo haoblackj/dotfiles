@@ -18,6 +18,14 @@ function ghq_peco {
   fi
 }
 
+# ghq cd設定
+function ghq_peco_cd {
+  local dir="$( ghq list -p | peco )"
+  if [ ! -z "$dir" ] ; then
+    cd "$dir"
+  fi
+}
+
 # chezmoi設定
 function chezmoi_edit {
     chezmoi edit
@@ -32,8 +40,10 @@ function chezmoi_apply {
 }
 
 zle -N ghq_peco
+zle -N ghq_peco_cd
 zle -N chezmoi_edit
 zle -N chezmoi_apply
+bindkey '^:' ghq_peco_cd
 bindkey '^]' ghq_peco
 bindkey '^[' chezmoi_edit
 bindkey '^\' chezmoi_apply
