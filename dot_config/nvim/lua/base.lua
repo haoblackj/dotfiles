@@ -36,13 +36,6 @@ vim.o.ttimeoutlen = 50
 vim.o.undofile = true
 vim.o.undodir = vim.fn.stdpath('cache') .. '/undo'
 
-vim.api.nvim_set_keymap('n', 'j', 'gj', { noremap = true })
-vim.api.nvim_set_keymap('n', 'k', 'gk', { noremap = true })
-vim.api.nvim_set_keymap('n', '<Down>', 'gj', { noremap = true })
-vim.api.nvim_set_keymap('n', '<Up>', 'gk', { noremap = true })
-vim.api.nvim_set_keymap('n', 'gj', 'j', { noremap = true })
-vim.api.nvim_set_keymap('n', 'gk', 'k', { noremap = true })
-
 -- disable netrw at the very start of your init.lua
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1

@@ -28,6 +28,7 @@ require("lazy").setup({
   'lambdalisue/nerdfont.vim',
   'nvim-tree/nvim-tree.lua',
   'nvim-tree/nvim-web-devicons',
+  'echasnovski/mini.nvim',
 })
 
 require("nvim-tree").setup()
