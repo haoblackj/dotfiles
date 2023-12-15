@@ -153,6 +153,24 @@ sudo install lazygit /usr/local/bin
 rm -rf lazygit.tar.gz
 {{ end }}
 
+# install ripgrep
+# 検索ツール
+{{$ripgrepPath := lookPath "rg"}}
+{{if $ripgrepPath}}
+echo "ripgrepインストール済"
+{{else}}
+sudo apt-get install -y ripgrep
+{{ end }}
+
+# install fd
+# 検索ツール
+{{$fdPath := lookPath "fd"}}
+{{if $fdPath}}
+echo "fdインストール済"
+{{else}}
+sudo apt install -y fd-find
+{{ end }}
+
 # ghqのインストールを確認し、インストールされていなければインストールする関数
 install_ghq_if_not_exists() {
   if ! asdf_plugin_installed "ghq"; then
