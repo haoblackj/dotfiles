@@ -664,3 +664,4 @@ cmp.setup {
 -- file to avoid any conflict with this file if you're interested in keeping
 -- up-to-date with whatever is in the kickstart repo.
 pcall(require, 'custom.init')
+pcall(require, 'custom.keymaps')
