@@ -171,6 +171,16 @@ echo "fdインストール済"
 sudo apt install -y fd-find
 {{ end }}
 
+# install gcc
+# gcc
+{{$gccPath := lookPath "gcc"}}
+{{if $gccPath}}
+echo "gccインストール済"
+{{else}}
+sudo apt install build-essential -y
+{{ end }}
+
+
 # ghqのインストールを確認し、インストールされていなければインストールする関数
 install_ghq_if_not_exists() {
   if ! asdf_plugin_installed "ghq"; then
