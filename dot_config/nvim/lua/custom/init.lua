@@ -1,4 +1,50 @@
 -- Desc: 基本的な設定を行う
+
+-- Options are automatically loaded before lazy.nvim startup
+-- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
+-- Add any additional options here
+
+vim.cmd("autocmd!")
+
+-- encoding
+vim.o.encoding = 'utf-8'
+vim.o.scriptencoding = 'utf-8'
+
+-- visual
+-- vim.o.ambiwidth = 'double'
+vim.o.tabstop = 2
+vim.o.softtabstop = 2
+vim.o.shiftwidth = 2
+vim.o.expandtab = true
+vim.o.autoindent = true
+vim.o.smartindent = true
+
+vim.o.visualbell = true
+vim.o.number = true
+vim.o.showmatch = true
+vim.o.matchtime = 1
+
+vim.wo.number = true
+
+-- search
+vim.o.incsearch = true
+vim.o.ignorecase = true
+vim.o.smartcase = true
+vim.o.hlsearch = true
+vim.keymap.set('n', '<Esc><Esc>', ':nohl<CR>', { noremap = true, silent = true})
+
+-- manipulation
+vim.g.mapleader = ' '
+vim.o.ttimeout = true
+vim.o.ttimeoutlen = 50
+
+vim.o.undofile = true
+vim.o.undodir = vim.fn.stdpath('cache') .. '/undo'
+
+-- disable netrw at the very start of your init.lua
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+
 -- txtjpの設定
 vim.api.nvim_create_autocmd({"BufRead", "BufNewFile"}, {
     pattern = "*.txt",
@@ -30,6 +76,10 @@ require("nvim-tree").setup({
     dotfiles = true,
   },
 })
+--Lazy.nvim
+{'vim-denops/denops.vim', lazy = false}, --kensaku.vimの依存プラグイン。
+{'lambdalisue/kensaku-search.vim', lazy = false}, --/キーでの検索でkensaku.vimを使うためのプラグイン。
+{'lambdalisue/kensaku.vim', lazy = false},
 
 --kensaku-search
 vim.keymap.set('c', '<CR>', '<Plug>(kensaku-search-replace)<CR>')
