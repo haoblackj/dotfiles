@@ -2,7 +2,8 @@
 -- Default keymaps that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/keymaps.lua
 -- Add any additional keymaps here
 -- キーマッピングの設定
-local map = vim.api.nvim_set_keymap
+
+local map = vim.keymap.set
 local opts = { noremap = true, silent = true }
 
 -- リーダーキーをスペースに設定
@@ -44,7 +45,3 @@ end
 
 -- lazygitを呼び出すキーマップ
 map('n', '<leader>gg', ':LazyGit<CR>', opts)
-
--- nvim-tree
-map('n', '<C-n>', ':NvimTreeToggle<CR>', opts)
-map('n', '<C-j>w', ':NvimTreeFindFile<CR>', opts)

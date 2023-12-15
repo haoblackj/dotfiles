@@ -140,6 +140,15 @@ sudo mv win32yank/win32yank.exe /usr/local/bin/win32yank
 rm -rf win32yank-x64.zip win32yank
 {{ end }}
 
+# Install xsel
+# クリップボード操作プログラム。
+{{$xselPath := lookPath "xsel"}}
+{{if $xselPath}}
+echo "xselインストール済"
+{{else}}
+sudo apt-get install -y xsel
+{{ end }}
+
 # Install lazyGit
 # gitのGUIツール
 {{$lazyGitPath := lookPath "lazygit"}}
