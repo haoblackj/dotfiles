@@ -1,1 +1,1 @@
-au BufRead,BufNewFile *.txt echom "Setting filetype to txtjp" | setfiletype txtjp
+au BufRead,BufNewFile *.txt setfiletype txtjp
