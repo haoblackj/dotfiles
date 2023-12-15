@@ -1,8 +1,2 @@
-require("base")
-require("plugins")
-require("keymaps")
-require("autocmds")
-require("colorscheme")
-require("nvim-tree")
-require("writing_conf")
-require("clipboard")
+-- bootstrap lazy.nvim, LazyVim and your plugins
+require("config.lazy")
