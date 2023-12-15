@@ -76,10 +76,6 @@ require("nvim-tree").setup({
     dotfiles = true,
   },
 })
---Lazy.nvim
-{'vim-denops/denops.vim', lazy = false}, --kensaku.vimの依存プラグイン。
-{'lambdalisue/kensaku-search.vim', lazy = false}, --/キーでの検索でkensaku.vimを使うためのプラグイン。
-{'lambdalisue/kensaku.vim', lazy = false},
 
 --kensaku-search
 vim.keymap.set('c', '<CR>', '<Plug>(kensaku-search-replace)<CR>')
