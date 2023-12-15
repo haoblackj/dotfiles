@@ -5,6 +5,8 @@ export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export DENO_INSTALL="/home/yagu001/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 export PATH=$HOME/bin:/usr/local/bin:$PATH
+export PATH="$HOME/.local/bin:$PATH"
+
 
 # asdf Path設定
 . "$HOME/.asdf/asdf.sh"
