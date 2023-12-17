@@ -131,3 +131,6 @@ vim.api.nvim_create_autocmd("FileType", {
         vim.opt_local.wrap = true
     end
 })
+
+-- カーソル行からの相対的な行番号を表示する
+opt.relativenumber = true
