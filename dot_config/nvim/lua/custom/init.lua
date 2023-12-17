@@ -133,4 +133,4 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 -- カーソル行からの相対的な行番号を表示する
-opt.relativenumber = true
+vim.opt.relativenumber = true
