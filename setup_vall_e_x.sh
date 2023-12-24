@@ -3,6 +3,10 @@
 # スクリプトの失敗時に停止するための設定
 set -e
 
+sudo apt -y install --no-install-recommends make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+cd /tmp
+curl https://pyenv.run | bash
+
 # CUDAの最新安定版のインストール
 echo "CUDAのインストールを開始します..."
 wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
