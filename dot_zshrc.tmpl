@@ -20,19 +20,19 @@ zicompinit # <- https://wiki.zshell.dev/docs/guides/commands
 
 zinit ice depth=1; zinit light romkatv/powerlevel10k
 
-source ~/.local/share/chezmoi/zsh/plugins.zsh
-source ~/.local/share/chezmoi/zsh/config.zsh
-source ~/.local/share/chezmoi/zsh/alias.zsh
+source ~/.zsh/plugins.zsh
+source ~/.zsh/config.zsh
+source ~/.zsh/alias.zsh
 {{ if eq .chezmoi.os "linux" }}
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
-source ~/.local/share/chezmoi/zsh/wsl_only.zsh
+source ~/.zsh/wsl_only.zsh
 {{     end }}
 {{   end }}
 {{ end }}
 
 # To customize prompt, run `p10k configure` or edit .../zsh/p10k.zsh.
-[[ ! -f ~/.local/share/chezmoi/zsh/p10k.zsh ]] || source ~/.local/share/chezmoi/zsh/p10k.zsh
+[[ ! -f ~/.zsh/p10k.zsh ]] || source ~/.zsh/p10k.zsh
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
