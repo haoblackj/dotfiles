@@ -1,5 +1,5 @@
 [".config/nvim"]
 type = "git-repo"
-url = "https://github.com/AstroNvim/AstroNvim"
+url = "https://github.com/haoblackj/astronvim-template"
 refreshPeriod = "24h"
 clone.args = ["--depth", "1", "-b", "main"]
