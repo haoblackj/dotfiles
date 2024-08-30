@@ -1,0 +1,23 @@
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[user]
+	name = haoblackj
+	email = 17177994+haoblackj@users.noreply.github.com
+[core]
+	autocrlf = false
+	quotepath = false
+{{- if eq .chezmoi.username "yagu1755" }}
+[credential]
+    helper = "/mnt/c/Users/yagu1755/scoop/apps/git/current/mingw64/bin/git-credential-manager.exe"
+{{- else }}
+[credential]
+    helper = "/mnt/c/Users/yagu001/scoop/apps/git/current/mingw64/bin/git-credential-manager.exe"
+{{- end }}
+[alias]
+	cob = checkout -b
+  co = checkout
+[ghq]
+	root = ~/repo
