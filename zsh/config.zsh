@@ -66,3 +66,6 @@ fi
 
 # gh設定
 export GH_CONFIG_DIR=~/.config/gh
+
+# tfenv設定
+export PATH="$HOME/.tfenv/bin:$PATH"
