@@ -25,7 +25,9 @@ vim.g.maplocalleader = "\\"
 require("lazy").setup({
   spec = {
     -- add your plugins here
-    { { import = "plugins" } }
+    {
+      { import = "plugins" }
+    }
   },
   -- Configure any other settings here. See the documentation for more details.
   -- colorscheme that will be used when installing plugins.
@@ -33,11 +35,12 @@ require("lazy").setup({
   -- automatically check for plugin updates
   checker = { enabled = true },
 
--- Configure keymapping
-  require('keymaps'),
-
--- Disable netrw for nvim-tree
-  vim.api.nvim_set_var('loaded_netrw', 1),
-  vim.api.nvim_set_var('loaded_netrwPlugin', 1),
 
 })
+
+-- Configure keymapping
+  require('keymaps')
+
+-- Disable netrw for nvim-tree
+  vim.api.nvim_set_var('loaded_netrw', 1)
+  vim.api.nvim_set_var('loaded_netrwPlugin', 1)
