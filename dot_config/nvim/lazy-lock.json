@@ -4,6 +4,7 @@
   "clever-f.vim": { "branch": "master", "commit": "6a3ac5e3688598af9411ab741737f98c47370c22" },
   "denops.vim": { "branch": "main", "commit": "3a38e081f922e0134671236edd3e6dcbb251d10c" },
   "fuzzy-motion.vim": { "branch": "main", "commit": "f926a6080489d03b08af66cdd1e89b8c2f5c4f39" },
+  "gitsigns.nvim": { "branch": "main", "commit": "4daf7022f1481edf1e8fb9947df13bb07c18e89a" },
   "horizon.nvim": { "branch": "main", "commit": "b4d7b1e7c3aa77aea31b9ced8960e49fd8682c47" },
   "kensaku-search.vim": { "branch": "main", "commit": "9568c2b174a9cf31bd9922c0a991117f4dd4f0c3" },
   "kensaku.vim": { "branch": "main", "commit": "f7080a9f49132f688f9023cab28ffe3a1f51dee3" },
@@ -13,5 +14,6 @@
   "none-ls.nvim": { "branch": "main", "commit": "dcc8cd4efdcb29275681a3c95786a816330dbca6" },
   "nvim-tree.lua": { "branch": "master", "commit": "4a9e82d10a3715d0c3845e1d2f66ddfb8b711253" },
   "nvim-web-devicons": { "branch": "master", "commit": "19d257cf889f79f4022163c3fbb5e08639077bd8" },
-  "plenary.nvim": { "branch": "master", "commit": "2d9b06177a975543726ce5c73fca176cedbffe9d" }
+  "plenary.nvim": { "branch": "master", "commit": "2d9b06177a975543726ce5c73fca176cedbffe9d" },
+  "toggleterm.nvim": { "branch": "main", "commit": "48be57eaba817f038d61bbf64d2c597f578c0827" }
 }
