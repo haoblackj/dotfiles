@@ -31,7 +31,7 @@ require("lazy").setup({
   },
   -- Configure any other settings here. See the documentation for more details.
   -- colorscheme that will be used when installing plugins.
-  install = { colorscheme = { "horizon" } },
+  -- install = { colorscheme = { "horizon-extended" } },
   -- automatically check for plugin updates
   checker = { enabled = true },
 
@@ -65,3 +65,30 @@ vim.g.clipboard = {
   },
   cache_enabled = 1,
 }
+
+-- Configure colorscheme
+require("horizon-extended").setup({
+	style = "neo",
+	transparent = true,
+	terminal_colors = true,
+	enable_italics = true,
+	show_end_of_buffer = false,
+	underline = false,
+	undercurl = true,
+	styles = {
+		booleans = { italic = true, bold = true },
+		comments = { italic = true, bold = false },
+		conditionals = { italic = true, bold = false },
+		delimiters = { italic = false, bold = false },
+		functions = { italic = false, bold = false },
+		keywords = { italic = true, bold = false },
+		loops = { italic = true, bold = false },
+		operators = { italic = false, bold = false },
+		properties = { italic = false, bold = false },
+		strings = { italic = false, bold = false },
+		types = { italic = false, bold = false },
+		variables = { italic = false, bold = false },
+	},
+})
+
+vim.cmd.colorscheme "horizon-extended"
