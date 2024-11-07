@@ -48,21 +48,20 @@ require("lazy").setup({
   vim.api.nvim_set_var('loaded_netrw', 1)
   vim.api.nvim_set_var('loaded_netrwPlugin', 1)
 
-  -- 表示設定
-  vim.opt.number = true  -- 行番号を表示
-  vim.wo.number = true
-  vim.wo.relativenumber = false  -- 相対行番号を無効化
-
-  -- クリップボード関連
-  vim.g.clipboard = {
-    name = 'WslClipboard',
-    copy = {
-        ['+'] = 'xsel -bi',
-        ['*'] = 'xsel -bi',
-    },
-    paste = {
-        ['+'] = 'xsel -bo',
-        ['*'] = function() return vim.fn.systemlist('xsel -bo | tr -d "\r"') end,
-    },
-    cache_enabled = 1,
+-- 表示設定
+vim.opt.number = true  -- 行番号を表示
+vim.wo.number = true
+vim.wo.relativenumber = false  -- 相対行番号を無効化
+-- クリップボード関連
+vim.g.clipboard = {
+  name = 'WslClipboard',
+  copy = {
+      ['+'] = 'xsel -bi',
+      ['*'] = 'xsel -bi',
+  },
+  paste = {
+      ['+'] = 'xsel -bo',
+      ['*'] = function() return vim.fn.systemlist('xsel -bo | tr -d "\r"') end,
+  },
+  cache_enabled = 1,
 }
