@@ -41,6 +41,9 @@ function chezmoi_apply {
   return 0
 }
 
+# xsel設定
+export DISPLAY=localhost:0.0
+
 zle -N ghq_peco
 zle -N ghq_peco_cd
 zle -N chezmoi_edit
