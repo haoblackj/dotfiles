@@ -3,7 +3,14 @@ local function open_nvim_tree()
     require("nvim-tree.api").tree.open()
 end
 
-vim.api.nvim_create_autocmd({ "VimEnter" }, { callback = open_nvim_tree })
+vim.api.nvim_create_autocmd("VimEnter", {
+    callback = function()
+        open_nvim_tree()
+        -- nvim-treeを開いた後にカスタムハイライトを再適用
+        require('custom_highlights').setup()
+        -- vim.notify("Custom highlights applied after nvim-tree")
+    end,
+})
 
 return {
   "nvim-tree/nvim-tree.lua",
