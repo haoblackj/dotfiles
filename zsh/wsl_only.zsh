@@ -53,4 +53,4 @@ bindkey '^]' ghq_peco
 bindkey '^[' chezmoi_edit
 bindkey '^\' chezmoi_apply
 
-~/startup_script.sh
+~/fix_wayland.sh
