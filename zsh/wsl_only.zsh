@@ -41,8 +41,8 @@ function chezmoi_apply {
   return 0
 }
 
-# xsel設定
-export DISPLAY=localhost:0.0
+# # xsel設定
+# export DISPLAY=localhost:0.0
 
 zle -N ghq_peco
 zle -N ghq_peco_cd
@@ -52,3 +52,5 @@ bindkey '^:' ghq_peco_cd
 bindkey '^]' ghq_peco
 bindkey '^[' chezmoi_edit
 bindkey '^\' chezmoi_apply
+
+~/startup_script.sh
