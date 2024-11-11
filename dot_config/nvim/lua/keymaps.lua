@@ -14,6 +14,10 @@ vim.api.nvim_set_keymap('n', '<Up>', 'gk', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('v', '<Down>', 'gj', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('v', '<Up>', 'gk', { noremap = true, silent = true })
 
+-- インサートモードでの矢印キーの上下移動も表示行に置き換える
+vim.api.nvim_set_keymap('i', '<Down>', '<C-o>gj', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('i', '<Up>', '<C-o>gk', { noremap = true, silent = true })
+
 -- 状態遷移系
 vim.keymap.set("i", "jj", "<esc><cmd>w<CR>")
 vim.keymap.set("i", "kk", "<esc><cmd>w<CR>")
