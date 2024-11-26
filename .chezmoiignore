@@ -6,3 +6,30 @@
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi aplly の対象から外す
 /.gitconfig
 {{- end }}
+
+{{- if eq (env "OS") "Windows_NT" }}
+# Windows マシンのため、下記ファイルは chezmoi apply の対象から外す
+/.wslconfig
+/.bashrc
+/.bash_profile
+/.bash_aliases
+/.zshrc
+/.zprofile
+/.profile
+/.czrc
+/.gitignore
+/.gitconfig
+/.inputrc
+/executable_fix_wayland.sh
+/keyboards.conf
+/local.conf
+/wsl.conf
+/my-settings.service
+/run_once_install-packages.sh
+/my-settings.sh
+/setup_vall_e_x.sh
+.config/fontconfig/*
+.config/lazygit/*
+.config/nvim/*
+zsh/*
+{{- end }}
