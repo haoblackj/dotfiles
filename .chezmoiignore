@@ -7,7 +7,7 @@
 /.gitconfig
 {{- end }}
 
-{{- if eq (env "OS") "Windows_NT" }}
+{{ if eq .chezmoi.os "windows" -}}
 # Windows マシンのため、下記ファイルは chezmoi apply の対象から外す
 /.wslconfig
 /.bashrc
@@ -20,16 +20,26 @@
 /.gitignore
 /.gitconfig
 /.inputrc
-/executable_fix_wayland.sh
-/keyboards.conf
-/local.conf
-/wsl.conf
-/my-settings.service
-/run_once_install-packages.sh
-/my-settings.sh
-/setup_vall_e_x.sh
-.config/fontconfig/*
-.config/lazygit/*
-.config/nvim/*
-zsh/*
+fix_wayland.sh
+keyboard.conf
+local.conf
+wsl.conf
+my-settings.service
+run_once_install-packages.sh
+my-settings.sh
+setup_vall_e_x.sh
+.config/fontconfig
+.config/gh
+.config/lazygit
+.config/nvim
+zsh
+install-packages.sh
+{{- end }}
+
+{{- if ne .chezmoi.os "windows" -}}
+# Linux マシンのため、下記ファイルは chezmoi apply の対象から外す
+.config/komorebi
+.config/whkd
+.config/wezterm
+/.wezterm.lua
 {{- end }}
