@@ -45,11 +45,20 @@
           "layout": "Rows"
         }
       ]
+    },
+    {
+      "workspaces": [
+        {
+          "name": "Quaternary",
+          "layout": "VerticalStack"
+        }
+      ]
     }
   ],
   "display_index_preferences": {
     "0": "ENC2796-5&2fe87119&0&UID4354",
     "1": "ENC2796-5&2fe87119&0&UID4356",
-    "2": "DELF069-5&2fe87119&0&UID4358"
+    "2": "DELF069-5&2fe87119&0&UID4358",
+    "3": "PHLC155-4&24cf2cc3&0&UID4145"
   }
 }
