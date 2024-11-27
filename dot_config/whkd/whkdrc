@@ -27,6 +27,8 @@ alt + shift + j         : komorebic move down
 alt + shift + k         : komorebic move up
 alt + shift + l         : komorebic move right
 alt + shift + return    : komorebic promote
+alt + right     : komorebic cycle-monitor previous # oem_3 is @
+alt + left	 : komorebic cycle-monitor next # oem_1 is ;
 
 # Stack windows
 #alt + left              : komorebic stack left
@@ -54,6 +56,8 @@ alt + p                 : komorebic toggle-pause
 # Layouts
 alt + x                 : komorebic flip-layout horizontal
 alt + y                 : komorebic flip-layout vertical
+alt + oem_4			 : komorebic cycle-layout previous # oem_4 is [
+alt + oem_6			 : komorebic cycle-layout next # oem_6 is ]
 
 # Workspaces
 alt + 1                 : komorebic focus-workspace 0
