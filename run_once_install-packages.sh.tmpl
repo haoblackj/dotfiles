@@ -8,7 +8,7 @@ set -u
   sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
   sudo ln -snfv ~/.local/share/chezmoi/local.conf /etc/fonts/local.conf
   sudo ln -snfv ~/.local/share/chezmoi/keyboard.conf /etc/default/keyboard
-  sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
+  # sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
   # WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   # echo ${WINHOME}
   # cp -f .wslconfig ${WINHOME}/
@@ -27,6 +27,7 @@ echo "zshインストール済"
 {{ if $wsluPath }}
 echo "wsluインストール済"
 {{ else }}
+# wsluはwslからデフォルトブラウザを開くために必要
     echo "wsluインストール"
     sudo add-apt-repository ppa:wslutilities/wslu -y
     sudo apt update
@@ -129,24 +130,33 @@ sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
 
 # Install win32yank.
 # クリップボード操作プログラム。
-{{$win32yankPath := lookPath "win32yank"}}
-{{if $win32yankPath}}
-echo "win32yankインストール済"
-{{else}}
-curl -fLO https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip
-unzip win32yank-x64.zip -d win32yank
-chmod u+x win32yank/win32yank.exe
-sudo mv win32yank/win32yank.exe /usr/local/bin/win32yank
-rm -rf win32yank-x64.zip win32yank
-{{ end }}
+# {{$win32yankPath := lookPath "win32yank"}}
+# {{if $win32yankPath}}
+# echo "win32yankインストール済"
+# {{else}}
+# curl -fLO https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip
+# unzip win32yank-x64.zip -d win32yank
+# chmod u+x win32yank/win32yank.exe
+# sudo mv win32yank/win32yank.exe /usr/local/bin/win32yank
+# rm -rf win32yank-x64.zip win32yank
+# {{ end }}
 
 # Install xsel
 # クリップボード操作プログラム。
-{{$xselPath := lookPath "xsel"}}
-{{if $xselPath}}
-echo "xselインストール済"
+# {{$xselPath := lookPath "xsel"}}
+# {{if $xselPath}}
+# echo "xselインストール済"
+# {{else}}
+# sudo apt-get install -y xsel
+# {{ end }}
+
+# Install wl-clipboard
+# クリップボード操作プログラム。
+{{$wlClipboardPath := lookPath "wl-copy"}}
+{{if $wlClipboardPath}}
+echo "wl-clipboardインストール済"
 {{else}}
-sudo apt-get install -y xsel
+sudo apt install -y wl-clipboard
 {{ end }}
 
 # Install lazyGit
