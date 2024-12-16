@@ -40,16 +40,17 @@ config.font_size = 16
 config.use_ime = true
 
 -- WSL起動設定
-config.default_prog = {
-  "wsl.exe",
-  "--distribution",
-  "Ubuntu",
-  "--cd",
-  "/home/yagu001",
-  "--exec",
-  "/bin/zsh",
-  "-l"
-}
+-- config.default_prog = {
+--   "wsl.exe",
+--   "--distribution",
+--   "Ubuntu",
+--   "--cd",
+--   "/home/yagu001",
+--   "--exec",
+--   "/bin/zsh",
+--   "-l"
+-- }
+config.default_domain = 'WSL:Ubuntu'
 
 -- 起動メニュー設定
 config.launch_menu = {
@@ -57,24 +58,16 @@ config.launch_menu = {
   {
     label = "Ubuntu (WSL)",
     args = {"wsl.exe", "--distribution", "Ubuntu", "--cd", "/home/yagu001", "--exec", "/bin/zsh", "-l"}
-  },
-  {
-    label = "ArchLinux - zsh",
-    args = {"wsl.exe", "--distribution", "ArchLinux", "--cd", "/home/yagu001", "--exec", "/bin/zsh", "-l"}
-  },
-  {
-    label = "ArchLinux - bash",
-    args = {"wsl.exe", "--distribution", "ArchLinux", "--cd", "/home/yagu001", "--exec", "/bin/bash", "-l"}
-  },
-  -- PowerShell 7.4の設定
-  {
-    label = "PowerShell 7.4",
-    args = {"C:\\Program Files\\PowerShell\\7\\pwsh.exe"}
-  },
-  -- cmdの設定
-  {
-    label = "Command Prompt",
-    args = {"cmd.exe"}
+  -- },
+  -- -- PowerShell 7.4の設定
+  -- {
+  --   label = "PowerShell 7.4",
+  --   args = {"C:\\Program Files\\PowerShell\\7\\pwsh.exe"}
+  -- },
+  -- -- cmdの設定
+  -- {
+  --   label = "Command Prompt",
+  --   args = {"cmd.exe"}
   },
 }
 
@@ -89,17 +82,17 @@ config.mouse_bindings = {
 }
 
 -- WSL のタブを閉じる際の挙動を設定
-config.skip_close_confirmation_for_processes_named = {
-  'bash',
-  'sh',
-  'zsh',
-  'fish',
-  'tmux',
-  'nu',
-  'cmd.exe',
-  'pwsh.exe',
-  'powershell.exe',
-}
+-- config.skip_close_confirmation_for_processes_named = {
+--   'bash',
+--   'sh',
+--   'zsh',
+--   'fish',
+--   'tmux',
+--   'nu',
+--   'cmd.exe',
+--   'pwsh.exe',
+--   'powershell.exe',
+-- }
 
 -- タブの設定
 
