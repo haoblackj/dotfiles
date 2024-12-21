@@ -75,8 +75,8 @@ return {
     { key = 'P', mods = 'SHIFT|CTRL', action = act.ActivateCommandPalette },
     { key = 'R', mods = 'CTRL', action = act.ReloadConfiguration },
     { key = 'R', mods = 'SHIFT|CTRL', action = act.ReloadConfiguration },
-    { key = 'T', mods = 'CTRL', action = act.SpawnTab 'CurrentPaneDomain' },
-    { key = 'T', mods = 'SHIFT|CTRL', action = act.SpawnTab 'CurrentPaneDomain' },
+    { key = 'T', mods = 'CTRL', action = wezterm.action.SpawnCommandInNewTab { cwd = '~' } },
+    { key = 'T', mods = 'SHIFT|CTRL', action = wezterm.action.SpawnCommandInNewTab { cwd = '~' } },
     { key = 'U', mods = 'CTRL', action = act.CharSelect{ copy_on_select = true, copy_to =  'ClipboardAndPrimarySelection' } },
     { key = 'U', mods = 'SHIFT|CTRL', action = act.CharSelect{ copy_on_select = true, copy_to =  'ClipboardAndPrimarySelection' } },
     { key = 'V', mods = 'CTRL', action = act.PasteFrom 'Clipboard' },
@@ -140,7 +140,7 @@ return {
     { key = 'Copy', mods = 'NONE', action = act.CopyTo 'Clipboard' },
     { key = 'Paste', mods = 'NONE', action = act.PasteFrom 'Clipboard' },
     -- Tab新規作成
-    { key = "t", mods = "CTRL", action = act({ SpawnTab = "CurrentPaneDomain" }) },
+    { key = "t", mods = "CTRL", action = wezterm.action.SpawnCommandInNewTab { cwd = '~' } },
     -- Tabを閉じる
     { key = "w", mods = "CTRL", action = act({ CloseCurrentTab = { confirm = true } }) },
     { key = "}", mods = "LEADER", action = act({ MoveTabRelative = 1 }) },
