@@ -52,24 +52,32 @@ config.use_ime = true
 -- }
 config.default_domain = 'WSL:Ubuntu'
 
--- 起動メニュー設定
-config.launch_menu = {
-  -- 既存のWSLの設定をここに追加（必要に応じて）
-  {
-    label = "Ubuntu (WSL)",
-    args = {"wsl.exe", "--distribution", "Ubuntu", "--cd", "/home/yagu001", "--exec", "/bin/zsh", "-l"}
-  -- },
-  -- -- PowerShell 7.4の設定
-  -- {
-  --   label = "PowerShell 7.4",
-  --   args = {"C:\\Program Files\\PowerShell\\7\\pwsh.exe"}
-  -- },
-  -- -- cmdの設定
-  -- {
-  --   label = "Command Prompt",
-  --   args = {"cmd.exe"}
-  },
-}
+-- config.wsl_domains = {
+--   {
+--     name = 'WSL:Ubuntu',
+--     distribution = 'Ubuntu',
+--     default_cwd = '/home/yagu001',
+--   }
+-- }
+
+-- -- 起動メニュー設定
+-- config.launch_menu = {
+--   -- 既存のWSLの設定をここに追加（必要に応じて）
+--   {
+--     label = "Ubuntu (WSL)",
+--     args = {"wsl.exe", "--distribution", "Ubuntu", "--cd", "/home/yagu001", "--exec", "/bin/zsh", "-l"}
+--   -- },
+--   -- -- PowerShell 7.4の設定
+--   -- {
+--   --   label = "PowerShell 7.4",
+--   --   args = {"C:\\Program Files\\PowerShell\\7\\pwsh.exe"}
+--   -- },
+--   -- -- cmdの設定
+--   -- {
+--   --   label = "Command Prompt",
+--   --   args = {"cmd.exe"}
+--   },
+-- }
 
 -- マウスの設定
 config.mouse_bindings = {
@@ -120,7 +128,7 @@ config.window_frame = {
   colors = { "#000000" },
 }
 
--- config.show_new_tab_button_in_tab_bar = false
+config.show_new_tab_button_in_tab_bar = false
 -- config.show_close_tab_button_in_tabs = false
 
 local SOLID_LEFT_ARROW = wezterm.nerdfonts.ple_lower_right_triangle
