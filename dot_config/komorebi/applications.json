@@ -1242,6 +1242,20 @@
       }
     ]
   },
+  "Microsoft SQL Server Management Studio": {
+    "floating": [
+      {
+        "kind": "Exe",
+        "id": "Ssms.exe",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Class",
+        "id": "WindowsForms10.Window.8.app",
+        "matching_strategy": "StartsWith"
+      }
+    ]
+  },
   "Microsoft Terminal Services Client": {
     "ignore": [
       {
@@ -1603,6 +1617,22 @@
         "id": "prime95.exe",
         "matching_strategy": "Equals"
       }
+    ]
+  },
+  "Prism Launcher": {
+    "floating": [
+      [
+        {
+          "kind": "Exe",
+          "id": "prismlauncher.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "- Prism Launcher",
+          "matching_strategy": "Contains"
+        }
+      ]
     ]
   },
   "Process Hacker": {
