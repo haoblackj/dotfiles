@@ -64,5 +64,12 @@
     "1": "ENC2796-5&2fe87119&0&UID4356",
     "2": "DELF069-5&2fe87119&0&UID4358",
     "3": "PHLC155-4&24cf2cc3&0&UID4145"
-  }
+  },
+  "ignore_rules": [
+    {
+      "kind": "Exe",
+      "id": "Ueli",
+      "matching_strategy": "Contains"
+    }
+  ]
 }
