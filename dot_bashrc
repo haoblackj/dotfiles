@@ -36,3 +36,4 @@ if [ -d "${PYENV_ROOT}" ]; then
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
 fi
+. "/home/yagu001/.deno/env"

@@ -1,1 +1,2 @@
 source ~/.profile
+. "/home/yagu001/.deno/env"
