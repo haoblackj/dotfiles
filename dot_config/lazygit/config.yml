@@ -1,5 +1,5 @@
 customCommands:
-  - command: czg
+  - command: git-cz
     context: files
     subprocess: true
     key: c
