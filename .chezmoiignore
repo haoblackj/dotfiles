@@ -41,5 +41,6 @@ install-packages.sh
 .config/komorebi
 .config/whkd
 .config/wezterm
+.config/scoop
 /.wezterm.lua
 {{- end }}
