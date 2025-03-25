@@ -12,5 +12,5 @@ nvm install --lts
 nvm use --lts
 npm install -g yarn
 npm install -g @vivliostyle/cli
-npm install -g git-cz
+npm install -g git-cz cz-conventional-changelog-ja
 ```
