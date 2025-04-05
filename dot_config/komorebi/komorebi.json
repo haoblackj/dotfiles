@@ -38,7 +38,7 @@
       "workspaces": [
         {
           "name": "Secondary",
-          "layout": "UltrawideVerticalStack"
+          "layout": "VerticalStack"
         }
       ]
     },
