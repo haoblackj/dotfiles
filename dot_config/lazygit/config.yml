@@ -7,3 +7,6 @@ customCommands:
 os:
   editPreset: "vscode"
   promptToReturnFromSubprocess: false # removes "press enter to return to lazygit" popup
+
+git:
+  pullArgs: []
