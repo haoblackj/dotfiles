@@ -1,8 +1,14 @@
+# https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
+
 customCommands:
-  - command: git-cz
+  - command: czg
     context: files
     subprocess: true
     key: c
+  - command: czg ai
+    context: files
+    subprocess: true
+    key: C
 
 os:
   editPreset: "vscode"
