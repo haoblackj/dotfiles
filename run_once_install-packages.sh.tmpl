@@ -61,21 +61,24 @@ echo "wsluインストール済"
 echo "pyenvインストール済"
 {{ else }}
 echo "pyenvインストール開始"
+sudo apt update && sudo apt install -y \
+  build-essential \
+  libssl-dev \
+  zlib1g-dev \
+  libbz2-dev \
+  libreadline-dev \
+  libsqlite3-dev \
+  libncurses-dev \
+  libffi-dev \
+  liblzma-dev \
+  tk-dev \
+  uuid-dev \
+  libnss3-dev \
+  libgdbm-dev \
+  libdb-dev \
+  libexpat1-dev
 git clone https://github.com/pyenv/pyenv.git ~/.pyenv
 git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
-
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init --path)"
-eval "$(pyenv virtualenv-init -)"
-
-# Pythonバージョンのインストールとグローバル設定
-PYTHON_VERSION="3.11.8"
-if ! pyenv versions --bare | grep -qx "$PYTHON_VERSION"; then
-  pyenv install "$PYTHON_VERSION"
-fi
-pyenv global "$PYTHON_VERSION"
-pip install --upgrade pip
 {{ end }}
 
 {{ $ghPath := lookPath "gh" }}
