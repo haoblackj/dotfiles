@@ -23,7 +23,7 @@ fi
 # export PATH=$PATH:/usr/local/go/bin
 
 # asdf Path設定
-. "$HOME/.asdf/libexec/asdf.sh"
+export PATH="$HOME/.asdf/bin:$PATH"
 
 export PYENV_ROOT="${HOME}/.pyenv"
 if [ -d "${PYENV_ROOT}" ]; then

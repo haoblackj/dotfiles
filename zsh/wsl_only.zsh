@@ -9,7 +9,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 
 # Go実装のasdf用（v0.16.0 以降）
-source "$HOME/.asdf/libexec/asdf.sh"
+export PATH="$HOME/.asdf/bin:$PATH"
 
 # ghq設定
 function ghq_peco {
