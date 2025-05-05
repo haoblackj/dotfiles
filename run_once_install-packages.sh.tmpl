@@ -8,6 +8,7 @@ set -u
   sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
   sudo ln -snfv ~/.local/share/chezmoi/local.conf /etc/fonts/local.conf
   sudo ln -snfv ~/.local/share/chezmoi/keyboard.conf /etc/default/keyboard
+  sudo ln -snfv ~/.local/share/chezmoi/envrc /opt/etc/envrc
   # sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' /etc/apt/sources.list
   # WINHOME=/mnt/c/Users/$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
   # echo ${WINHOME}
@@ -81,16 +82,25 @@ git clone https://github.com/pyenv/pyenv.git ~/.pyenv
 git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
 {{ end }}
 
+# linuxbrewをインストールするセクション
+{{ $linuxbrewPath := lookPath "brew" }}
+{{ if $linuxbrewPath }}
+echo "linuxbrewインストール済"
+{{ else }}
+echo "linuxbrewインストール開始"
+sudo apt-get install build-essential procps curl file git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+source ~/.bashrc
+{{ end}}
+
 {{ $ghPath := lookPath "gh" }}
 {{ if $ghPath }}
 echo "ghインストール済"
 {{ else }}
-    echo "ghインストールします"
-    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-    sudo apt update -y
-    sudo apt install gh -y
-    sudo apt-get install fzf -y
+
+    echo "ghインストール"
+    brew install fzf
+    brew install gh
 {{ end }}
 
 {{ $dockerPath := lookPath "docker" }}
@@ -111,37 +121,27 @@ echo "dockerインストール済"
     sudo systemctl enable docker
 {{ end }}
 
-{{ $asdfPath := lookPath "asdf" }}
-{{ if $asdfPath }}
-echo "asdfインストール済"
-{{ else }}
-    git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.16.7
-    # 現在のセッションで初期化
-    . "$HOME/.asdf/libexec/asdf.sh"
-{{ end }}
-
-# goをasdfでインストールするセクション
+# goをインストールするセクション
 {{ $goPath := lookPath "go" }}
 {{ if $goPath }}
 echo "goインストール済"
 {{ else }}
-    asdf plugin add golang
-    asdf install golang latest
-    asdf global golang latest
-    asdf reshim golang
+echo "goインストール開始"
+sudo apt install -y golang-go
 {{ end }}
 
 # nvmをインストールするセクション
-{{ $asdfPath := lookPath "asdf" }}
-{{ if $asdfPath }}
+{{ $nvmPath := lookPath "nvm" }}
+{{ if $nvmPath }}
 echo "nvmインストール済"
 {{ else }}
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+echo "nvmインストール開始"
+brew install nvm
 {{ end }}
 
 # denoをインストールするセクション
-{{ $asdfPath := lookPath "asdf" }}
-{{ if $asdfPath }}
+{{ $denoPath := lookPath "deno" }}
+{{ if $denoPath }}
 echo "denoインストール済"
 {{ else }}
 curl -fsSL https://deno.land/x/install/install.sh | sh -s -- -y
@@ -161,27 +161,22 @@ sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
 # curl -fLo $HOME/.local/share/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 {{end}}
 
-# ghqのインストールを確認し、インストールされていなければインストールする関数
-install_ghq_if_not_exists() {
-  if ! asdf_plugin_installed "ghq"; then
-    asdf plugin add ghq
-    asdf install ghq latest
-    asdf global ghq latest
-  fi
-}
+# ghqをインストールするセクション
+{{ $ghqPath := lookPath "ghq" }}
+{{ if $ghqPath }}
+echo "ghqインストール済"
+{{ else }}
+echo "ghqインストール開始"
+brew install ghq
+{{ end }}
 
-# ghqのインストールを確認し、インストールされていなければインストールする
-install_ghq_if_not_exists
-
+# pecoをインストールするセクション
 {{ $pecoPath := lookPath "peco" }}
 {{ if $pecoPath }}
 echo "pecoインストール済"
 {{ else }}
-    cd ~
-    wget https://github.com/peco/peco/releases/download/v0.5.7/peco_linux_386.tar.gz
-    tar xzvf peco_linux_386.tar.gz
-    cd peco_linux_386
-    sudo cp peco /usr/local/bin
+echo "ghqインストール開始"
+brew install ghq
 {{ end }}
 
 # GitHub CLI ログイン確認
