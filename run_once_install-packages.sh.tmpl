@@ -82,6 +82,38 @@ git clone https://github.com/pyenv/pyenv.git ~/.pyenv
 git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
 {{ end }}
 
+{{ $dockerPath := lookPath "docker" }}
+{{ if $dockerPath }}
+echo "dockerインストール済"
+{{ else }}
+    sudo ln -snfv ~/.local/share/chezmoi/my-settings.service /etc/systemd/system/my-settings.service
+    sudo ln -snfv ~/.local/share/chezmoi/my-settings.sh /usr/local/bin/my-settings.sh
+    sudo systemctl enable my-settings.service
+    sudo apt install -y ca-certificates curl gnupg lsb-release
+    sudo mkdir -p /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+    sudo apt update
+    sudo apt install -y docker-ce docker-compose-plugin
+    sudo service docker start
+    sudo usermod -aG docker $USER
+    sudo systemctl enable docker
+{{ end }}
+
+# neovimをインストールするセクション
+# Install neovim 0.5.
+{{$neovimPath := lookPath "nvim"}}
+{{if $neovimPath}}
+echo "neovimインストール済"
+{{else}}
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
+chmod u+x nvim-linux-x86_64.appimage
+./nvim-linux-x86_64.appimage --appimage-extract
+sudo mv squashfs-root /
+sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
+# curl -fLo $HOME/.local/share/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+{{end}}
+
 # linuxbrewをインストールするセクション
 {{ $linuxbrewPath := lookPath "brew" }}
 {{ if $linuxbrewPath }}
@@ -101,24 +133,6 @@ echo "ghインストール済"
     echo "ghインストール"
     brew install fzf
     brew install gh
-{{ end }}
-
-{{ $dockerPath := lookPath "docker" }}
-{{ if $dockerPath }}
-echo "dockerインストール済"
-{{ else }}
-    sudo ln -snfv ~/.local/share/chezmoi/my-settings.service /etc/systemd/system/my-settings.service
-    sudo ln -snfv ~/.local/share/chezmoi/my-settings.sh /usr/local/bin/my-settings.sh
-    sudo systemctl enable my-settings.service
-    sudo apt install -y ca-certificates curl gnupg lsb-release
-    sudo mkdir -p /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
-    sudo apt update
-    sudo apt install -y docker-ce docker-compose-plugin
-    sudo service docker start
-    sudo usermod -aG docker $USER
-    sudo systemctl enable docker
 {{ end }}
 
 # goをインストールするセクション
@@ -146,20 +160,6 @@ echo "denoインストール済"
 {{ else }}
 curl -fsSL https://deno.land/x/install/install.sh | sh -s -- -y
 {{ end}}
-
-# neovimをインストールするセクション
-# Install neovim 0.5.
-{{$neovimPath := lookPath "nvim"}}
-{{if $neovimPath}}
-echo "neovimインストール済"
-{{else}}
-curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
-chmod u+x nvim-linux-x86_64.appimage
-./nvim-linux-x86_64.appimage --appimage-extract
-sudo mv squashfs-root /
-sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
-# curl -fLo $HOME/.local/share/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-{{end}}
 
 # ghqをインストールするセクション
 {{ $ghqPath := lookPath "ghq" }}
