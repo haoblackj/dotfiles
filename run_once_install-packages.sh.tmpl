@@ -115,8 +115,21 @@ echo "dockerインストール済"
 {{ if $asdfPath }}
 echo "asdfインストール済"
 {{ else }}
-    git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.3
-    source ~/.profile
+    git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.16.7
+    # 現在のセッションで初期化
+    . "$HOME/.asdf/asdf.sh"
+    . "$HOME/.asdf/completions/asdf.bash"
+{{ end }}
+
+# goをasdfでインストールするセクション
+{{ $goPath := lookPath "go" }}
+{{ if $goPath }}
+echo "goインストール済"
+{{ else }}
+    asdf plugin add golang
+    asdf install golang latest
+    asdf global golang latest
+    asdf reshim golang
 {{ end }}
 
 # nvmをインストールするセクション
