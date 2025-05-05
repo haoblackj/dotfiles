@@ -1,0 +1,14 @@
+# setup for brew
+export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew";
+if [[ -d "${HOMEBREW_PREFIX}" ]]; then
+  HOMEBREW_CACHE="${HOMEBREW_PREFIX}/.local/cache"
+  HOMEBREW_CELLAR="${HOMEBREW_PREFIX}/Cellar";
+  HOMEBREW_REPOSITORY="${HOMEBREW_PREFIX}/Homebrew";
+
+  PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${PATH+:$PATH}";
+  MANPATH="/home/linuxbrew/.linuxbrew/share/man${MANPATH+:$MANPATH}:";
+  INFOPATH="/home/linuxbrew/.linuxbrew/share/info:${INFOPATH:-}";
+
+  export HOMEBREW_PREFIX HOMEBREW_CACHE HOMEBREW_CELLAR HOMEBREW_REPOSITORY
+  export PATH MANPATH INFOPATH
+fi
