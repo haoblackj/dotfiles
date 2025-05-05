@@ -82,6 +82,15 @@ git clone https://github.com/pyenv/pyenv.git ~/.pyenv
 git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
 {{ end }}
 
+# nvmをインストールするセクション
+{{ $nvmPath := lookPath "nvm" }}
+{{ if $nvmPath }}
+echo "nvmインストール済"
+{{ else }}
+echo "nvmインストール開始"
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+{{ end }}
+
 {{ $dockerPath := lookPath "docker" }}
 {{ if $dockerPath }}
 echo "dockerインストール済"
@@ -142,15 +151,6 @@ echo "goインストール済"
 {{ else }}
 echo "goインストール開始"
 sudo apt install -y golang-go
-{{ end }}
-
-# nvmをインストールするセクション
-{{ $nvmPath := lookPath "nvm" }}
-{{ if $nvmPath }}
-echo "nvmインストール済"
-{{ else }}
-echo "nvmインストール開始"
-brew install nvm
 {{ end }}
 
 # denoをインストールするセクション
