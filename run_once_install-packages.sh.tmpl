@@ -179,6 +179,15 @@ echo "ghqインストール開始"
 brew install ghq
 {{ end }}
 
+# lazygitをインストールするセクション
+{{ $lazygitPath := lookPath "lazygit" }}
+{{ if $lazygitPath }}
+echo "lazygitインストール済"
+{{ else }}
+echo "lazygitインストール開始"
+brew install lazygit
+{{ end }}
+
 # GitHub CLI ログイン確認
     gh_signed_in() {
         gh auth status >/dev/null 2>&1
