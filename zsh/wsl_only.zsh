@@ -8,8 +8,8 @@ export PATH=$HOME/bin:/usr/local/bin:$PATH
 export PATH="$HOME/.local/bin:$PATH"
 
 
-# asdf Path設定
-. "$HOME/.asdf/asdf.sh"
+# Go実装のasdf用（v0.16.0 以降）
+source "$HOME/.asdf/libexec/asdf.sh"
 
 # ghq設定
 function ghq_peco {
