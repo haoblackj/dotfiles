@@ -117,8 +117,7 @@ echo "asdfインストール済"
 {{ else }}
     git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.16.7
     # 現在のセッションで初期化
-    . "$HOME/.asdf/asdf.sh"
-    . "$HOME/.asdf/completions/asdf.bash"
+    . "$HOME/.asdf/libexec/asdf.sh"
 {{ end }}
 
 # goをasdfでインストールするセクション
