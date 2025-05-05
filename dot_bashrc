@@ -24,6 +24,7 @@ fi
 
 # asdf Path設定
 . "$HOME/.asdf/asdf.sh"
+. "$HOME/.asdf/completions/asdf.bash"
 export PYENV_ROOT="${HOME}/.pyenv"
 if [ -d "${PYENV_ROOT}" ]; then
     export PATH=${PYENV_ROOT}/bin:$PATH
