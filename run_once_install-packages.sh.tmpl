@@ -78,8 +78,6 @@ sudo apt update && sudo apt install -y \
   libgdbm-dev \
   libdb-dev \
   libexpat1-dev
-git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
 {{ end }}
 
 # nvmをインストールするセクション
@@ -123,6 +121,15 @@ sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
 # curl -fLo $HOME/.local/share/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 {{end}}
 
+# goをインストールするセクション
+{{ $goPath := lookPath "go" }}
+{{ if $goPath }}
+echo "goインストール済"
+{{ else }}
+echo "goインストール開始"
+sudo apt install -y golang-go
+{{ end }}
+
 # linuxbrewをインストールするセクション
 {{ $linuxbrewPath := lookPath "brew" }}
 {{ if $linuxbrewPath }}
@@ -134,6 +141,16 @@ sudo apt-get install build-essential procps curl file git
 source ~/.bashrc
 {{ end}}
 
+# pyenvインストール
+{{ $pyenv := lookPath "pyenv" }}
+{{ if $pyenv }}
+echo "pyenv(brew)インストール済"
+{{ else }}
+brew install pyenv
+brew install pyenv-virtualenv
+{{ end }}
+
+# ghインストール
 {{ $ghPath := lookPath "gh" }}
 {{ if $ghPath }}
 echo "ghインストール済"
@@ -142,15 +159,6 @@ echo "ghインストール済"
     echo "ghインストール"
     brew install fzf
     brew install gh
-{{ end }}
-
-# goをインストールするセクション
-{{ $goPath := lookPath "go" }}
-{{ if $goPath }}
-echo "goインストール済"
-{{ else }}
-echo "goインストール開始"
-sudo apt install -y golang-go
 {{ end }}
 
 # denoをインストールするセクション
