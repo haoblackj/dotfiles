@@ -3,11 +3,17 @@
 ## Installation
 
 ```bash
-deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ jammy main restricted universe multiverse
-deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ jammy-updates main restricted universe multiverse
-deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ jammy-backports main restricted universe multiverse
+CODENAME=$(lsb_release -cs) && \
+sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak && \
+sudo tee /etc/apt/sources.list > /dev/null <<EOF
+# Main JAIST mirror
+deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME main restricted universe multiverse
+deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME-updates main restricted universe multiverse
+deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME-backports main restricted universe multiverse
 
-deb http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+# Security updates - DO NOT REPLACE
+deb http://security.ubuntu.com/ubuntu $CODENAME-security main restricted universe multiverse
+EOF
 
 sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply haoblackj
 ```
