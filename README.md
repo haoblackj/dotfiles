@@ -15,6 +15,8 @@ deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME-backports main restricted
 deb http://security.ubuntu.com/ubuntu $CODENAME-security main restricted universe multiverse
 EOF
 
+sudo mv /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.disabled
+
 sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply haoblackj
 ```
 
