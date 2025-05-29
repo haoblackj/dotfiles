@@ -17,3 +17,8 @@ aicommit2 config set OPENAI.locale="jp"
 aicommit2 config set OPENAI.generate=5
 aicommit2 config set OPENAI.key=<key>
 ```
+
+```
+brew install bitwarden-cli
+gh repo clone joaojacome/bitwarden-ssh-agent
+```
