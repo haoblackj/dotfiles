@@ -6,16 +6,20 @@
 CODENAME=$(lsb_release -cs) && \
 sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak && \
 sudo tee /etc/apt/sources.list > /dev/null <<EOF
-# Main JAIST mirror
+# JAIST mirror (primary)
 deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME main restricted universe multiverse
 deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME-updates main restricted universe multiverse
 deb http://ftp.jaist.ac.jp/pub/Linux/ubuntu/ $CODENAME-backports main restricted universe multiverse
 
-# Security updates - DO NOT REPLACE
+# WIDE (fallback)
+deb http://ftp.tsukuba.wide.ad.jp/Linux/ubuntu/ $CODENAME main restricted universe multiverse
+deb http://ftp.tsukuba.wide.ad.jp/Linux/ubuntu/ $CODENAME-updates main restricted universe multiverse
+deb http://ftp.tsukuba.wide.ad.jp/Linux/ubuntu/ $CODENAME-backports main restricted universe multiverse
+
+# Security (official)
 deb http://security.ubuntu.com/ubuntu $CODENAME-security main restricted universe multiverse
 EOF
-
-sudo mv /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.disabled
+&& echo 'Acquire::http::Timeout "5";' | sudo tee /etc/apt/apt.conf.d/99timeout > /dev/null
 
 sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply haoblackj
 ```
