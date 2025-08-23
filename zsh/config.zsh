@@ -69,3 +69,16 @@ export GH_CONFIG_DIR=~/.config/gh
 
 # tfenv設定
 export PATH="$HOME/.tfenv/bin:$PATH"
+
+# ssh-agent設定
+agent_file="$HOME/.ssh/agent.env"
+
+# 既存の ssh-agent が動いていれば再利用
+if [ -f "$agent_file" ]; then
+    source "$agent_file" > /dev/null
+    if ! kill -0 "$SSH_AGENT_PID" 2>/dev/null; then
+        eval "$(ssh-agent -s)" > "$agent_file"
+    fi
+else
+    eval "$(ssh-agent -s)" > "$agent_file"
+fi
