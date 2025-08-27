@@ -224,6 +224,10 @@ install_gh_extension_if_not_exists() {
 # 拡張機能のインストール状況を確認し、インストールされていなければインストールする
 install_gh_extension_if_not_exists "kawarimidoll/gh-q" "https://github.com/kawarimidoll/gh-q"
 
+systemctl --user enable ssh-agent
+systemctl --user start ssh-agent
+
+
 {{     end }}
 {{   end }}
 {{ end }}

@@ -71,6 +71,4 @@ export GH_CONFIG_DIR=~/.config/gh
 export PATH="$HOME/.tfenv/bin:$PATH"
 
 # ssh-agent設定
-if ! pgrep -u "$USER" ssh-agent > /dev/null; then
-    eval "$(ssh-agent -s)" >/dev/null
-fi
+export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
