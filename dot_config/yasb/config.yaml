@@ -42,6 +42,7 @@ bars:
       #- "home"
       - "komorebi_workspaces"
       - "komorebi_active_layout"
+      - "whkd"
       - "active_window"
       center:
       - "clock"
@@ -282,3 +283,29 @@ widgets:
         on_left: "toggle_notification"
         on_right: "do_nothing"
         on_middle: "toggle_label"
+  whkd:
+    type: "yasb.whkd.WhkdWidget"
+    options:
+      label: "<span>\uf11c</span>"
+      special_keys:
+        - key: "win"
+          key_replace: "\ue70f"
+        - key: "ctrl"
+          key_replace: "Ctrl"
+        - key: "alt"
+          key_replace: "Alt"
+        - key: "shift"
+          key_replace: "Shift"
+        - key: "left"
+          key_replace: "\u2190"
+        - key: "right"
+          key_replace: "\u2192"
+        - key: "up"
+          key_replace: "\u2191"
+        - key: "down"
+          key_replace: "\u2193"
+      label_shadow:
+        enabled: true
+        color: "black"
+        radius: 3
+        offset: [ 1, 1 ]
