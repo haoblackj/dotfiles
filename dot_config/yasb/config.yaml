@@ -112,8 +112,8 @@ widgets:
         separator: " | "
         label_padding: 1
       callbacks:
-        on_left: "toggle_media_menu"
-        on_middle: "do_nothing"
+        on_left: "toggle_play_pause"
+        on_middle: "toggle_media_menu"
         on_right: "toggle_label"
   active_window:
     type: "yasb.active_window.ActiveWindowWidget"
