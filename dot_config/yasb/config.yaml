@@ -5,9 +5,9 @@ watch_config: true
 debug: false
 update_check: true # Enable automatic update check.
 komorebi:
-  start_command: "komorebic start --config \"~\\.config\\komorebi\\komorebi.json\" --whkd"
-  stop_command: "komorebic stop --whkd"
-  reload_command: "komorebic stop --whkd && komorebic start --config \"~\\.config\\komorebi\\komorebi.json\" --whkd"
+  # start_command: "komorebic start --config \"~\\.config\\komorebi\\komorebi.json\" --whkd"
+  # stop_command: "komorebic stop --whkd"
+  # reload_command: "komorebic stop --whkd && komorebic start --config \"~\\.config\\komorebi\\komorebi.json\" --whkd"
 bars:
   primary-bar:
     enabled: true
@@ -15,7 +15,7 @@ bars:
     class_name: "yasb-bar"
     alignment:
       position: "top"
-      center: false
+      center: true
     animation:
       enabled: true
       duration: 400
@@ -40,9 +40,9 @@ bars:
     widgets:
       left:
       #- "home"
-      - "komorebi_workspaces"
-      - "komorebi_active_layout"
-      - "whkd"
+      - "glazewm_workspaces"
+      - "glazewm_binding_mode"
+      - "glazewm_tiling_direction"
       - "active_window"
       center:
       - "clock"
@@ -140,51 +140,51 @@ widgets:
       callbacks:
         on_left: "toggle_calendar"
         on_right: "toggle_label"
-  komorebi_workspaces:
-    type: "komorebi.workspaces.WorkspaceWidget"
-    options:
-      label_offline: "\u23fc Offline"
-      label_workspace_btn: "\u000d"
-      label_workspace_active_btn: "\u000d"
-      label_workspace_populated_btn: "\u000d"
-      label_default_name: "{index}"
-      label_zero_index: false
-      hide_empty_workspaces: true
-      hide_if_offline: true
-      animation: true
-  komorebi_active_layout:
-    type: "komorebi.active_layout.ActiveLayoutWidget"
-    options:
-      hide_if_offline: true
-      label: "{icon}"
-      layouts:
-        [
-          "bsp",
-          "columns",
-          "rows",
-          "grid",
-          "vertical_stack",
-          "horizontal_stack",
-          "ultrawide_vertical_stack",
-          "right_main_vertical_stack",
-        ]
-      layout_icons:
-        bsp: "BSP"
-        columns: "COLS"
-        rows: "ROWS"
-        grid: "GRID"
-        vertical_stack: "V-STACK"
-        horizontal_stack: "H-STACK"
-        ultrawide_vertical_stack: "W-STACK"
-        right_main_vertical_stack: "RMV-STACK"
-        monocle: "MONOCLE"
-        maximized: "MAX"
-        floating: "FLOATING"
-        paused: "PAUSED"
-      callbacks:
-        on_left: "next_layout"
-        on_middle: "toggle_monocle"
-        on_right: "prev_layout"
+  # komorebi_workspaces:
+  #   type: "komorebi.workspaces.WorkspaceWidget"
+  #   options:
+  #     label_offline: "\u23fc Offline"
+  #     label_workspace_btn: "\u000d"
+  #     label_workspace_active_btn: "\u000d"
+  #     label_workspace_populated_btn: "\u000d"
+  #     label_default_name: "{index}"
+  #     label_zero_index: false
+  #     hide_empty_workspaces: true
+  #     hide_if_offline: true
+  #     animation: true
+  # komorebi_active_layout:
+  #   type: "komorebi.active_layout.ActiveLayoutWidget"
+  #   options:
+  #     hide_if_offline: true
+  #     label: "{icon}"
+  #     layouts:
+  #       [
+  #         "bsp",
+  #         "columns",
+  #         "rows",
+  #         "grid",
+  #         "vertical_stack",
+  #         "horizontal_stack",
+  #         "ultrawide_vertical_stack",
+  #         "right_main_vertical_stack",
+  #       ]
+  #     layout_icons:
+  #       bsp: "BSP"
+  #       columns: "COLS"
+  #       rows: "ROWS"
+  #       grid: "GRID"
+  #       vertical_stack: "V-STACK"
+  #       horizontal_stack: "H-STACK"
+  #       ultrawide_vertical_stack: "W-STACK"
+  #       right_main_vertical_stack: "RMV-STACK"
+  #       monocle: "MONOCLE"
+  #       maximized: "MAX"
+  #       floating: "FLOATING"
+  #       paused: "PAUSED"
+  #     callbacks:
+  #       on_left: "next_layout"
+  #       on_middle: "toggle_monocle"
+  #       on_right: "prev_layout"
   weather:
     type: "yasb.weather.WeatherWidget"
     options:
@@ -283,29 +283,75 @@ widgets:
         on_left: "toggle_notification"
         on_right: "do_nothing"
         on_middle: "toggle_label"
-  whkd:
-    type: "yasb.whkd.WhkdWidget"
+  # whkd:
+  #   type: "yasb.whkd.WhkdWidget"
+  #   options:
+  #     label: "<span>\uf11c</span>"
+  #     special_keys:
+  #       - key: "win"
+  #         key_replace: "\ue70f"
+  #       - key: "ctrl"
+  #         key_replace: "Ctrl"
+  #       - key: "alt"
+  #         key_replace: "Alt"
+  #       - key: "shift"
+  #         key_replace: "Shift"
+  #       - key: "left"
+  #         key_replace: "\u2190"
+  #       - key: "right"
+  #         key_replace: "\u2192"
+  #       - key: "up"
+  #         key_replace: "\u2191"
+  #       - key: "down"
+  #         key_replace: "\u2193"
+  #     label_shadow:
+  #       enabled: true
+  #       color: "black"
+  #       radius: 3
+  #       offset: [ 1, 1 ]
+
+  glazewm_workspaces:
+    type: "glazewm.workspaces.GlazewmWorkspacesWidget"
     options:
-      label: "<span>\uf11c</span>"
-      special_keys:
-        - key: "win"
-          key_replace: "\ue70f"
-        - key: "ctrl"
-          key_replace: "Ctrl"
-        - key: "alt"
-          key_replace: "Alt"
-        - key: "shift"
-          key_replace: "Shift"
-        - key: "left"
-          key_replace: "\u2190"
-        - key: "right"
-          key_replace: "\u2192"
-        - key: "up"
-          key_replace: "\u2191"
-        - key: "down"
-          key_replace: "\u2193"
-      label_shadow:
+      offline_label: "GWM Offline"
+      hide_empty_workspaces: true
+      hide_if_offline: true
+      # app_icons:
+      #   enabled_populated: false
+      #   enabled_active: true
+      #   size: 14
+      #   max_icons: 0
+      #   hide_label: true
+      #   hide_duplicates: false
+      #   hide_floating: false
+
+  glazewm_tiling_direction:
+    type: "glazewm.tiling_direction.GlazewmTilingDirectionWidget"
+    options:
+      horizontal_label: "\udb81\udce1"
+      vertical_label: "\udb81\udce2"
+      btn_shadow:
         enabled: true
         color: "black"
         radius: 3
         offset: [ 1, 1 ]
+
+  glazewm_binding_mode:
+    type: "glazewm.binding_mode.GlazewmBindingModeWidget"
+    options:
+      hide_if_no_active: true
+      label_if_no_active: "NBM"
+      default_icon: "\uf071"
+      icons:
+        none: ""
+        resize: "\uf071"
+        pause: "\uf28c"
+      binding_modes_to_cycle_through: [
+        "none", # none handles if no binding mode is active
+        "resize",
+        "pause"
+      ]
+      callbacks:
+        on_left: "next_binding_mode"
+        on_middle: "toggle_label"
+        on_right: "disable_binding_mode"
