@@ -1,5 +1,23 @@
+{{- /* 自宅ドメイン判定
+   USERDOMAIN が自宅のものなら "home"、それ以外はすべて "work" とみなす
+*/ -}}
+{{- $location := "work" -}}
+{{- $domain := env "USERDOMAIN" -}}
+
+{{- if eq $domain "HIRO" -}}
+    {{- $location = "home" -}}
+{{- end -}}
+
+[data]
+    location = {{ $location | quote }}
+    # デバッグ用にドメイン名を持たせたい場合は残すが、
+    # 不要なら消してもOK
+    # domain = {{ $domain | quote }}
+
 [edit]
     command = "code"
     args = ["--wait"]
+
 [merge]
     command = "code"
+    args = ["--wait", "--diff", "{{ "{{" }} .Destination {{ "}}" }}", "{{ "{{" }} .Source {{ "}}" }}"]
