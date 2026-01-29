@@ -46,7 +46,7 @@
       "workspaces": [
         {
           "name": "Tertiary",
-          "layout": "Rows"
+          "layout": "HorizontalStack"
         }
       ]
     },
