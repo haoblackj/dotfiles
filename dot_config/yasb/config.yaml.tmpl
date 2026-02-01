@@ -166,19 +166,55 @@ widgets:
         - { key: "alt", key_replace: "Alt" }
         - { key: "shift", key_replace: "Shift" }
       label_shadow: { enabled: true, color: "black", radius: 3, offset: [1, 1] }
-
   media:
     type: "yasb.media.MediaWidget"
     options:
       label: "{title}"
       label_alt: "{artist} - {title}"
+      max_field_size:
+        label: 24
+        label_alt: 24
       show_thumbnail: true
+      controls_only: false
+      controls_left: true
+      controls_hide: true
       hide_empty: true
+      thumbnail_alpha: 100
+      thumbnail_padding: 16
+      thumbnail_corner_radius: 0
+      thumbnail_edge_fade: true
       icons:
         prev_track: "\udb81\udcae"
         next_track: "\udb81\udcad"
         play: "\udb81\udc0a"
         pause: "\udb80\udfe4"
+      media_menu:
+        blur: false
+        round_corners: false
+        alignment: "right"
+        direction: "down"
+        offset_top: 6
+        offset_left: 0
+        thumbnail_corner_radius: 4
+        thumbnail_size: 100
+        max_title_size: 80
+        max_artist_size: 20
+        show_source: true
+      label_shadow:
+        enabled: true
+        color: "#000000"
+        radius: 2
+        offset: [ 1, 1 ]
+      scrolling_label:
+        enabled: true
+        update_interval_ms: 50
+        style: "left"  # can be "left", "right", "bounce", "bounce-ease"
+        separator: " | "
+        label_padding: 1
+      callbacks:
+        on_left: "toggle_play_pause"
+        on_middle: "toggle_media_menu"
+        on_right: "toggle_label"
   {{- end }}
 
   # --- 職場用 (GlazeWM/Notifications) ---
