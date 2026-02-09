@@ -42,5 +42,8 @@ install-packages.sh
 .config/whkd
 .config/wezterm
 .config/scoop
+.config/yasb
+.config/glazewm
+scoop
 /.wezterm.lua
 {{- end }}
