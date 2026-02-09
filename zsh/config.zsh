@@ -72,3 +72,29 @@ export PATH="$HOME/.tfenv/bin:$PATH"
 
 # ssh-agent設定
 export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
+
+# Homebrew一括アップデート関数
+brewup() {
+  set -e  # エラーが発生したらそこで中断する
+  echo "== brew update =="
+  brew update
+  echo ""
+
+  echo "== brew upgrade (formula) =="
+  brew upgrade
+  echo ""
+
+  echo "== brew upgrade (cask, greedy) =="
+  brew upgrade --cask --greedy
+  echo ""
+
+  echo "== brew cleanup =="
+  brew cleanup
+  echo ""
+
+  echo "== brew autoremove =="
+  brew autoremove
+  echo ""
+
+  echo "✅ brew update all done"
+}
