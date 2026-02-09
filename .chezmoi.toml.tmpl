@@ -1,18 +1,22 @@
-{{- /* 自宅ドメイン判定
-   USERDOMAIN が自宅のものなら "home"、それ以外はすべて "work" とみなす
-*/ -}}
-{{- $location := "work" -}}
-{{- $domain := env "USERDOMAIN" -}}
+{{- /* WSL判定 */ -}}
+{{- $isWSL := contains "microsoft" (.chezmoi.kernel.osrelease | lower) -}}
 
-{{- if eq $domain "HIRO" -}}
-    {{- $location = "home" -}}
+{{- $location := "work" -}}
+
+{{- if $isWSL -}}
+    {{- /* WSLのときはここを通る。必要なら wsl 用の値を設定 */ -}}
+    {{- $location = "wsl" -}}
+{{- else -}}
+    {{- /* WSLでない場合のみドメイン判定を実行 */ -}}
+    {{- $domain := env "USERDOMAIN" -}}
+    {{- if eq $domain "HIRO" -}}
+        {{- $location = "home" -}}
+    {{- end -}}
 {{- end -}}
 
 [data]
     location = {{ $location | quote }}
-    # デバッグ用にドメイン名を持たせたい場合は残すが、
-    # 不要なら消してもOK
-    # domain = {{ $domain | quote }}
+    isWSL = {{ $isWSL }}
 
 [edit]
     command = "code"
