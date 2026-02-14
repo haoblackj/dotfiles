@@ -31,6 +31,22 @@
         {
           "name": "Primary",
           "layout": "HorizontalStack"
+        },
+        {
+          "name": "Primary-2",
+          "layout": "HorizontalStack"
+        },
+        {
+          "name": "Primary-3",
+          "layout": "HorizontalStack"
+        },
+        {
+          "name": "Primary-4",
+          "layout": "HorizontalStack"
+        },
+        {
+          "name": "Primary-5",
+          "layout": "HorizontalStack"
         }
       ]
     },
@@ -39,6 +55,22 @@
         {
           "name": "Secondary",
           "layout": "VerticalStack"
+        },
+        {
+          "name": "Secondary-2",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Secondary-3",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Secondary-4",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Secondary-5",
+          "layout": "VerticalStack"
         }
       ]
     },
@@ -46,6 +78,22 @@
       "workspaces": [
         {
           "name": "Tertiary",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Tertiary-2",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Tertiary-3",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Tertiary-4",
+          "layout": "VerticalStack"
+        },
+        {
+          "name": "Tertiary-5",
           "layout": "VerticalStack"
         }
       ]
