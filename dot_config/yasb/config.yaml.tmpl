@@ -4,8 +4,8 @@ watch_config: true
 debug: false
 update_check: true
 
-komorebi:
   {{- if eq .location "home" }}
+komorebi:
   start_command: "komorebic start --config \"~\\.config\\komorebi\\komorebi.json\" --whkd"
   stop_command: "komorebic stop --whkd"
   reload_command: "komorebic stop --whkd && komorebic start --config \"~\\.config\\komorebi\\komorebi.json\" --whkd"
