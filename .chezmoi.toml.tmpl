@@ -1,13 +1,13 @@
-{{- /* WSL判定 */ -}}
-{{- $isWSL := contains "microsoft" (.chezmoi.kernel.osrelease | lower) -}}
+{{- $isWSL := false -}}
+{{- if eq .chezmoi.os "linux" -}}
+  {{- $isWSL = contains "microsoft" (.chezmoi.kernel.osrelease | lower) -}}
+{{- end -}}
 
 {{- $location := "work" -}}
 
 {{- if $isWSL -}}
-    {{- /* WSLのときはここを通る。必要なら wsl 用の値を設定 */ -}}
     {{- $location = "wsl" -}}
 {{- else -}}
-    {{- /* WSLでない場合のみドメイン判定を実行 */ -}}
     {{- $domain := env "USERDOMAIN" -}}
     {{- if eq $domain "HIRO" -}}
         {{- $location = "home" -}}
