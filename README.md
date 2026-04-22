@@ -15,9 +15,7 @@ nvm use --lts
 npm install -g yarn
 npm install -g git-cz cz-conventional-changelog-ja
 source ~/.zshrc
-aicommit2 config set OPENAI.locale="jp"
-aicommit2 config set OPENAI.generate=5
-aicommit2 config set OPENAI.key=<key>
+aicommit2 setup
 ```
 
 ```
