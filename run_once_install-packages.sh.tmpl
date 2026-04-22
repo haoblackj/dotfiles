@@ -196,6 +196,15 @@ echo "lazygitインストール開始"
 brew install lazygit
 {{ end }}
 
+# aicommit2をインストールするセクション
+{{ $aicommit2Path := lookPath "aicommit" }}
+{{ if $aicommit2Path }}
+echo "aicommit2インストール済"
+{{ else }}
+echo "aicommit2インストール開始"
+brew install aicommit2
+{{ end }}
+
 # GitHub CLI ログイン確認
     gh_signed_in() {
         gh auth status >/dev/null 2>&1
