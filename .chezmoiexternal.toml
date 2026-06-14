@@ -1,0 +1,14 @@
+# 公開 skill（upstream を追跡）
+[".claude/skills/book-to-skill"]
+type = "git-repo"
+url = "https://github.com/virgiliojr94/book-to-skill.git"
+refreshPeriod = "168h"
+clone.args = ["--depth", "1"]
+
+# 機密 private repo（memory + 著作権配慮スキル）をステージング地点へ clone。
+# pull のみ（push は Stop hook の claude-private-sync.sh が担当）。
+[".local/share/claude-private"]
+type = "git-repo"
+url = "https://github.com/haoblackj/claude-private.git"
+refreshPeriod = "168h"
+pull.args = ["--ff-only"]
