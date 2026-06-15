@@ -58,6 +58,7 @@ case "${1:-pull}" in
     ensure_symlinks
     ;;
   push)
+    git -C "$ROOT" pull --ff-only >/dev/null 2>&1 || true
     migrate_new
     ensure_symlinks
     git -C "$ROOT" add -A
@@ -66,7 +67,7 @@ case "${1:-pull}" in
       -c user.name="haoblackj" \
       -c user.email="17177994+haoblackj@users.noreply.github.com" \
       commit -q -m "sync: $(date -Iseconds)" || true
-    git -C "$ROOT" push -q >/dev/null 2>&1 || true
+    git -C "$ROOT" push -q 2>/dev/null || echo "[claude-private-sync] push failed — retry: git -C $ROOT push" >&2
     ;;
 esac
 exit 0
