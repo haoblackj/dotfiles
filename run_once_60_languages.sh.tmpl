@@ -1,0 +1,26 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+{{ $goPath := lookPath "go" }}
+{{ if $goPath }}
+echo "goインストール済"
+{{ else }}
+echo "goインストール開始"
+sudo apt install -y golang-go
+{{ end }}
+
+{{ $denoPath := lookPath "deno" }}
+{{ if $denoPath }}
+echo "denoインストール済"
+{{ else }}
+echo "denoインストール開始"
+curl -fsSL https://deno.land/x/install/install.sh | sh -s -- -y
+{{ end }}
+
+{{     end }}
+{{   end }}
+{{ end }}

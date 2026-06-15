@@ -1,0 +1,56 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+# 非インタラクティブシェルでは .profile が読まれないため brew を PATH に追加
+if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+{{ $ghPath := lookPath "gh" }}
+{{ if $ghPath }}
+echo "ghインストール済"
+{{ else }}
+echo "ghインストール開始"
+brew install fzf
+brew install gh
+{{ end }}
+
+{{ $ghqPath := lookPath "ghq" }}
+{{ if $ghqPath }}
+echo "ghqインストール済"
+{{ else }}
+echo "ghqインストール開始"
+brew install ghq
+{{ end }}
+
+{{ $pecoPath := lookPath "peco" }}
+{{ if $pecoPath }}
+echo "pecoインストール済"
+{{ else }}
+echo "pecoインストール開始"
+brew install peco
+{{ end }}
+
+{{ $lazygitPath := lookPath "lazygit" }}
+{{ if $lazygitPath }}
+echo "lazygitインストール済"
+{{ else }}
+echo "lazygitインストール開始"
+brew install lazygit
+{{ end }}
+
+{{ $aicommit2Path := lookPath "aicommit" }}
+{{ if $aicommit2Path }}
+echo "aicommit2インストール済"
+{{ else }}
+echo "aicommit2インストール開始"
+brew install aicommit2
+{{ end }}
+
+{{     end }}
+{{   end }}
+{{ end }}

@@ -1,0 +1,38 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+{{ $neovimPath := lookPath "nvim" }}
+{{ if $neovimPath }}
+echo "neovimインストール済"
+{{ else }}
+echo "neovimインストール開始"
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
+chmod u+x nvim-linux-x86_64.appimage
+./nvim-linux-x86_64.appimage --appimage-extract
+sudo mv squashfs-root /
+sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
+{{ end }}
+
+{{ $dockerPath := lookPath "docker" }}
+{{ if $dockerPath }}
+echo "dockerインストール済"
+{{ else }}
+echo "dockerインストール開始"
+sudo ln -snfv ~/.local/share/chezmoi/my-settings.service /etc/systemd/system/my-settings.service
+sudo ln -snfv ~/.local/share/chezmoi/my-settings.sh /usr/local/bin/my-settings.sh
+sudo apt install -y ca-certificates curl gnupg lsb-release
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt update
+sudo apt install -y docker-ce docker-compose-plugin
+sudo usermod -aG docker "$USER"
+{{ end }}
+
+{{     end }}
+{{   end }}
+{{ end }}

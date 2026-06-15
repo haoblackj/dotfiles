@@ -1,0 +1,20 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+{{ $linuxbrewPath := lookPath "brew" }}
+{{ if $linuxbrewPath }}
+echo "linuxbrewインストール済"
+{{ else }}
+echo "linuxbrewインストール開始"
+sudo apt-get install -y build-essential procps curl file git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+{{ end }}
+
+{{     end }}
+{{   end }}
+{{ end }}

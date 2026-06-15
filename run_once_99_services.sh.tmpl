@@ -1,0 +1,16 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+systemctl --user enable ssh-agent
+systemctl --user start ssh-agent
+
+sudo systemctl enable my-settings.service
+sudo systemctl enable docker
+
+{{     end }}
+{{   end }}
+{{ end }}

@@ -1,0 +1,33 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+{{ $wsluPath := lookPath "xdg-open" }}
+{{ if $wsluPath }}
+echo "wsluインストール済"
+{{ else }}
+echo "wsluインストール"
+sudo add-apt-repository ppa:wslutilities/wslu -y
+sudo apt update
+sudo apt install wslu -y
+{{ end }}
+
+sudo apt install -y \
+  libgtk2.0-0 \
+  libgtk-3-0 \
+  libnotify-dev \
+  libnss3 \
+  libxss1 \
+  libasound2t64 \
+  libxtst6 \
+  xauth \
+  xvfb \
+  libgbm-dev \
+  fonts-ipafont
+
+{{     end }}
+{{   end }}
+{{ end }}
