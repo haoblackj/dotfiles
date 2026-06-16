@@ -48,4 +48,5 @@ install-packages.sh
 .config/glazewm
 scoop
 /.wezterm.lua
+AppData/Roaming/alacritty
 {{- end }}
