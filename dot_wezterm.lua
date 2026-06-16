@@ -3,7 +3,7 @@ local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 config.automatically_reload_config = true
 
-front_end = "WebGPU"
+config.front_end = "WebGpu"
 
 -- カラースキームの設定
 config.color_scheme = 'Horizon Dark (base16)'
@@ -40,17 +40,19 @@ config.font_size = 16
 config.use_ime = true
 
 -- WSL起動設定
--- config.default_prog = {
---   "wsl.exe",
---   "--distribution",
---   "Ubuntu",
---   "--cd",
---   "/home/yagu001",
---   "--exec",
---   "/bin/zsh",
---   "-l"
--- }
-config.default_domain = 'WSL:Ubuntu'
+-- default_domain（WSL multiplexerドメイン）はmux経由のハンドシェイクが発生し起動が遅いため、
+-- wsl.exeを直接spawnするdefault_progに変更（高速化）
+config.default_prog = {
+  "wsl.exe",
+  "--distribution",
+  "Ubuntu",
+  "--cd",
+  "/home/yagu001",
+  "--exec",
+  "/bin/zsh",
+  "-l"
+}
+-- config.default_domain = 'WSL:Ubuntu'
 
 -- config.wsl_domains = {
 --   {
