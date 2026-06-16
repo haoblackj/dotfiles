@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chezmoi apply *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/chezmoi-auto-apply.sh",
+            "statusMessage": "Applying chezmoi...",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

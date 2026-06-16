@@ -65,10 +65,15 @@ unsetopt nomatch
 # chezmoi drift check (once per login session)
 if [[ -z "$_CHEZMOI_CHECKED" ]] && command -v chezmoi &>/dev/null; then
   _CHEZMOI_CHECKED=1
-  if ! chezmoi diff --quiet 2>/dev/null; then
+  local _chezmoi_status
+  _chezmoi_status=$(chezmoi status 2>/dev/null)
+  if [[ -n "$_chezmoi_status" ]]; then
     print -P "%F{yellow}⚠  chezmoi: managed files have drifted.%f"
+    print -P "%F{yellow}$(echo "$_chezmoi_status" | awk '{print "   " $0}')%f"
     print -P "%F{yellow}   - 差分確認:            chezmoi diff%f"
-    print -P "%F{yellow}   - ホームの変更を取込む: chezmoi re-add <file>%f"
+    local _chezmoi_files
+    _chezmoi_files=$(echo "$_chezmoi_status" | awk '{print $NF}' | tr '\n' ' ')
+    print -P "%F{yellow}   - ホームの変更を取込む: chezmoi re-add ${_chezmoi_files}%f"
     print -P "%F{yellow}   - ソースをホームに適用: chezmoi apply%f"
   fi
 fi
