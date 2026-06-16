@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/v0.1.30/schema.json",
+  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/v0.1.41/schema.json",
   "app_specific_configuration_path": "$Env:KOMOREBI_CONFIG_HOME/applications.json",
   "window_hiding_behaviour": "Cloak",
   "cross_monitor_move_behaviour": "Insert",
@@ -12,6 +12,8 @@
   "border": true,
   "border_width": 4,
   "border_offset": -1,
+  "transparency": true,
+  "transparency_alpha": 200,
   "theme": {
     "palette": "Base16",
     "name": "HorizonDark",
@@ -99,11 +101,12 @@
       ]
     }
   ],
-  "ignore_rules": [
+  "ignore_rules": [],
+  "transparency_ignore_rules": [
     {
       "kind": "Exe",
-      "id": "Ueli",
-      "matching_strategy": "Contains"
+      "id": "wezterm-gui.exe",
+      "matching_strategy": "Equals"
     }
   ]
 }
