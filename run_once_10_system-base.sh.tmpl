@@ -16,7 +16,7 @@ echo "zshインストール済"
 echo "zshインストール"
 sudo apt update
 sudo apt install zsh -y
-chsh -s /usr/bin/zsh
+sudo usermod -s /usr/bin/zsh "$USER"
 {{ end }}
 
 sudo apt update -y && sudo apt upgrade -y && sudo apt install -y \

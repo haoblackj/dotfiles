@@ -10,6 +10,8 @@ if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
+export HOMEBREW_NO_AUTO_UPDATE=1
+
 {{ $ghPath := lookPath "gh" }}
 {{ if $ghPath }}
 echo "ghインストール済"
