@@ -1,4 +1,19 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(git -C * *)",
+      "Bash(chezmoi apply *)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git branch -D*)",
+      "Bash(git checkout --*)"
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "~/.claude/ccline/ccline",
