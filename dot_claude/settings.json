@@ -21,7 +21,16 @@
   },
   "effortLevel": "high",
   "enabledPlugins": {
-    "skill-creator@claude-plugins-official": true
+    "skill-creator@claude-plugins-official": true,
+    "andrej-karpathy-skills@karpathy-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "karpathy-skills": {
+      "source": {
+        "source": "github",
+        "repo": "forrestchang/andrej-karpathy-skills"
+      }
+    }
   },
   "hooks": {
     "SessionStart": [
