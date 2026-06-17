@@ -28,6 +28,7 @@ local.conf
 wsl.conf
 my-settings.service
 run_once_install-packages.sh
+50_komorebi-fetch-asc.ps1
 10_system-base.sh
 20_wslu.sh
 30_linuxbrew.sh
