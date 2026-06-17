@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Users\\yagu001\\.local\\share\\chezmoi\\.codex\\hooks\\chezmoi-auto-apply.sh'",
+            "timeout": 30,
+            "statusMessage": "Applying chezmoi..."
+          }
+        ]
+      }
+    ]
+  }
+}
