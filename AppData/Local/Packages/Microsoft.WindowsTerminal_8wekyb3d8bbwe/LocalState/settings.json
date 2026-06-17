@@ -1,74 +1,88 @@
 {
-  "$schema": "https://aka.ms/terminal-profiles-schema",
-  "defaultProfile": "{2c4de342-38b7-51cf-b940-2309a097f518}",
-  "copyFormatting": "none",
-  "copyOnSelect": false,
-  "initialCols": 120,
-  "initialRows": 34,
-  "newTabMenu": [
+    "$help": "https://aka.ms/terminal-documentation",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "actions": [],
+    "copyFormatting": "none",
+    "copyOnSelect": false,
+    "defaultProfile": "{2c4de342-38b7-51cf-b940-2309a097f518}",
+    "initialCols": 120,
+    "initialRows": 34,
+    "keybindings": [],
+    "newTabMenu":
+    [
+        {
+            "type": "remainingProfiles"
+        }
+    ],
+    "profiles":
     {
-      "type": "remainingProfiles"
-    }
-  ],
-  "profiles": {
-    "defaults": {
-      "colorScheme": "Horizon Dark",
-      "cursorShape": "filledBox",
-      "font": {
-        "face": "Firge35Nerd Console",
-        "size": 16.0,
-        "weight": "medium"
-      },
-      "opacity": 80,
-      "padding": "8, 8, 8, 8",
-      "useAcrylic": false
+        "defaults":
+        {
+            "colorScheme": "Horizon Dark",
+            "cursorShape": "filledBox",
+            "font":
+            {
+                "face": "Firge35Nerd Console",
+                "size": 16,
+                "weight": "medium"
+            },
+            "opacity": 80,
+            "padding": "8, 8, 8, 8",
+            "useAcrylic": false
+        },
+        "list":
+        [
+            {
+                "commandline": "wsl.exe --distribution Ubuntu --cd /home/yagu001 --exec /bin/zsh -l",
+                "guid": "{2c4de342-38b7-51cf-b940-2309a097f518}",
+                "hidden": false,
+                "icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png",
+                "name": "Ubuntu (WSL zsh)",
+                "source": "CanonicalGroupLimited.Ubuntu_79rhkp1fndgsc",
+                "startingDirectory": "//wsl$/Ubuntu/home/yagu001"
+            },
+            {
+                "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+                "hidden": false,
+                "name": "Windows PowerShell"
+            },
+            {
+                "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+                "hidden": false,
+                "name": "PowerShell",
+                "source": "Windows.Terminal.PowershellCore"
+            },
+            {
+                "commandline": "%SystemRoot%\\System32\\cmd.exe",
+                "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+                "hidden": false,
+                "name": "Command Prompt"
+            }
+        ]
     },
-    "list": [
-      {
-        "guid": "{2c4de342-38b7-51cf-b940-2309a097f518}",
-        "name": "Ubuntu (WSL zsh)",
-        "commandline": "wsl.exe --distribution Ubuntu --cd /home/yagu001 --exec /bin/zsh -l",
-        "hidden": false,
-        "icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png",
-        "startingDirectory": "//wsl$/Ubuntu/home/yagu001"
-      },
-      {
-        "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
-        "name": "PowerShell",
-        "source": "Windows.Terminal.PowershellCore",
-        "hidden": false
-      },
-      {
-        "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
-        "name": "Command Prompt",
-        "commandline": "%SystemRoot%\\System32\\cmd.exe",
-        "hidden": false
-      }
-    ]
-  },
-  "schemes": [
-    {
-      "name": "Horizon Dark",
-      "background": "#1C1E26",
-      "foreground": "#E0E0E0",
-      "black": "#16161C",
-      "red": "#E95678",
-      "green": "#29D398",
-      "yellow": "#FAB795",
-      "blue": "#26BBD9",
-      "purple": "#EE64AC",
-      "cyan": "#59E1E3",
-      "white": "#D5D8DA",
-      "brightBlack": "#5B5858",
-      "brightRed": "#EC6A88",
-      "brightGreen": "#3FDAA4",
-      "brightYellow": "#FBC3A7",
-      "brightBlue": "#3FC4DE",
-      "brightPurple": "#F075B5",
-      "brightCyan": "#6BE4E6",
-      "brightWhite": "#D5D8DA",
-      "cursorColor": "#E0E0E0",
-      "selectionBackground": "#5C6D74"
-    }
-  ]
+    "schemes":
+    [
+        {
+            "name": "Horizon",
+            "black": "#0a0a0d",
+            "red": "#E95678",
+            "green": "#29D398",
+            "yellow": "#FAB795",
+            "blue": "#26BBD9",
+            "purple": "#EE64AC",
+            "cyan": "#59E1E3",
+            "white": "#e5e5e5",
+            "brightBlack": "#848484",
+            "brightRed": "#EC6A88",
+            "brightGreen": "#3FDAA4",
+            "brightYellow": "#FBC3A7",
+            "brightBlue": "#3FC4DE",
+            "brightPurple": "#F075B5",
+            "brightCyan": "#6BE4E6",
+            "brightWhite": "#e5e5e5",
+            "background": "#1c1e26",
+            "foreground": "#bdc0c2"
+        }
+    ],
+    "themes": []
 }
