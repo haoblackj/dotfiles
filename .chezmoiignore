@@ -30,6 +30,7 @@ my-settings.service
 run_once_install-packages.sh
 my-settings.sh
 setup_vall_e_x.sh
+run_after_00_windows-terminal-settings-wsl.sh
 .config/fontconfig
 .config/gh
 .config/lazygit
@@ -49,4 +50,5 @@ install-packages.sh
 scoop
 /.wezterm.lua
 AppData/Roaming/alacritty
+AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe
 {{- end }}
