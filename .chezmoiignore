@@ -28,6 +28,16 @@ local.conf
 wsl.conf
 my-settings.service
 run_once_install-packages.sh
+10_system-base.sh
+20_wslu.sh
+30_linuxbrew.sh
+40_python-env.sh
+50_node-env.sh
+60_languages.sh
+70_editors-containers.sh
+80_cli-tools.sh
+85_gh-setup.sh
+99_services.sh
 my-settings.sh
 setup_vall_e_x.sh
 .config/fontconfig
