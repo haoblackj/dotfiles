@@ -59,4 +59,5 @@ install-packages.sh
 scoop
 /.wezterm.lua
 AppData/Roaming/alacritty
+ubuntu-(wsl-zsh).ps1
 {{- end }}
