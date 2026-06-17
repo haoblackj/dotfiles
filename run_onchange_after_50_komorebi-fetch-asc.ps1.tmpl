@@ -1,28 +1,17 @@
 {{- if eq .chezmoi.os "windows" }}
 $ErrorActionPreference = "Stop"
 
-$komorebic = Get-Command komorebic.exe -ErrorAction SilentlyContinue
-if (-not $komorebic) {
-    $komorebic = Get-Command komorebic -ErrorAction SilentlyContinue
+$uri = "https://raw.githubusercontent.com/LGUG2Z/komorebi-application-specific-configuration/master/applications.json"
+$target = Join-Path $HOME "applications.json"
+$temp = "$target.tmp"
+
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 }
 
-if (-not $komorebic) {
-    Write-Warning "komorebic が見つからないため、app-specific configuration の取得をスキップします。"
-    exit 0
-}
-
-$logDir = Join-Path $env:LOCALAPPDATA "komorebi"
-New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-$stdoutLog = Join-Path $logDir "fetch-asc.stdout.log"
-$stderrLog = Join-Path $logDir "fetch-asc.stderr.log"
-
-Write-Host "komorebic fetch-app-specific-configuration をバックグラウンドで実行します。"
-Start-Process `
-    -FilePath $komorebic.Source `
-    -ArgumentList @("fetch-app-specific-configuration") `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $stdoutLog `
-    -RedirectStandardError $stderrLog
+Write-Host "komorebi app-specific configuration を取得します: $target"
+Invoke-WebRequest -Uri $uri -OutFile $temp -UseBasicParsing -TimeoutSec 30
+Move-Item -LiteralPath $temp -Destination $target -Force
 
 exit 0
 {{- end }}
