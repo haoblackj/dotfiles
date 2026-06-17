@@ -50,8 +50,8 @@ install-packages.sh
 
 {{- if ne .chezmoi.os "windows" -}}
 # Linux マシンのため、下記ファイルは chezmoi apply の対象から外す
-# run_onchange_after_50_komorebi-fetch-asc.ps1.tmpl のターゲット名
-50_komorebi-fetch-asc.ps1
+# run_onchange_after_50_komorebi-fetch-asc.bat.tmpl のターゲット名
+50_komorebi-fetch-asc.bat
 .config/komorebi
 .config/whkd
 .config/wezterm

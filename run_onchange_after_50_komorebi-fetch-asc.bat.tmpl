@@ -1,0 +1,46 @@
+{{- if eq .chezmoi.os "windows" }}
+@echo off
+setlocal EnableExtensions
+
+set "URI=https://raw.githubusercontent.com/LGUG2Z/komorebi-application-specific-configuration/master/applications.json"
+set "TARGET_DIR=%USERPROFILE%\.config\komorebi"
+set "TARGET=%TARGET_DIR%\applications.json"
+set "TEMP_FILE=%TARGET%.tmp"
+set "LOG_DIR=%LOCALAPPDATA%\komorebi"
+set "DEBUG_LOG=%LOG_DIR%\fetch-asc-debug.log"
+set "STDOUT_LOG=%LOG_DIR%\fetch-asc-curl.stdout.log"
+set "STDERR_LOG=%LOG_DIR%\fetch-asc-curl.stderr.log"
+
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
+
+call :log START target="%TARGET%"
+where curl.exe >> "%DEBUG_LOG%" 2>&1
+call :log curl start
+
+curl.exe --fail --location --silent --show-error --max-time 30 --output "%TEMP_FILE%" "%URI%" > "%STDOUT_LOG%" 2> "%STDERR_LOG%"
+set "CURL_EXIT=%ERRORLEVEL%"
+call :log curl exit code=%CURL_EXIT%
+
+if not "%CURL_EXIT%"=="0" (
+    del "%TEMP_FILE%" >nul 2>nul
+    call :log END curl failure
+    exit /b %CURL_EXIT%
+)
+
+call :log move start temp="%TEMP_FILE%" target="%TARGET%"
+move /Y "%TEMP_FILE%" "%TARGET%" >nul
+set "MOVE_EXIT=%ERRORLEVEL%"
+if not "%MOVE_EXIT%"=="0" (
+    call :log END move failure code=%MOVE_EXIT%
+    exit /b %MOVE_EXIT%
+)
+
+for %%A in ("%TARGET%") do call :log move done bytes=%%~zA
+call :log END success
+exit /b 0
+
+:log
+>> "%DEBUG_LOG%" echo [%DATE% %TIME%] %*
+exit /b 0
+{{- end }}
