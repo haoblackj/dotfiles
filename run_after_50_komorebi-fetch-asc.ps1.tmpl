@@ -7,5 +7,7 @@ if (-not (Get-Command komorebic -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "komorebic fetch-asc を実行します。"
-komorebic fetch-asc
+& komorebic fetch-asc
+$exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
+exit $exitCode
 {{- end }}
