@@ -4,23 +4,23 @@
     "actions": [],
     "copyFormatting": "none",
     "copyOnSelect": false,
-    "defaultProfile": "{2c4de342-38b7-51cf-b940-2309a097f518}",
+    "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
     "initialCols": 120,
     "initialRows": 34,
     "keybindings": [],
-    "newTabMenu":
+    "newTabMenu": 
     [
         {
             "type": "remainingProfiles"
         }
     ],
-    "profiles":
+    "profiles": 
     {
-        "defaults":
+        "defaults": 
         {
             "colorScheme": "Horizon Dark",
             "cursorShape": "filledBox",
-            "font":
+            "font": 
             {
                 "face": "Firge35Nerd Console",
                 "size": 16,
@@ -30,7 +30,7 @@
             "padding": "8, 8, 8, 8",
             "useAcrylic": false
         },
-        "list":
+        "list": 
         [
             {
                 "commandline": "wsl.exe --distribution Ubuntu --cd /home/yagu001 --exec /bin/zsh -l",
@@ -60,28 +60,53 @@
             }
         ]
     },
-    "schemes":
+    "schemes": 
     [
         {
-            "name": "Horizon",
-            "black": "#0a0a0d",
-            "red": "#E95678",
-            "green": "#29D398",
-            "yellow": "#FAB795",
+            "background": "#1C1E26",
+            "black": "#0A0A0D",
             "blue": "#26BBD9",
-            "purple": "#EE64AC",
-            "cyan": "#59E1E3",
-            "white": "#e5e5e5",
             "brightBlack": "#848484",
-            "brightRed": "#EC6A88",
-            "brightGreen": "#3FDAA4",
-            "brightYellow": "#FBC3A7",
             "brightBlue": "#3FC4DE",
-            "brightPurple": "#F075B5",
             "brightCyan": "#6BE4E6",
-            "brightWhite": "#e5e5e5",
-            "background": "#1c1e26",
-            "foreground": "#bdc0c2"
+            "brightGreen": "#3FDAA4",
+            "brightPurple": "#F075B5",
+            "brightRed": "#EC6A88",
+            "brightWhite": "#E5E5E5",
+            "brightYellow": "#FBC3A7",
+            "cursorColor": "#FFFFFF",
+            "cyan": "#59E1E3",
+            "foreground": "#BDC0C2",
+            "green": "#29D398",
+            "name": "Horizon",
+            "purple": "#EE64AC",
+            "red": "#E95678",
+            "selectionBackground": "#FFFFFF",
+            "white": "#E5E5E5",
+            "yellow": "#FAB795"
+        },
+        {
+            "background": "#000000",
+            "black": "#0C0C0C",
+            "blue": "#0037DA",
+            "brightBlack": "#767676",
+            "brightBlue": "#3B78FF",
+            "brightCyan": "#61D6D6",
+            "brightGreen": "#16C60C",
+            "brightPurple": "#B4009E",
+            "brightRed": "#E74856",
+            "brightWhite": "#F2F2F2",
+            "brightYellow": "#F9F1A5",
+            "cursorColor": "#FFFFFF",
+            "cyan": "#3A96DD",
+            "foreground": "#FFFFFF",
+            "green": "#13A10E",
+            "name": "Horizon Dark",
+            "purple": "#881798",
+            "red": "#C50F1F",
+            "selectionBackground": "#FFFFFF",
+            "white": "#CCCCCC",
+            "yellow": "#C19C00"
         }
     ],
     "themes": []
