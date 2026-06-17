@@ -28,7 +28,6 @@ local.conf
 wsl.conf
 my-settings.service
 run_once_install-packages.sh
-50_komorebi-fetch-asc.ps1
 10_system-base.sh
 20_wslu.sh
 30_linuxbrew.sh
@@ -51,7 +50,7 @@ install-packages.sh
 
 {{- if ne .chezmoi.os "windows" -}}
 # Linux マシンのため、下記ファイルは chezmoi apply の対象から外す
-run_after_50_komorebi-fetch-asc.ps1
+50_komorebi-fetch-asc.ps1
 .config/komorebi
 .config/whkd
 .config/wezterm
