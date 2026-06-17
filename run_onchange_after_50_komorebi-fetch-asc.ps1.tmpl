@@ -5,17 +5,65 @@ $uri = "https://raw.githubusercontent.com/LGUG2Z/komorebi-application-specific-c
 $targetDir = Join-Path $HOME ".config\komorebi"
 $target = Join-Path $targetDir "applications.json"
 $temp = "$target.tmp"
+$logDir = Join-Path $env:LOCALAPPDATA "komorebi"
+$debugLog = Join-Path $logDir "fetch-asc-debug.log"
+$stdoutLog = Join-Path $logDir "fetch-asc-curl.stdout.log"
+$stderrLog = Join-Path $logDir "fetch-asc-curl.stderr.log"
 
-New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-
-Write-Host "komorebi app-specific configuration を取得します: $target"
-& curl.exe --fail --location --silent --show-error --max-time 30 --output $temp $uri
-if ($LASTEXITCODE -ne 0) {
-    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
-    throw "curl.exe による applications.json の取得に失敗しました。exit code: $LASTEXITCODE"
+function Write-DebugLog {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff zzz"
+    Add-Content -LiteralPath $debugLog -Encoding UTF8 -Value "[$timestamp] $Message"
 }
 
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+Write-DebugLog "START pid=$PID ps=$($PSVersionTable.PSVersion) home=$HOME target=$target"
+
+$curl = Get-Command curl.exe -ErrorAction Stop
+$arguments = @(
+    "--fail",
+    "--location",
+    "--silent",
+    "--show-error",
+    "--max-time", "30",
+    "--output", $temp,
+    $uri
+)
+
+Write-Host "komorebi app-specific configuration を取得します: $target"
+Write-DebugLog "curl start path=$($curl.Source) args=$($arguments -join ' ')"
+$process = Start-Process `
+    -FilePath $curl.Source `
+    -ArgumentList $arguments `
+    -RedirectStandardOutput $stdoutLog `
+    -RedirectStandardError $stderrLog `
+    -WindowStyle Hidden `
+    -PassThru
+
+$deadline = (Get-Date).AddSeconds(35)
+while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 250
+    $process.Refresh()
+}
+
+if (-not $process.HasExited) {
+    Write-DebugLog "curl timeout pid=$($process.Id); stopping process"
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
+    throw "curl.exe による applications.json の取得が35秒以内に完了しませんでした。log: $debugLog"
+}
+
+Write-DebugLog "curl exit code=$($process.ExitCode)"
+if ($process.ExitCode -ne 0) {
+    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
+    throw "curl.exe による applications.json の取得に失敗しました。exit code: $($process.ExitCode), stderr: $stderrLog"
+}
+
+Write-DebugLog "move start temp=$temp target=$target"
 Move-Item -LiteralPath $temp -Destination $target -Force
+Write-DebugLog "move done bytes=$((Get-Item -LiteralPath $target).Length)"
+Write-DebugLog "END success"
 
 exit 0
 {{- end }}
