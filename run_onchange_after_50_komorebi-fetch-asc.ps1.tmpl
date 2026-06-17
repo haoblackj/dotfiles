@@ -2,15 +2,19 @@
 $ErrorActionPreference = "Stop"
 
 $uri = "https://raw.githubusercontent.com/LGUG2Z/komorebi-application-specific-configuration/master/applications.json"
-$target = Join-Path $HOME "applications.json"
+$targetDir = Join-Path $HOME ".config\komorebi"
+$target = Join-Path $targetDir "applications.json"
 $temp = "$target.tmp"
 
-if ($PSVersionTable.PSVersion.Major -lt 6) {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-}
+New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
 
 Write-Host "komorebi app-specific configuration を取得します: $target"
-Invoke-WebRequest -Uri $uri -OutFile $temp -UseBasicParsing -TimeoutSec 30
+& curl.exe --fail --location --silent --show-error --max-time 30 --output $temp $uri
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
+    throw "curl.exe による applications.json の取得に失敗しました。exit code: $LASTEXITCODE"
+}
+
 Move-Item -LiteralPath $temp -Destination $target -Force
 
 exit 0
