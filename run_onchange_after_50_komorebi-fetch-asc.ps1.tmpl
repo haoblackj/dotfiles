@@ -1,0 +1,28 @@
+{{- if eq .chezmoi.os "windows" }}
+$ErrorActionPreference = "Stop"
+
+$komorebic = Get-Command komorebic.exe -ErrorAction SilentlyContinue
+if (-not $komorebic) {
+    $komorebic = Get-Command komorebic -ErrorAction SilentlyContinue
+}
+
+if (-not $komorebic) {
+    Write-Warning "komorebic が見つからないため、app-specific configuration の取得をスキップします。"
+    exit 0
+}
+
+$logDir = Join-Path $env:LOCALAPPDATA "komorebi"
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$stdoutLog = Join-Path $logDir "fetch-asc.stdout.log"
+$stderrLog = Join-Path $logDir "fetch-asc.stderr.log"
+
+Write-Host "komorebic fetch-app-specific-configuration をバックグラウンドで実行します。"
+Start-Process `
+    -FilePath $komorebic.Source `
+    -ArgumentList @("fetch-app-specific-configuration") `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $stdoutLog `
+    -RedirectStandardError $stderrLog
+
+exit 0
+{{- end }}
