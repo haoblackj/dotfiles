@@ -39,6 +39,34 @@ ensure_symlinks() {
   done
 }
 
+migrate_externals() {
+  local TOML="$HOME/.local/share/chezmoi/.chezmoiexternal.toml"
+  local CHEZMOI_DIR="$HOME/.local/share/chezmoi"
+  local sk name key url changed=0
+  for sk in "$HOME"/.claude/skills/*/; do
+    [ -d "$sk" ] || continue
+    [ -L "${sk%/}" ] && continue
+    [ -d "${sk}.git" ] || continue
+    name="$(basename "${sk%/}")"
+    key=".claude/skills/$name"
+    grep -qF "\"$key\"" "$TOML" 2>/dev/null && continue
+    url="$(git -C "${sk%/}" remote get-url origin 2>/dev/null)" || continue
+    printf '\n["%s"]\ntype = "git-repo"\nurl = "%s"\nrefreshPeriod = "168h"\nclone.args = ["--depth", "1"]\n' \
+      "$key" "$url" >> "$TOML"
+    changed=1
+  done
+  if [ "$changed" = "1" ]; then
+    git -C "$CHEZMOI_DIR" add .chezmoiexternal.toml
+    git -C "$CHEZMOI_DIR" diff --cached --quiet && return
+    git -C "$CHEZMOI_DIR" \
+      -c user.name="haoblackj" \
+      -c user.email="17177994+haoblackj@users.noreply.github.com" \
+      commit -q -m "auto: register external skills in chezmoiexternal.toml" || true
+    git -C "$CHEZMOI_DIR" push -q 2>/dev/null || \
+      echo "[claude-private-sync] dotfiles push failed" >&2
+  fi
+}
+
 migrate_new() {
   # Capture real (non-symlinked) skill dirs into the private repo.
   # Skip chezmoi externals (git-repo clones that have their own .git).
@@ -77,6 +105,7 @@ case "${1:-pull}" in
     ;;
   push)
     git -C "$ROOT" pull --ff-only >/dev/null 2>&1 || true
+    migrate_externals
     migrate_new
     ensure_symlinks
     git -C "$ROOT" add -A
