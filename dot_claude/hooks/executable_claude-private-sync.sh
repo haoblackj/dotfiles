@@ -10,14 +10,18 @@ ROOT="$HOME/.local/share/claude-private"
 [ -d "$ROOT/.git" ] || exit 0
 
 ensure_symlinks() {
-  # learning-efficiency-book skill (stable path)
-  local sk_src="$ROOT/skills/learning-efficiency-book"
-  local sk_dst="$HOME/.claude/skills/learning-efficiency-book"
-  if [ -d "$sk_src" ] && [ ! -L "$sk_dst" ]; then
-    [ -e "$sk_dst" ] && rm -rf "$sk_dst"
-    mkdir -p "$(dirname "$sk_dst")"
-    ln -s "$sk_src" "$sk_dst"
-  fi
+  # all skills present in the private repo
+  local sk_src sk_dst sk_name
+  for sk_src in "$ROOT"/skills/*/; do
+    [ -d "$sk_src" ] || continue
+    sk_name="$(basename "$sk_src")"
+    sk_dst="$HOME/.claude/skills/$sk_name"
+    if [ ! -L "$sk_dst" ]; then
+      [ -e "$sk_dst" ] && rm -rf "$sk_dst"
+      mkdir -p "$(dirname "$sk_dst")"
+      ln -s "${sk_src%/}" "$sk_dst"
+    fi
+  done
   # per-project memory dirs present in the private repo
   local d proj link
   for d in "$ROOT"/memory/*/; do
