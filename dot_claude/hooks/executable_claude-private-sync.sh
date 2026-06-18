@@ -40,8 +40,20 @@ ensure_symlinks() {
 }
 
 migrate_new() {
+  # Capture real (non-symlinked) skill dirs into the private repo.
+  local sk name dest
+  for sk in "$HOME"/.claude/skills/*/; do
+    [ -d "$sk" ] || continue
+    [ -L "${sk%/}" ] && continue
+    name="$(basename "$sk")"
+    dest="$ROOT/skills/$name"
+    mkdir -p "$dest"
+    cp -a "$sk". "$dest"/ 2>/dev/null || true
+    rm -rf "${sk%/}"
+    ln -s "$dest" "${sk%/}"
+  done
   # Capture real (non-symlinked) memory dirs holding markdown into the repo.
-  local link proj dest
+  local link proj
   for link in "$HOME"/.claude/projects/*/memory; do
     [ -e "$link" ] || continue
     [ -L "$link" ] && continue
