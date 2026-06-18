@@ -41,10 +41,12 @@ ensure_symlinks() {
 
 migrate_new() {
   # Capture real (non-symlinked) skill dirs into the private repo.
+  # Skip chezmoi externals (git-repo clones that have their own .git).
   local sk name dest
   for sk in "$HOME"/.claude/skills/*/; do
     [ -d "$sk" ] || continue
     [ -L "${sk%/}" ] && continue
+    [ -d "${sk}.git" ] && continue
     name="$(basename "$sk")"
     dest="$ROOT/skills/$name"
     mkdir -p "$dest"
