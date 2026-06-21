@@ -19,7 +19,7 @@
     "command": "~/.claude/ccline/ccline",
     "padding": 0
   },
-  "effortLevel": "high",
+  "effortLevel": "medium",
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true,
     "andrej-karpathy-skills@karpathy-skills": true
@@ -53,5 +53,6 @@
         ]
       }
     ]
-  }
+  },
+  "model": "opus"
 }
