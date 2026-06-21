@@ -45,6 +45,9 @@ migrate_new() {
   for sk in "$HOME"/.claude/skills/*/; do
     [ -d "$sk" ] || continue
     [ -L "${sk%/}" ] && continue
+    # Skip chezmoi git-repo externals (e.g. book-to-skill): they have their own
+    # .git and are managed publicly via .chezmoiexternal.toml, not the private repo.
+    [ -d "${sk}.git" ] && continue
     name="$(basename "$sk")"
     dest="$ROOT/skills/$name"
     mkdir -p "$dest"
