@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -eu
 
 {{ if eq .chezmoi.os "linux" }}
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
@@ -12,46 +12,25 @@ fi
 
 export HOMEBREW_NO_AUTO_UPDATE=1
 
-{{ $ghPath := lookPath "gh" }}
-{{ if $ghPath }}
-echo "ghインストール済"
-{{ else }}
-echo "ghインストール開始"
-brew install fzf
-brew install gh
-{{ end }}
-
-{{ $ghqPath := lookPath "ghq" }}
-{{ if $ghqPath }}
-echo "ghqインストール済"
-{{ else }}
-echo "ghqインストール開始"
-brew install ghq
-{{ end }}
-
-{{ $pecoPath := lookPath "peco" }}
-{{ if $pecoPath }}
-echo "pecoインストール済"
-{{ else }}
-echo "pecoインストール開始"
-brew install peco
-{{ end }}
-
-{{ $lazygitPath := lookPath "lazygit" }}
-{{ if $lazygitPath }}
-echo "lazygitインストール済"
-{{ else }}
-echo "lazygitインストール開始"
-brew install lazygit
-{{ end }}
-
-{{ $aicommit2Path := lookPath "aicommit" }}
-{{ if $aicommit2Path }}
-echo "aicommit2インストール済"
-{{ else }}
-echo "aicommit2インストール開始"
-brew install aicommit2
-{{ end }}
+# CLI ツールを Brewfile で一括インストール（冪等・導入済みはスキップ）。
+# ツールを追加するときはこのリストに 1 行足すだけでよい。
+# pyenv / pyenv-virtualenv は run_once_40、nvm は run_once_50 で管理するためここには含めない。
+echo "CLIツール一括インストール開始（brew bundle）"
+brew bundle install --no-upgrade --file=- <<'BREWFILE'
+brew "aicommit2"      # AI でコミットメッセージ生成
+brew "bitwarden-cli"  # パスワードマネージャ CLI
+brew "fzf"            # ファジーファインダー
+brew "gh"             # GitHub CLI
+brew "ghq"            # リモートリポジトリ管理
+brew "lazygit"        # git TUI
+brew "pandoc"         # マークアップ変換
+brew "peco"           # インタラクティブフィルタ
+brew "poppler"        # PDF レンダリング（pdftotext 等）
+brew "rtk"            # LLM トークン削減 CLI プロキシ
+brew "tesseract"      # OCR エンジン
+brew "tesseract-lang" # Tesseract 追加言語データ
+BREWFILE
+echo "CLIツール一括インストール完了"
 
 {{     end }}
 {{   end }}
