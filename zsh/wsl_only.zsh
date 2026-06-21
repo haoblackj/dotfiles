@@ -28,29 +28,12 @@ function ghq_peco_cd {
   fi
 }
 
-# chezmoi設定
-function chezmoi_edit {
-    chezmoi edit
-}
-function chezmoi_apply {
-    chezmoi apply
-    echo "Chezmoi Apply Done!"
-   echo "\n"
-
-  zle reset-prompt
-  return 0
-}
-
 # # xsel設定
 # export DISPLAY=localhost:0.0
 
 zle -N ghq_peco
 zle -N ghq_peco_cd
-zle -N chezmoi_edit
-zle -N chezmoi_apply
 bindkey '^:' ghq_peco_cd
 bindkey '^]' ghq_peco
-bindkey '^[' chezmoi_edit
-bindkey '^\' chezmoi_apply
 
 ~/fix_wayland.sh
