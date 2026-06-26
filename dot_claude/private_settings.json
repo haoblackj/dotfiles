@@ -11,7 +11,9 @@
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)",
       "Bash(git branch -D*)",
-      "Bash(git checkout --*)"
+      "Bash(git checkout --*)",
+      "Bash(claude -p:*)",
+      "Bash(claude --print:*)"
     ]
   },
   "model": "opus",
