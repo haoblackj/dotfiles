@@ -16,7 +16,6 @@
       "Bash(claude --print:*)"
     ]
   },
-  "model": "opus",
   "hooks": {
     "SessionStart": [
       {
@@ -58,7 +57,8 @@
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true,
     "andrej-karpathy-skills@karpathy-skills": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "karpathy-skills": {
@@ -74,5 +74,6 @@
       }
     }
   },
-  "effortLevel": "medium"
+  "effortLevel": "medium",
+  "tui": "fullscreen"
 }
