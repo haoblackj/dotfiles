@@ -47,6 +47,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/claude-config-chezmoi-sync.sh"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
