@@ -51,11 +51,14 @@ USAGE_LINE=$(tac "$TRANSCRIPT" 2>/dev/null | grep -m1 '"usage"')
 MODEL_NAME=$(printf '%s' "$USAGE_LINE" | jq -r '.message.model // empty' 2>/dev/null)
 DEFAULT_WINDOW=$(model_context_window "$MODEL_NAME")
 CONTEXT_WINDOW="${CLAUDE_CONTEXT_WINDOW_TOKENS:-$DEFAULT_WINDOW}"
-# 非数値の override は自動判定値にフォールバックする(fail-open。set -u 下での算術式クラッシュ防止)
-[[ "$CONTEXT_WINDOW" =~ ^[0-9]+$ ]] || CONTEXT_WINDOW="$DEFAULT_WINDOW"
+# 非数値・先頭ゼロ(桁数2以上、8進誤解釈の原因)の override は自動判定値にフォールバックする
+# (fail-open。set -u 下での算術式クラッシュ・8進誤パース防止)。
+# CONTEXT_WINDOW はさらに 0 も除外する(除数として使うためゼロ除算防止)。
+[[ "$CONTEXT_WINDOW" =~ ^(0|[1-9][0-9]*)$ ]] || CONTEXT_WINDOW="$DEFAULT_WINDOW"
+[[ "$CONTEXT_WINDOW" == "0" ]] && CONTEXT_WINDOW="$DEFAULT_WINDOW"
 DEFAULT_THRESHOLD=$(default_threshold_for_window "$CONTEXT_WINDOW")
 THRESHOLD="${CLAUDE_COMPACT_WARN_THRESHOLD:-$DEFAULT_THRESHOLD}"
-[[ "$THRESHOLD" =~ ^[0-9]+$ ]] || THRESHOLD="$DEFAULT_THRESHOLD"
+[[ "$THRESHOLD" =~ ^(0|[1-9][0-9]*)$ ]] || THRESHOLD="$DEFAULT_THRESHOLD"
 
 USED_TOKENS=$(printf '%s' "$USAGE_LINE" | jq -r '
   (.message.usage.input_tokens // 0) +

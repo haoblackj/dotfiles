@@ -83,6 +83,24 @@ ctx="$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.std
 check "CONTEXT_WINDOW非数値 → クラッシュせず exit 0" "0" "$rc"
 check "CONTEXT_WINDOW非数値 → 自動判定窓(200000)にフォールバックし90%で超過扱い" "yes" "$(printf '%s' "$ctx" | grep -q "COMPACT PREP REMINDER" && echo yes || echo no)"
 
+# --- 10. CLAUDE_CONTEXT_WINDOW_TOKENS=0 → 数字だが除数として不正 → 自動判定窓にフォールバックしゼロ除算を回避 ---
+TR10="$TMPDIR_TEST/t10.jsonl"
+make_transcript "$TR10" 180000   # モデル無指定 → 既定200000窓のうち180002 tokens ≈ 90% (既定85%超過)
+out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=0 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-10\\\",\\\"transcript_path\\\":\\\"$TR10\\\"}\" | \"$SCRIPT\"")"; rc=$?
+ctx="$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"])' 2>/dev/null)"
+check "CONTEXT_WINDOW=0 → ゼロ除算せずクラッシュせず exit 0" "0" "$rc"
+check "CONTEXT_WINDOW=0 → 自動判定窓(200000)にフォールバックし90%で超過扱い" "yes" "$(printf '%s' "$ctx" | grep -q "COMPACT PREP REMINDER" && echo yes || echo no)"
+check "CONTEXT_WINDOW=0 → 分母が自動判定の200000であることを含む" "yes" "$(printf '%s' "$ctx" | grep -q "200000" && echo yes || echo no)"
+
+# --- 11. CLAUDE_COMPACT_WARN_THRESHOLD=089(先頭ゼロ・8進誤パース対象) → 自動判定閾値にフォールバックしfail-open、stderrノイズ無し ---
+TR11="$TMPDIR_TEST/t11.jsonl"
+make_transcript "$TR11" 1000   # モデル無指定 → 200000窓のうち1002 tokens ≈ 0% (既定85%未満)
+stderr_file="$TMPDIR_TEST/t11.stderr"
+out="$(CLAUDE_COMPACT_WARN_THRESHOLD=089 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-11\\\",\\\"transcript_path\\\":\\\"$TR11\\\"}\" | \"$SCRIPT\"" 2>"$stderr_file")"; rc=$?
+check "THRESHOLD=089(先頭ゼロ) → クラッシュせず exit 0" "0" "$rc"
+check "THRESHOLD=089(先頭ゼロ) → 自動判定閾値(85%)にフォールバックし0%は未超過で空stdout" "" "$out"
+check "THRESHOLD=089(先頭ゼロ) → 8進パースエラー等のstderrノイズ無し" "" "$(cat "$stderr_file")"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
