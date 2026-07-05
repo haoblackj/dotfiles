@@ -3,7 +3,7 @@
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$HERE/executable_userpromptsubmit-compaction-recovery.sh"
+SCRIPT="$HERE/userpromptsubmit-compaction-recovery.sh"
 TMPDIR_TEST="$(mktemp -d)"
 export TMPDIR="$TMPDIR_TEST"
 pass=0
