@@ -37,7 +37,8 @@ default_threshold_for_window() { # $1 = context window tokens
 INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 TRANSCRIPT=$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
-[[ -z "$SESSION_ID" || -z "$TRANSCRIPT" || ! -f "$TRANSCRIPT" ]] && exit 0
+# session_id は英数字・ドット・アンダースコア・ハイフンのみ許可(パストラバーサル対策)。
+[[ -z "$SESSION_ID" || ! "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ || -z "$TRANSCRIPT" || ! -f "$TRANSCRIPT" ]] && exit 0
 
 WARNED_DIR="${TMPDIR:-/tmp}/claude-compact-warned"
 WARNED_MARKER="$WARNED_DIR/$SESSION_ID"

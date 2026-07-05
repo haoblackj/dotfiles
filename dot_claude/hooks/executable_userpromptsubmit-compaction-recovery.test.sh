@@ -43,6 +43,17 @@ check "state fileパスを含む" "yes" "$(printf '%s' "$ctx" | grep -qF "$TMPDI
 out="$(printf '%s' '{"session_id":"sess-3"}' | "$SCRIPT")"
 check "2回目呼び出し → 空stdout" "" "$out"
 
+# --- 5. session_id にパストラバーサル文字列 → 空stdout・exit 0・marker dir外に副作用なし ---
+mkdir -p "$TMPDIR_TEST/claude-compacted"
+out="$(printf '%s' '{"session_id":"../evil"}' | "$SCRIPT")"; rc=$?
+check "session_id=../evil → 空stdout" "" "$out"
+check "session_id=../evil → exit 0" "0" "$rc"
+check "session_id=../evil → TMPDIR直下に評価対象ファイルが作られない" "no" "$([ -f "$TMPDIR_TEST/evil" ] && echo yes || echo no)"
+
+out="$(printf '%s' '{"session_id":"a/b"}' | "$SCRIPT")"; rc=$?
+check "session_id=a/b → 空stdout" "" "$out"
+check "session_id=a/b → exit 0" "0" "$rc"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

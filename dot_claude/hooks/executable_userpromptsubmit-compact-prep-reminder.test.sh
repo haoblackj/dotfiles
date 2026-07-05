@@ -101,6 +101,18 @@ check "THRESHOLD=089(先頭ゼロ) → クラッシュせず exit 0" "0" "$rc"
 check "THRESHOLD=089(先頭ゼロ) → 自動判定閾値(85%)にフォールバックし0%は未超過で空stdout" "" "$out"
 check "THRESHOLD=089(先頭ゼロ) → 8進パースエラー等のstderrノイズ無し" "" "$(cat "$stderr_file")"
 
+# --- 12. session_id にパストラバーサル文字列 → 空stdout・exit 0・cooldown marker dir外に副作用なし ---
+TR12="$TMPDIR_TEST/t12.jsonl"
+make_transcript "$TR12" 180000   # 200000のうち180002 tokens ≈ 90%(本来なら閾値超過するケース)
+out="$(printf '%s' "{\"session_id\":\"../evil\",\"transcript_path\":\"$TR12\"}" | "$SCRIPT")"; rc=$?
+check "session_id=../evil → 空stdout" "" "$out"
+check "session_id=../evil → exit 0" "0" "$rc"
+check "session_id=../evil → TMPDIR直下に評価対象ファイルが作られない" "no" "$([ -f "$TMPDIR_TEST/evil" ] && echo yes || echo no)"
+
+out="$(printf '%s' "{\"session_id\":\"a/b\",\"transcript_path\":\"$TR12\"}" | "$SCRIPT")"; rc=$?
+check "session_id=a/b → 空stdout" "" "$out"
+check "session_id=a/b → exit 0" "0" "$rc"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

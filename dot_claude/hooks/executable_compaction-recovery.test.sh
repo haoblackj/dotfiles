@@ -39,6 +39,16 @@ out="$(printf '%s' 'not json' | "$SCRIPT")"; rc=$?
 check "不正JSON → 空stdout" "" "$out"
 check "不正JSON → exit 0" "0" "$rc"
 
+# --- 5. session_id にパストラバーサル文字列 → marker dir 外に書き込まず exit 0 ---
+out="$(printf '%s' '{"session_id":"../evil","trigger":"manual"}' | "$SCRIPT")"; rc=$?
+check "session_id=../evil → exit 0" "0" "$rc"
+check "session_id=../evil → TMPDIR直下に評価対象ファイルが作られない" "no" "$([ -f "$TMPDIR_TEST/evil" ] && echo yes || echo no)"
+check "session_id=../evil → marker dir 内にも作られない" "no" "$([ -f "$TMPDIR_TEST/claude-compacted/../evil" ] && echo yes || echo no)"
+
+out="$(printf '%s' '{"session_id":"a/b","trigger":"manual"}' | "$SCRIPT")"; rc=$?
+check "session_id=a/b → exit 0" "0" "$rc"
+check "session_id=a/b → サブディレクトリが作られない" "no" "$([ -f "$TMPDIR_TEST/claude-compacted/a/b" ] && echo yes || echo no)"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

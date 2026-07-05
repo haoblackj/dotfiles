@@ -9,7 +9,9 @@ set -uo pipefail
 
 INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
-[[ -z "$SESSION_ID" ]] && exit 0
+# session_id は英数字・ドット・アンダースコア・ハイフンのみ許可(パストラバーサル対策)。
+# 空文字列もこの正規表現には一致しないため空チェックを兼ねる。
+[[ "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
 
 MARKER_DIR="${TMPDIR:-/tmp}/claude-compacted"
 MARKER="$MARKER_DIR/$SESSION_ID"

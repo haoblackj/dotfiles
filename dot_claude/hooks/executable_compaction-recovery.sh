@@ -8,7 +8,9 @@ set -uo pipefail
 
 INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
-[[ -z "$SESSION_ID" ]] && exit 0
+# session_id は英数字・ドット・アンダースコア・ハイフンのみ許可(パストラバーサル対策)。
+# 空文字列もこの正規表現には一致しないため空チェックを兼ねる。
+[[ "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
 
 # trigger (manual/auto) はベストエフォートの付帯情報。フィールド名は
 # 公式ドキュメントで確定できなかったため、複数候補を試し、無ければ unknown とする。
