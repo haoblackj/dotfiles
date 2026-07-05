@@ -68,6 +68,21 @@ make_transcript "$TR7" 140000 "claude-haiku-4-5"   # 200,000のうち140002 toke
 out="$(printf '%s' "{\"session_id\":\"sess-7\",\"transcript_path\":\"$TR7\"}" | "$SCRIPT")"
 check "haiku-4-5(200K窓)は70%ではまだ既定85%閾値に届かず空stdout" "" "$out"
 
+# --- 8. CLAUDE_COMPACT_WARN_THRESHOLD が非数値 → 自動判定閾値にフォールバックしfail-open(exit 0) ---
+TR8="$TMPDIR_TEST/t8.jsonl"
+make_transcript "$TR8" 1000   # モデル無指定・200000窓のうち1002 tokens ≈ 0% → 既定85%未満
+out="$(CLAUDE_COMPACT_WARN_THRESHOLD=abc bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-8\\\",\\\"transcript_path\\\":\\\"$TR8\\\"}\" | \"$SCRIPT\"")"; rc=$?
+check "THRESHOLD非数値 → クラッシュせず exit 0" "0" "$rc"
+check "THRESHOLD非数値 → 自動判定閾値(85%)を使い0%は未超過で空stdout" "" "$out"
+
+# --- 9. CLAUDE_CONTEXT_WINDOW_TOKENS が非数値 → 自動判定ウィンドウにフォールバックしfail-open(exit 0) ---
+TR9="$TMPDIR_TEST/t9.jsonl"
+make_transcript "$TR9" 180000 "claude-haiku-4-5"   # 200,000のうち180002 tokens = 90% → haiku既定85%超過
+out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=notanumber bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-9\\\",\\\"transcript_path\\\":\\\"$TR9\\\"}\" | \"$SCRIPT\"")"; rc=$?
+ctx="$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"])' 2>/dev/null)"
+check "CONTEXT_WINDOW非数値 → クラッシュせず exit 0" "0" "$rc"
+check "CONTEXT_WINDOW非数値 → 自動判定窓(200000)にフォールバックし90%で超過扱い" "yes" "$(printf '%s' "$ctx" | grep -q "COMPACT PREP REMINDER" && echo yes || echo no)"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
