@@ -97,7 +97,8 @@
     "skill-creator@claude-plugins-official": true,
     "andrej-karpathy-skills@karpathy-skills": true,
     "superpowers@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true
+    "claude-code-setup@claude-plugins-official": true,
+    "compact-plus@compact-plus-local": true
   },
   "extraKnownMarketplaces": {
     "karpathy-skills": {
@@ -110,6 +111,12 @@
       "source": {
         "source": "github",
         "repo": "obra/superpowers-marketplace"
+      }
+    },
+    "compact-plus-local": {
+      "source": {
+        "source": "github",
+        "repo": "u-ichi/compact-plus"
       }
     }
   },
