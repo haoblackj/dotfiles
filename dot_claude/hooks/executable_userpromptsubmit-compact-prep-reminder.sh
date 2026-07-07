@@ -1,6 +1,7 @@
 #!/bin/bash
-# UserPromptSubmit hook: transcript_path の直近usage+modelからcontext使用率を自前計算し、
-# 閾値超過なら additionalContext で /compact-prep 実行を提案する（cooldown付き, one-shot的に1サイクル1回）。
+# UserPromptSubmit hook: threshold producer. transcript_path の直近usage+modelからcontext使用率を自前計算し、
+# 閾値超過なら claude-compact-warn マーカファイルを書き込む（cooldown付き, one-shot的に1サイクル1回）。
+# compact-plus プラグインの reminder hook が claude-compact-warn を消費し、ユーザーに通知する。
 #
 # VSCode拡張は statusLine コマンドを未サポートのため、statusLine には依存せず
 # hook入力の transcript_path だけで完結させる設計にしている。
@@ -40,8 +41,8 @@ TRANSCRIPT=$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/nul
 # session_id は英数字・ドット・アンダースコア・ハイフンのみ許可(パストラバーサル対策)。
 [[ -z "$SESSION_ID" || ! "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ || -z "$TRANSCRIPT" || ! -f "$TRANSCRIPT" ]] && exit 0
 
-WARNED_DIR="${TMPDIR:-/tmp}/claude-compact-warned"
-WARNED_MARKER="$WARNED_DIR/$SESSION_ID"
+# cooldown: compact-plus プラグインの reminder hook が書き込んだ claude-compact-warned を読む。
+WARNED_MARKER="${TMPDIR:-/tmp}/claude-compact-warned/$SESSION_ID"
 [[ -f "$WARNED_MARKER" ]] && exit 0
 
 # 末尾から usage を含む最初の行を1件だけ取得(cache_read_input_tokensは累積値のため
@@ -71,18 +72,10 @@ USED_TOKENS=$(printf '%s' "$USAGE_LINE" | jq -r '
 PCT=$(( USED_TOKENS * 100 / CONTEXT_WINDOW ))
 [[ "$PCT" -lt "$THRESHOLD" ]] && exit 0
 
-mkdir -p "$WARNED_DIR" 2>/dev/null || true
-printf '%s\n' "$(date +%s)" > "$WARNED_MARKER" 2>/dev/null || true
-
-CTX="[COMPACT PREP REMINDER] context 使用率が約 ${PCT}%（推定 ${USED_TOKENS}/${CONTEXT_WINDOW} tokens）に達した。"
-CTX+=$'\n'"- 作業区切りでユーザーに \`/compact-prep\` の実行を提案せよ。"
-CTX+=$'\n'"- \`/compact-prep\` 実行後、ユーザーに \`/compact\` 実行を案内せよ。"
-CTX+=$'\n'"- scope 縮小や別セッション化ではなく、圧縮前 state 保存で対処せよ。"
-
-jq -n --arg ctx "$CTX" '{
-  hookSpecificOutput: {
-    hookEventName: "UserPromptSubmit",
-    additionalContext: $ctx
-  }
-}'
+# Marker producer: PCT を claude-compact-warn に書き込む。
+# compact-plus プラグインの reminder hook がこれを読み、ユーザーに通知する。
+WARN_DIR="${TMPDIR:-/tmp}/claude-compact-warn"; WARN_MARKER="$WARN_DIR/$SESSION_ID"
+[[ -f "$WARN_MARKER" ]] && exit 0
+mkdir -p "$WARN_DIR" 2>/dev/null || true
+printf '%s\n' "$PCT" > "$WARN_MARKER" 2>/dev/null || true
 exit 0
