@@ -2,7 +2,9 @@
 # compact-plus 両取り E2E: producer→plugin③→backend guard→plugin PostCompact→plugin② を
 # live実体(deployed producer/backend + plugin cache hooks)で通す。codex は呼ばない(guard経路のみ)。
 set -uo pipefail
-CACHE="/home/yagu001/.claude/plugins/cache/compact-plus-local/compact-plus/1.0.2/hooks"
+# plugin バージョンをハードコードせず動的解決(更新耐性)
+CACHE=$(find "$HOME/.claude/plugins/cache" -path '*compact-plus/*/hooks' -type d 2>/dev/null | sort -V | tail -1)
+[[ -n "$CACHE" && -d "$CACHE" ]] || { echo "FAIL0: compact-plus plugin hooks 未検出(installされているか)"; exit 1; }
 PROD=~/.claude/hooks/userpromptsubmit-compact-prep-reminder.sh
 BACKEND=~/.claude/compact-plus-backend/backend-codex-mini.sh
 TP="$HOME/.claude/projects/-home-yagu001-repo-github-com-haoblackj-penguinEx/9bbdb771-6e0a-427a-88e1-c79f8f1d071d.jsonl"
