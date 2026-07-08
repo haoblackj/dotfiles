@@ -1,0 +1,17 @@
+#!/bin/bash
+set -u
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+# homebrew.herdr.service.d/override.conf hash: {{ include "dot_config/systemd/user/homebrew.herdr.service.d/override.conf" | sha256sum }}
+
+if [ -f "$HOME/.config/systemd/user/homebrew.herdr.service" ]; then
+  systemctl --user daemon-reload
+  systemctl --user restart homebrew.herdr.service
+fi
+
+{{     end }}
+{{   end }}
+{{ end }}
