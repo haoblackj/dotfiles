@@ -113,15 +113,11 @@
         "color": "hex:3fc4de"
       },
       {
-        "id": "git-status",
-        "type": "git-status",
-        "color": "hex:fbc3a7",
-        "metadata": {
-          "symbolConflicts": "conflict ",
-          "symbolStaged": "staged ",
-          "symbolUnstaged": "unstaged ",
-          "symbolUntracked": "untracked "
-        }
+        "id": "git-status-counts",
+        "type": "custom-command",
+        "commandPath": "/home/yagu001/.config/ccstatusline/git-status-counts.sh",
+        "timeout": 1000,
+        "color": "hex:fbc3a7"
       }
     ],
     []
