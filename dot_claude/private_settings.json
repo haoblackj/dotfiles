@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/claude-config-chezmoi-sync.sh"
+            "command": "~/.claude/hooks/chezmoi-auto-apply.sh"
           }
         ]
       }
