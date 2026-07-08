@@ -115,7 +115,13 @@
       {
         "id": "git-status",
         "type": "git-status",
-        "color": "hex:fbc3a7"
+        "color": "hex:fbc3a7",
+        "metadata": {
+          "symbolConflicts": "conflict ",
+          "symbolStaged": "staged ",
+          "symbolUnstaged": "unstaged ",
+          "symbolUntracked": "untracked "
+        }
       }
     ],
     []
