@@ -72,7 +72,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/ccline/ccline",
+    "command": "ccstatusline",
     "padding": 0
   },
   "enabledPlugins": {

@@ -1,0 +1,36 @@
+#!/bin/bash
+set -eu
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+# グローバル npm パッケージ導入。
+# nvm を明示 source することで、対話シェルでなくても（＝ nvm 導入直後に
+# `source ~/.zshrc` や端末再起動をしなくても）node/npm を使えるようにする。
+# これで従来 README の Manual 手順に頼らず冪等に導入できる。
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  . "$HOME/.nvm/nvm.sh"
+fi
+
+# node 未導入なら default(lts/*) を導入・有効化する
+if ! command -v npm >/dev/null 2>&1 && command -v nvm >/dev/null 2>&1; then
+  echo "node 未検出のため nvm で LTS を導入"
+  nvm install --lts
+  nvm use --lts
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "npm を用意できなかったため npm グローバル導入をスキップ（nvm/node 未導入）"
+else
+  # 追加するときはこのリストに 1 行足すだけでよい。
+  # ccstatusline は pin 運用（バージョンを上げると run_once が再実行される）。
+  echo "グローバル npm パッケージ導入"
+  npm i -g ccstatusline@2.2.22                    # Claude Code StatusLine（5h/7d 使用率を表示）
+  npm i -g yarn                                   # パッケージマネージャ
+  npm i -g git-cz cz-conventional-changelog-ja    # commitizen（対話コミット）
+fi
+
+{{     end }}
+{{   end }}
+{{ end }}
