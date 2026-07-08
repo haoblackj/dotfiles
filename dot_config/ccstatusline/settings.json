@@ -98,6 +98,24 @@
         "type": "thinking-effort",
         "rawValue": true,
         "color": "hex:e95678"
+      },
+      {
+        "id": "icon-context",
+        "type": "custom-text",
+        "customText": "📊",
+        "merge": true,
+        "color": "hex:3fc4de"
+      },
+      {
+        "id": "context-percentage",
+        "type": "context-percentage",
+        "rawValue": true,
+        "color": "hex:3fc4de"
+      },
+      {
+        "id": "git-status",
+        "type": "git-status",
+        "color": "hex:fbc3a7"
       }
     ],
     []
