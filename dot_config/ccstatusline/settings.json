@@ -3,77 +3,113 @@
   "lines": [
     [
       {
+        "id": "icon-model",
+        "type": "custom-text",
+        "customText": "🤖",
+        "merge": true,
+        "color": "hex:26bbd9"
+      },
+      {
         "id": "1",
         "type": "model",
-        "color": "cyan"
-      },
-      {
-        "id": "2",
-        "type": "separator"
-      },
-      {
-        "id": "3",
-        "type": "git-branch",
-        "color": "magenta"
-      },
-      {
-        "id": "4",
-        "type": "separator"
+        "rawValue": true,
+        "color": "hex:26bbd9"
       },
       {
         "id": "5",
-        "type": "context-percentage",
-        "color": "brightBlack"
+        "type": "git-branch",
+        "color": "hex:ee64ac"
       },
       {
-        "id": "6",
-        "type": "separator"
+        "id": "icon-session",
+        "type": "custom-text",
+        "customText": "🕔",
+        "merge": true,
+        "color": "hex:fab795"
       },
       {
-        "id": "7",
+        "id": "e9b6e336-76a8-4842-a5f9-8a7925fb8789",
         "type": "session-usage",
-        "color": "green"
+        "rawValue": true,
+        "color": "hex:fab795"
       },
       {
-        "id": "8",
-        "type": "separator"
+        "id": "icon-reset",
+        "type": "custom-text",
+        "customText": "⏳",
+        "merge": true,
+        "color": "hex:666666"
       },
       {
-        "id": "9",
+        "id": "4fe1e6cb-2438-42d7-adf6-8a12756f4ed7",
+        "type": "reset-timer",
+        "rawValue": true,
+        "color": "hex:666666"
+      },
+      {
+        "id": "icon-weekly",
+        "type": "custom-text",
+        "customText": "📅",
+        "merge": true,
+        "color": "hex:29d398"
+      },
+      {
+        "id": "d8b8d539-f7f7-466b-a03f-b7cd32775838",
         "type": "weekly-usage",
-        "color": "yellow"
+        "rawValue": true,
+        "color": "hex:29d398"
       },
       {
-        "id": "10",
-        "type": "separator"
+        "id": "icon-weekly-reset",
+        "type": "custom-text",
+        "customText": "⌛",
+        "merge": true,
+        "color": "hex:666666"
       },
       {
-        "id": "11",
-        "type": "current-working-dir",
-        "color": "blue"
+        "id": "05799064-d6af-4595-a3ca-c13b537c35b9",
+        "type": "weekly-reset-timer",
+        "rawValue": true,
+        "color": "hex:666666"
       }
     ],
-    [],
+    [
+      {
+        "id": "icon-thinking",
+        "type": "custom-text",
+        "customText": "🧠",
+        "merge": true,
+        "color": "hex:e95678"
+      },
+      {
+        "id": "a9ef7a4f-4f98-43bf-a168-4bc868038626",
+        "type": "thinking-effort",
+        "rawValue": true,
+        "color": "hex:e95678"
+      }
+    ],
     []
   ],
   "flexMode": "full-minus-40",
   "compactThreshold": 60,
   "colorLevel": 2,
+  "defaultPadding": " ",
   "inheritSeparatorColors": false,
-  "globalBold": false,
+  "globalBold": true,
   "gitCacheTtlSeconds": 5,
   "minimalistMode": false,
   "powerline": {
     "enabled": false,
     "separators": [
-      ""
+      ""
     ],
     "separatorInvertBackground": [
       false
     ],
     "startCaps": [],
     "endCaps": [],
-    "autoAlign": false,
-    "continueThemeAcrossLines": false
+    "theme": "tokyonight",
+    "autoAlign": true,
+    "continueThemeAcrossLines": true
   }
 }
