@@ -1,4 +1,11 @@
 {
+  "env": {
+    "COMPACT_PLUS_PRIMARY_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
+    "COMPACT_PLUS_FALLBACK_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
+    "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
+    "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
+    "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120"
+  },
   "permissions": {
     "allow": [
       "Bash(git *)",
@@ -14,8 +21,10 @@
       "Bash(git checkout --*)",
       "Bash(claude -p:*)",
       "Bash(claude --print:*)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
+  "model": "sonnet[1m]",
   "hooks": {
     "SessionStart": [
       {
@@ -103,12 +112,7 @@
     }
   },
   "effortLevel": "high",
+  "askUserQuestionTimeout": "never",
   "tui": "fullscreen",
-  "env": {
-    "COMPACT_PLUS_PRIMARY_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
-    "COMPACT_PLUS_FALLBACK_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
-    "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
-    "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
-    "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120"
-  }
+  "switchModelsOnFlag": true
 }
