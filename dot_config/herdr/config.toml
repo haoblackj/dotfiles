@@ -1,7 +1,7 @@
 onboarding = false
 
 [[keys.command]]
-key = "prefix+o"
+key = "prefix+a"
 type = "plugin_action"
 command = "jt.command-palette.open"
 description = "command palette (fzf)"
