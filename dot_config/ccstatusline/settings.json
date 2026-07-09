@@ -16,18 +16,6 @@
         "color": "hex:26bbd9"
       },
       {
-        "id": "icon-repo",
-        "type": "custom-text",
-        "customText": "📁",
-        "merge": true,
-        "color": "hex:59e1e3"
-      },
-      {
-        "id": "git-origin-repo",
-        "type": "git-origin-repo",
-        "color": "hex:59e1e3"
-      },
-      {
         "id": "5",
         "type": "git-branch",
         "color": "hex:ee64ac"
