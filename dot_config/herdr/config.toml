@@ -1,5 +1,11 @@
 onboarding = false
 
+[[keys.command]]
+key = "prefix+o"
+type = "plugin_action"
+command = "jt.command-palette.open"
+description = "command palette (fzf)"
+
 [theme]
 name = "tokyo-night"
 auto_switch = false
@@ -20,3 +26,6 @@ peach = "#fab795"
 mauve = "#ee64ac"
 blue = "#26bbd9"
 teal = "#59e1e3"
+
+[ui]
+agent_panel_sort = "spaces"
