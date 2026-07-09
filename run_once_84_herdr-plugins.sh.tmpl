@@ -1,0 +1,19 @@
+#!/bin/bash
+set -eu
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+if command -v herdr >/dev/null 2>&1; then
+  echo "herdr plugin: reviewr を導入"
+  herdr plugin install persiyanov/herdr-reviewr --yes
+  echo "herdr plugin: herdr-plus を導入"
+  herdr plugin install cloudmanic/herdr-plus --yes
+else
+  echo "herdr が見つからないため herdr plugin 導入をスキップ"
+fi
+
+{{     end }}
+{{   end }}
+{{ end }}
