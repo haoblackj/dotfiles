@@ -6,3 +6,17 @@ auto_switch = false
 
 [ui.sound]
 enabled = false
+
+[theme.custom]
+panel_bg = "#1c1e26"
+text = "#d5d8da"
+accent = "#e95678"
+overlay0 = "#666666"
+overlay1 = "#6c6f93"
+red = "#e95678"
+green = "#29d398"
+yellow = "#fab795"
+peach = "#fab795"
+mauve = "#ee64ac"
+blue = "#26bbd9"
+teal = "#59e1e3"
