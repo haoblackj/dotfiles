@@ -6,6 +6,18 @@ type = "plugin_action"
 command = "jt.command-palette.open"
 description = "command palette (fzf)"
 
+[[keys.command]]
+key = "prefix+s"
+type = "shell"
+command = "herdr agent start claude-$(date +%s%N) --split right --focus -- claude"
+description = "縦分割してClaude Code起動"
+
+[[keys.command]]
+key = "prefix+d"
+type = "shell"
+command = "herdr agent start claude-$(date +%s%N) --split down --focus -- claude"
+description = "横分割してClaude Code起動"
+
 [theme]
 name = "tokyo-night"
 auto_switch = false
