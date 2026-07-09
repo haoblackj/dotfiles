@@ -28,8 +28,9 @@ gh repo clone joaojacome/bitwarden-ssh-agent
 `run_once_80`(brew本体)/`run_once_83`(agent skill)/`run_once_84`(プラグイン: reviewr, herdr-plus,
 command-palette)/`run_once_86`(Claude Code統合フック)で新規マシンでも自動導入される。キーバインドは
 `dot_config/herdr/config.toml`の`[[keys.command]]`で`prefix+a`にコマンドパレット(fzf)を割当済み。
-キーバインド・導入済みプラグインactionのチートシート: https://claude.ai/code/artifact/d13eca3b-71cc-40e5-a62b-1b897aa6c4c9
-（claude.ai Artifactとしてホスト。長期保持を保証する公式記述は未確認、恒久参照にするならリポジトリ内への保存を検討）
+キーバインド・導入済みプラグインactionのチートシート:
+- 恒久コピー: [`docs/herdr-cheatsheet.html`](docs/herdr-cheatsheet.html)（ローカル/ブラウザで直接開ける単体HTML）
+- ライブ版(検索UI付き): https://claude.ai/code/artifact/d13eca3b-71cc-40e5-a62b-1b897aa6c4c9 （claude.ai Artifactとしてホスト、長期保持を保証する公式記述は未確認）
 
 ## Claude Code StatusLine
 

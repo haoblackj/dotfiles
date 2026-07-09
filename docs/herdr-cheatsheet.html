@@ -1,0 +1,487 @@
+<title>herdr チートシート</title>
+<style>
+  :root {
+    --bg: #1c1e26;
+    --bg-raised: #22242f;
+    --bg-card: #262936;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: #d5d8da;
+    --text-dim: #9a9dae;
+    --text-faint: #6c6f93;
+    --accent: #e95678;
+    --accent-dim: #b9425a;
+    --teal: #59e1e3;
+    --blue: #26bbd9;
+    --mauve: #ee64ac;
+    --peach: #fab795;
+    --green: #29d398;
+
+    --sans: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+  }
+
+  body {
+    padding: clamp(20px, 5vw, 56px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  .page {
+    max-width: 920px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* ---------- header ---------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .masthead h1 {
+    margin: 0;
+    font-size: clamp(24px, 4vw, 34px);
+    font-weight: 650;
+    line-height: 1.25;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead h1 .prefix-kbd {
+    color: var(--accent);
+  }
+
+  .masthead p {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .search-row {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+
+  .search-row svg {
+    flex: none;
+    opacity: 0.5;
+  }
+
+  .search-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+
+  .search-row input::placeholder {
+    color: var(--text-faint);
+    font-family: var(--sans);
+  }
+
+  .search-row input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .search-count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  /* ---------- hero: the one key ---------- */
+
+  .hero {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+    padding: 26px 28px;
+    border-radius: 16px;
+    background:
+      radial-gradient(120% 140% at 0% 0%, rgba(233, 86, 120, 0.16), transparent 60%),
+      var(--bg-raised);
+    border: 1px solid var(--border-strong);
+  }
+
+  .hero-kbd {
+    font-family: var(--mono);
+    font-size: clamp(22px, 3.4vw, 30px);
+    font-weight: 600;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 12px 20px;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px -8px rgba(233, 86, 120, 0.55);
+    white-space: nowrap;
+  }
+
+  .hero-body {
+    flex: 1;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hero-body h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 620;
+  }
+
+  .hero-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 6px;
+    align-items: center;
+    font-size: 13.5px;
+    color: var(--text-dim);
+  }
+
+  .hero-steps li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .hero-steps li:not(:last-child)::after {
+    content: "→";
+    margin-left: 6px;
+    color: var(--text-faint);
+  }
+
+  .hero-steps kbd {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    padding: 2px 7px;
+  }
+
+  /* ---------- category grid ---------- */
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cat-color, var(--accent));
+    border-radius: 12px;
+    padding: 18px 20px 8px;
+    display: flex;
+    flex-direction: column;
+    transition: opacity 0.15s ease;
+  }
+
+  .card[hidden] { display: none; }
+
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .card-head h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 640;
+    color: var(--cat-color, var(--text));
+  }
+
+  .card-head span {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .row[hidden] { display: none; }
+
+  .row:first-of-type { border-top: none; }
+
+  .row kbd {
+    flex: none;
+    min-width: 30px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+
+  .row .desc {
+    font-size: 13.5px;
+    color: var(--text-dim);
+  }
+
+  /* ---------- plugin card (wide) ---------- */
+
+  .card--plugins {
+    grid-column: 1 / -1;
+  }
+
+  .plugin-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .plugin-row[hidden] { display: none; }
+
+  .plugin-row:first-of-type { border-top: none; }
+
+  .plugin-row .action-id {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    background: rgba(41, 211, 152, 0.1);
+    border: 1px solid rgba(41, 211, 152, 0.28);
+    border-radius: 6px;
+    padding: 3px 9px;
+    white-space: nowrap;
+  }
+
+  .plugin-row .desc {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    flex: 1;
+    min-width: 160px;
+  }
+
+  .plugin-note {
+    margin: 2px 0 12px;
+    font-size: 12.5px;
+    color: var(--text-faint);
+    line-height: 1.6;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--text-faint);
+    font-size: 13.5px;
+    font-family: var(--mono);
+  }
+
+  .empty-state[hidden] { display: none; }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-faint);
+    font-family: var(--mono);
+  }
+
+  footer a {
+    color: var(--text-faint);
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">herdr cheat sheet</div>
+    <h1>prefix は <span class="prefix-kbd">ctrl+b</span>、あとは <span class="prefix-kbd">prefix+a</span> だけ覚えればいい</h1>
+    <p>
+      個別キーを全部暗記しなくても、コマンドパレットで名前を打てば大抵のプラグイン操作にたどり着く。
+      下の検索欄はこのページ自体もパレットと同じ感覚でフィルタできる。
+    </p>
+    <div class="search-row">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="5.2" stroke="currentColor" stroke-width="1.4"/>
+        <line x1="11" y1="11" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <input id="filter" type="text" placeholder="操作名やキーで絞り込み(例: split, sidebar, reviewr)" autocomplete="off" spellcheck="false">
+      <span class="search-count" id="filter-count"></span>
+    </div>
+  </header>
+
+  <section class="hero" aria-label="コマンドパレットの使い方">
+    <div class="hero-kbd">prefix + a</div>
+    <div class="hero-body">
+      <h2>コマンドパレット(fzf)を開く — jt.command-palette</h2>
+      <ol class="hero-steps">
+        <li><kbd>ctrl+b</kbd> <kbd>a</kbd> で起動</li>
+        <li>action 名の一部を打つ</li>
+        <li><kbd>Enter</kbd> で実行</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="grid" id="grid">
+
+    <div class="card" data-cat="pane" style="--cat-color: var(--teal)">
+      <div class="card-head"><h3>ペイン・分割</h3><span>focus / split / zoom</span></div>
+      <div class="row" data-search="h 左 ペイン focus pane left"><kbd>h</kbd><span class="desc">左のペインへ</span></div>
+      <div class="row" data-search="j 下 ペイン focus pane down"><kbd>j</kbd><span class="desc">下のペインへ</span></div>
+      <div class="row" data-search="k 上 ペイン focus pane up"><kbd>k</kbd><span class="desc">上のペインへ</span></div>
+      <div class="row" data-search="l 右 ペイン focus pane right"><kbd>l</kbd><span class="desc">右のペインへ</span></div>
+      <div class="row" data-search="v split vertical 縦分割"><kbd>v</kbd><span class="desc">縦分割</span></div>
+      <div class="row" data-search="minus split horizontal 横分割"><kbd>−</kbd><span class="desc">横分割</span></div>
+      <div class="row" data-search="z zoom fullscreen ズーム 全画面"><kbd>z</kbd><span class="desc">ズーム(全画面切替)</span></div>
+      <div class="row" data-search="x close pane 閉じる"><kbd>x</kbd><span class="desc">ペインを閉じる</span></div>
+      <div class="row" data-search="b sidebar toggle サイドバー"><kbd>b</kbd><span class="desc">サイドバー切替</span></div>
+    </div>
+
+    <div class="card" data-cat="tab" style="--cat-color: var(--blue)">
+      <div class="card-head"><h3>タブ</h3><span>new / switch / rename</span></div>
+      <div class="row" data-search="c new tab 新規タブ"><kbd>c</kbd><span class="desc">新規タブ</span></div>
+      <div class="row" data-search="p previous tab 前のタブ"><kbd>p</kbd><span class="desc">前のタブ</span></div>
+      <div class="row" data-search="n next tab 次のタブ"><kbd>n</kbd><span class="desc">次のタブ</span></div>
+      <div class="row" data-search="1-9 switch tab タブ番号 切替"><kbd>1‑9</kbd><span class="desc">タブ番号で切替</span></div>
+      <div class="row" data-search="shift+t rename tab タブ名変更"><kbd>⇧t</kbd><span class="desc">タブ名変更</span></div>
+      <div class="row" data-search="shift+x close tab タブを閉じる"><kbd>⇧x</kbd><span class="desc">タブを閉じる</span></div>
+    </div>
+
+    <div class="card" data-cat="workspace" style="--cat-color: var(--mauve)">
+      <div class="card-head"><h3>ワークスペース</h3><span>workspace / worktree</span></div>
+      <div class="row" data-search="w workspace picker ピッカー"><kbd>w</kbd><span class="desc">ワークスペースピッカー</span></div>
+      <div class="row" data-search="g goto 横断移動"><kbd>g</kbd><span class="desc">goto(横断移動)</span></div>
+      <div class="row" data-search="shift+n new workspace 新規ワークスペース"><kbd>⇧n</kbd><span class="desc">新規ワークスペース</span></div>
+      <div class="row" data-search="shift+g new worktree 新規worktree"><kbd>⇧g</kbd><span class="desc">新規worktree</span></div>
+      <div class="row" data-search="shift+w rename workspace 名前変更"><kbd>⇧w</kbd><span class="desc">ワークスペース名変更</span></div>
+      <div class="row" data-search="shift+d close workspace 閉じる"><kbd>⇧d</kbd><span class="desc">ワークスペースを閉じる</span></div>
+    </div>
+
+    <div class="card" data-cat="view" style="--cat-color: var(--peach)">
+      <div class="card-head"><h3>ビュー・メタ</h3><span>help / settings / detach</span></div>
+      <div class="row" data-search="? help ヘルプ"><kbd>?</kbd><span class="desc">ヘルプ</span></div>
+      <div class="row" data-search="s settings 設定"><kbd>s</kbd><span class="desc">設定</span></div>
+      <div class="row" data-search="q detach デタッチ"><kbd>q</kbd><span class="desc">デタッチ</span></div>
+      <div class="row" data-search="shift+r reload config 再読込"><kbd>⇧r</kbd><span class="desc">config再読込</span></div>
+      <div class="row" data-search="o notification target 通知"><kbd>o</kbd><span class="desc">通知ターゲットを開く</span></div>
+    </div>
+
+    <div class="card card--plugins" data-cat="plugins" style="--cat-color: var(--green)">
+      <div class="card-head"><h3>プラグイン(専用キーなし・パレット経由)</h3><span>persiyanov / cloudmanic / jt</span></div>
+      <p class="plugin-note">
+        個別のキーは割り当てていない。<code style="font-family:var(--mono)">prefix+a</code> でパレットを開き、下の名前の一部を打てば呼び出せる。
+        直接CLIから叩く場合は <code style="font-family:var(--mono)">herdr plugin action invoke &lt;id&gt;</code>。
+      </p>
+      <div class="plugin-row" data-search="reviewr toggle sidebar レビュー 差分"><span class="action-id">persiyanov.reviewr.toggle</span><span class="desc">reviewr: 差分レビューサイドバー切替</span></div>
+      <div class="plugin-row" data-search="herdr-plus projects プロジェクト"><span class="action-id">cloudmanic.herdr-plus.projects</span><span class="desc">Herdr Plus: プロジェクト起動</span></div>
+      <div class="plugin-row" data-search="herdr-plus quick actions クイック"><span class="action-id">cloudmanic.herdr-plus.quick-actions</span><span class="desc">Herdr Plus: クイックアクション</span></div>
+      <div class="plugin-row" data-search="herdr-plus ping"><span class="action-id">cloudmanic.herdr-plus.ping</span><span class="desc">Herdr Plus: ping</span></div>
+      <div class="plugin-row" data-search="command palette open パレット自体"><span class="action-id">jt.command-palette.open</span><span class="desc">パレット自体を開く(= prefix+a)</span></div>
+    </div>
+
+  </section>
+
+  <p class="empty-state" id="empty" hidden>該当なし — prefix+a のパレットでも見つからなければ herdr plugin action list</p>
+
+  <footer>
+    <span>ソース: <code>herdr --default-config</code> 実機検証(2026-07-09) / config: <code>~/.config/herdr/config.toml</code>(chezmoi管理)</span>
+    <span>theme: tokyo-night + Horizon Dark custom</span>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var input = document.getElementById('filter');
+    var count = document.getElementById('filter-count');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+    var empty = document.getElementById('empty');
+
+    function normalize(s) {
+      return s.toLowerCase();
+    }
+
+    function apply() {
+      var q = normalize(input.value.trim());
+      var totalVisible = 0;
+
+      cards.forEach(function (card) {
+        var rows = Array.prototype.slice.call(card.querySelectorAll('.row, .plugin-row'));
+        var visibleInCard = 0;
+
+        rows.forEach(function (row) {
+          var hay = normalize(row.getAttribute('data-search') || '');
+          var match = q === '' || hay.indexOf(q) !== -1;
+          row.hidden = !match;
+          if (match) visibleInCard++;
+        });
+
+        card.hidden = visibleInCard === 0;
+        totalVisible += visibleInCard;
+      });
+
+      empty.hidden = totalVisible !== 0;
+      count.textContent = q === '' ? '' : (totalVisible + ' 件');
+    }
+
+    input.addEventListener('input', apply);
+    apply();
+  })();
+</script>
