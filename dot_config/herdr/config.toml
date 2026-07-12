@@ -41,3 +41,8 @@ teal = "#59e1e3"
 
 [ui]
 agent_panel_sort = "spaces"
+right_click_passthrough_modifier = "ctrl"
+
+[experimental]
+reveal_hidden_cursor_for_cjk_ime = true
+cjk_ime_agents = ["claude"]
