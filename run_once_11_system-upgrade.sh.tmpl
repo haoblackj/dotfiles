@@ -5,11 +5,9 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
-systemctl --user enable ssh-agent
-systemctl --user start ssh-agent
-
-sudo systemctl enable my-settings.service
-sudo systemctl enable docker
+echo "システムパッケージのアップグレード"
+sudo apt update -y
+sudo apt upgrade -y
 
 {{     end }}
 {{   end }}

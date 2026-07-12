@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -eu
 
 {{ if eq .chezmoi.os "linux" }}
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
@@ -20,7 +20,7 @@ fi
 
 gh_extension_installed() {
   local extension_name="$1"
-  gh extension list | grep -Fq "${extension_name}"
+  gh extension list | cut -f2 | grep -qFx "${extension_name}"
 }
 
 install_gh_extension_if_not_exists() {

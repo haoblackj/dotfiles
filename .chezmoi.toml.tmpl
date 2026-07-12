@@ -14,9 +14,18 @@
     {{- end -}}
 {{- end -}}
 
+{{- /* WSL側ユーザー名は yagu001 に統一しているため、実際の Windows 側ユーザー名は
+      env経由では取れない（WSLENVで明示共有した変数しか渡らない）。
+      WSLインタロップ経由で powershell.exe を直接叩いて動的に取得する。 */ -}}
+{{- $windowsUsername := "" -}}
+{{- if $isWSL -}}
+    {{- $windowsUsername = output "powershell.exe" "-NoProfile" "-Command" "$env:UserName" | trim -}}
+{{- end -}}
+
 [data]
     location = {{ $location | quote }}
     isWSL = {{ $isWSL }}
+    windowsUsername = {{ $windowsUsername | quote }}
 
 [edit]
     command = "code"
@@ -25,3 +34,6 @@
 [merge]
     command = "code"
     args = ["--wait", "--diff", "{{ "{{" }} .Destination {{ "}}" }}", "{{ "{{" }} .Source {{ "}}" }}"]
+
+[diff]
+    command = "delta"
