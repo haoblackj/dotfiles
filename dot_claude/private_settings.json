@@ -25,6 +25,10 @@
     "defaultMode": "auto"
   },
   "model": "sonnet[1m]",
+  "skillOverrides": {
+    "book-to-skill": "off",
+    "report-skills": "off"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -96,7 +100,7 @@
   },
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true,
-    "andrej-karpathy-skills@karpathy-skills": true,
+    "andrej-karpathy-skills@karpathy-skills": false,
     "superpowers@claude-plugins-official": true,
     "claude-code-setup@claude-plugins-official": true,
     "compact-plus@compact-plus-local": true
