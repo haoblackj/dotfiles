@@ -1,117 +1,135 @@
 {
-  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/v0.1.41/schema.json",
-  "app_specific_configuration_path": "$Env:KOMOREBI_CONFIG_HOME/applications.json",
-  "window_hiding_behaviour": "Cloak",
-  "cross_monitor_move_behaviour": "Insert",
-  "mouse_follows_focus": false,
-  "animation": {
-    "enabled": false
-  },
-  "default_workspace_padding": 0,
-  "default_container_padding": 0,
-  "border": true,
-  "border_width": 4,
-  "border_offset": -1,
-  "transparency": true,
-  "transparency_alpha": 200,
-  "theme": {
-    "palette": "Base16",
-    "name": "HorizonDark",
-    "unfocused_border": "Base03",
-    "bar_accent": "Base0D"
-  },
-  "stackbar": {
-    "height": 40,
-    "mode": "OnStack",
-    "tabs": {
-      "width": 300
-    }
-  },
-  "monitors": [
-    {
-      "workspaces": [
-        {
-          "name": "Primary",
-          "layout": "HorizontalStack"
-        },
-        {
-          "name": "Primary-2",
-          "layout": "HorizontalStack"
-        },
-        {
-          "name": "Primary-3",
-          "layout": "HorizontalStack"
-        },
-        {
-          "name": "Primary-4",
-          "layout": "HorizontalStack"
-        },
-        {
-          "name": "Primary-5",
-          "layout": "HorizontalStack"
-        }
-      ]
+    "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/v0.1.41/schema.json",
+    "app_specific_configuration_path": "$Env:KOMOREBI_CONFIG_HOME/applications.json",
+    "window_hiding_behaviour": "Cloak",
+    "cross_monitor_move_behaviour": "Insert",
+    "mouse_follows_focus": false,
+    "animation": {
+        "enabled": false
     },
-    {
-      "workspaces": [
-        {
-          "name": "Secondary",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Secondary-2",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Secondary-3",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Secondary-4",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Secondary-5",
-          "layout": "VerticalStack"
-        }
-      ]
+    "default_workspace_padding": 0,
+    "default_container_padding": 0,
+    "border": true,
+    "border_width": 4,
+    "border_offset": -1,
+    "transparency": true,
+    "transparency_alpha": 200,
+    "theme": {
+        "palette": "Base16",
+        "name": "HorizonDark",
+        "unfocused_border": "Base03",
+        "bar_accent": "Base0D"
     },
-    {
-      "workspaces": [
-        {
-          "name": "Tertiary",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Tertiary-2",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Tertiary-3",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Tertiary-4",
-          "layout": "VerticalStack"
-        },
-        {
-          "name": "Tertiary-5",
-          "layout": "VerticalStack"
+    "stackbar": {
+        "height": 40,
+        "mode": "OnStack",
+        "tabs": {
+            "width": 300
         }
-      ]
-    }
-  ],
-  "ignore_rules": [],
-  "transparency_ignore_rules": [
-    {
-      "kind": "Exe",
-      "id": "wezterm-gui.exe",
-      "matching_strategy": "Equals"
     },
-    {
-      "kind": "Exe",
-      "id": "WindowsTerminal.exe",
-      "matching_strategy": "Equals"
-    }
-  ]
+    "monitors": [
+        {
+            "workspaces": [
+                {
+                    "name": "Primary",
+                    "layout": "HorizontalStack"
+                },
+                {
+                    "name": "Primary-2",
+                    "layout": "HorizontalStack"
+                },
+                {
+                    "name": "Primary-3",
+                    "layout": "HorizontalStack"
+                },
+                {
+                    "name": "Primary-4",
+                    "layout": "HorizontalStack"
+                },
+                {
+                    "name": "Primary-5",
+                    "layout": "HorizontalStack"
+                }
+            ],
+            "work_area_offset": {
+                "left": 0,
+                "top": 40,
+                "right": 0,
+                "bottom": 40
+            }
+        },
+        {
+            "workspaces": [
+                {
+                    "name": "Secondary",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Secondary-2",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Secondary-3",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Secondary-4",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Secondary-5",
+                    "layout": "VerticalStack"
+                }
+            ],
+            "work_area_offset": {
+                "left": 0,
+                "top": 40,
+                "right": 0,
+                "bottom": 40
+            }
+        },
+        {
+            "workspaces": [
+                {
+                    "name": "Tertiary",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Tertiary-2",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Tertiary-3",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Tertiary-4",
+                    "layout": "VerticalStack"
+                },
+                {
+                    "name": "Tertiary-5",
+                    "layout": "VerticalStack"
+                }
+            ],
+            "work_area_offset": {
+                "left": 0,
+                "top": 40,
+                "right": 0,
+                "bottom": 40
+            }
+        }
+    ],
+    "ignore_rules": [],
+    "transparency_ignore_rules": [
+        {
+            "kind": "Exe",
+            "id": "wezterm-gui.exe",
+            "matching_strategy": "Equals"
+        },
+        {
+            "kind": "Exe",
+            "id": "WindowsTerminal.exe",
+            "matching_strategy": "Equals"
+        }
+    ]
 }
