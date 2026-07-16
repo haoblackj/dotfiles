@@ -42,6 +42,7 @@ run_once_install-packages.sh
 84_herdr-plugins.sh
 85_gh-setup.sh
 86_herdr-integration-claude.sh
+90_reload-herdr-umask.sh
 99_services.sh
 my-settings.sh
 setup_vall_e_x.sh
