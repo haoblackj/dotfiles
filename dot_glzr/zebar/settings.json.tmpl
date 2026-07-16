@@ -3,7 +3,7 @@
   "startupConfigs": [
     {
       "pack": "komorebi-bar",
-      "widget": "with-komorebi",
+      "widget": {{ if eq .location "home" }}"with-komorebi"{{ else }}"with-glazewm"{{ end }},
       "preset": "default"
     }
   ]
