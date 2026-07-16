@@ -29,6 +29,7 @@ wsl.conf
 my-settings.service
 run_once_install-packages.sh
 10_system-base.sh
+11_system-upgrade.sh
 20_wslu.sh
 30_linuxbrew.sh
 40_python-env.sh
