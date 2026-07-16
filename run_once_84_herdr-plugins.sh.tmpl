@@ -12,6 +12,8 @@ if command -v herdr >/dev/null 2>&1; then
   herdr plugin install cloudmanic/herdr-plus --yes
   echo "herdr plugin: command-palette を導入"
   herdr plugin install JanTvrdik/herdr-command-palette --yes
+  echo "herdr plugin: equalize-splits を導入"
+  herdr plugin install markhuot/herdr-equalize-splits --yes
 else
   echo "herdr が見つからないため herdr plugin 導入をスキップ"
 fi
