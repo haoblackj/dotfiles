@@ -37,7 +37,11 @@ run_once_install-packages.sh
 60_languages.sh
 70_editors-containers.sh
 80_cli-tools.sh
+82_npm-global.sh
+83_herdr-skill.sh
+84_herdr-plugins.sh
 85_gh-setup.sh
+86_herdr-integration-claude.sh
 99_services.sh
 my-settings.sh
 setup_vall_e_x.sh
