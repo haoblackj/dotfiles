@@ -1,5 +1,9 @@
+import contextlib
 import importlib.util
+import io
+import json
 import os
+import sys
 import tempfile
 import time
 import unittest
@@ -176,6 +180,91 @@ class TestSecretsAndIndex(unittest.TestCase):
             # 1バッチ目(10件)はディスクに保存されているはず
             reloaded = mod.load_cache(d)
             self.assertEqual(len(reloaded["entries"]), 10)
+
+
+class TestScoringAndMain(unittest.TestCase):
+    def test_top_matches_threshold_order_k(self):
+        entries = {
+            "hi.md": {"description": "高", "vector": [1.0, 0.0]},
+            "mid.md": {"description": "中", "vector": [0.8, 0.6]},
+            "low.md": {"description": "低", "vector": [0.0, 1.0]},
+            "baddim.md": {"description": "次元違い", "vector": [1.0]},
+        }
+        got = mod.top_matches([1.0, 0.0], entries, threshold=0.5, k=2)
+        self.assertEqual([g[1] for g in got], ["hi.md", "mid.md"])
+
+    def _run_main(self, stdin_obj, env):
+        old_env = {k: os.environ.get(k) for k in env}
+        os.environ.update(env)
+        try:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                with patch.object(sys, "stdin", io.StringIO(json.dumps(stdin_obj))):
+                    mod.main()
+            return out.getvalue()
+        finally:
+            for k, v in old_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_main_injects_on_match(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "height.md").write_text("---\ndescription: 身長183cm\n---\n本文")
+            secrets = Path(d, "tok")
+            secrets.write_text("CF_ACCOUNT_ID=a\nCF_API_TOKEN=t\n")
+
+            def fake_embed(texts, cfg, timeout=None):
+                return [[1.0, 0.0] for _ in texts]  # 全部同一 → 類似度1.0
+
+            with patch.object(mod, "embed_texts", fake_embed):
+                out = self._run_main(
+                    {"prompt": "背が高い人向けの家具を探している"},
+                    {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
+                )
+            self.assertIn("[memory-recall]", out)
+            self.assertIn("height.md", out)
+            self.assertIn("身長183cm", out)
+
+    def test_main_silent_when_below_threshold(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "height.md").write_text("---\ndescription: 身長183cm\n---\n本文")
+            secrets = Path(d, "tok")
+            secrets.write_text("CF_ACCOUNT_ID=a\nCF_API_TOKEN=t\n")
+
+            def fake_embed(texts, cfg, timeout=None):
+                # 索引時は[1,0]、クエリ時は直交する[0,1] → 類似度0
+                if any("身長" in t or "本文" in t for t in texts):
+                    return [[1.0, 0.0] for _ in texts]
+                return [[0.0, 1.0] for _ in texts]
+
+            with patch.object(mod, "embed_texts", fake_embed):
+                out = self._run_main(
+                    {"prompt": "全く関係ない話題についての発言です"},
+                    {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
+                )
+            self.assertEqual(out, "")
+
+    def test_main_silent_on_short_prompt(self):
+        out = self._run_main({"prompt": "OK!"}, {"MEMORY_RECALL_DIR": "/nonexistent"})
+        self.assertEqual(out, "")
+
+    def test_main_silent_on_api_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.md").write_text("x")
+            secrets = Path(d, "tok")
+            secrets.write_text("CF_ACCOUNT_ID=a\nCF_API_TOKEN=t\n")
+
+            def broken_embed(texts, cfg, timeout=None):
+                raise RuntimeError("boom")
+
+            with patch.object(mod, "embed_texts", broken_embed):
+                out = self._run_main(
+                    {"prompt": "これは十分な長さのある発言です"},
+                    {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
+                )
+            self.assertEqual(out, "")
 
 
 if __name__ == "__main__":

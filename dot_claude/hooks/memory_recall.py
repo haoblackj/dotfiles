@@ -165,3 +165,60 @@ def update_index(memory_dir, cache, cfg, deadline):
         if changed:
             save_cache(memory_dir, cache)
     return done_all
+
+
+def top_matches(qvec, entries, threshold=THRESHOLD, k=TOP_K):
+    scored = []
+    for name, e in entries.items():
+        v = e.get("vector") or []
+        if len(v) != len(qvec):
+            continue
+        s = sum(a * b for a, b in zip(qvec, v))
+        if s >= threshold:
+            scored.append((s, name, e.get("description", "")))
+    scored.sort(reverse=True)
+    return scored[:k]
+
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except ValueError:
+        return
+    prompt = payload.get("prompt") or ""
+    if not isinstance(prompt, str) or len(prompt) < MIN_PROMPT_CHARS:
+        return
+    memory_dir = (os.environ.get("MEMORY_RECALL_DIR")
+                  or resolve_memory_dir(payload.get("transcript_path")))
+    if not memory_dir or not os.path.isdir(memory_dir):
+        return
+    deadline = time.monotonic() + DEADLINE_SEC
+    try:
+        cfg = load_secrets(os.environ.get("MEMORY_RECALL_SECRETS") or SECRETS_PATH)
+    except (OSError, KeyError) as e:
+        log(f"secrets unavailable: {e}")
+        return
+    cache = load_cache(memory_dir)
+    try:
+        if not update_index(memory_dir, cache, cfg, deadline):
+            log("index partial; carrying over to next prompt")
+        qvec = normalize(embed_texts([prompt[:MAX_PROMPT_CHARS]], cfg)[0])
+    except Exception as e:
+        log(f"recall skipped: {type(e).__name__}: {e}")
+        return
+    matches = top_matches(qvec, cache["entries"])
+    if not matches:
+        return
+    lines = ["[memory-recall] この発言に関連しそうな保存済みメモリ:"]
+    for s, name, desc in matches:
+        lines.append(f"- {os.path.join(memory_dir, name)} — {desc} (類似度{s:.2f})")
+    lines.append("必要ならReadで本文を確認すること。")
+    print("\n".join(lines))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # 最後の砦: どんな失敗でも会話を止めない
+        log(f"unexpected: {type(e).__name__}: {e}")
+    sys.exit(0)
