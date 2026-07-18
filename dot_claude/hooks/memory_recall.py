@@ -51,3 +51,50 @@ def resolve_memory_dir(transcript_path):
         return None
     d = os.path.join(os.path.dirname(transcript_path), "memory")
     return d if os.path.isdir(d) else None
+
+
+def normalize(vec):
+    n = math.sqrt(sum(x * x for x in vec))
+    if n == 0:
+        return [0.0] * len(vec)
+    return [round(x / n, 6) for x in vec]
+
+
+def read_description(text):
+    m = re.match(r"\s*---\n(.*?)\n---", text, re.S)
+    if m:
+        for line in m.group(1).splitlines():
+            if line.strip().startswith("description:"):
+                return line.split(":", 1)[1].strip().strip("\"'")
+    return ""
+
+
+def list_memory_files(memory_dir):
+    out = {}
+    for name in sorted(os.listdir(memory_dir)):
+        if not name.endswith(".md") or name.startswith(".") or name in EXCLUDE:
+            continue
+        path = os.path.join(memory_dir, name)
+        if os.path.isfile(path):
+            out[name] = path
+    return out
+
+
+def load_cache(memory_dir):
+    path = os.path.join(memory_dir, CACHE_NAME)
+    try:
+        with open(path) as f:
+            cache = json.load(f)
+        if cache.get("model") != MODEL or not isinstance(cache.get("entries"), dict):
+            raise ValueError("model mismatch or bad shape")
+        return cache
+    except (OSError, ValueError):
+        return {"model": MODEL, "entries": {}}
+
+
+def save_cache(memory_dir, cache):
+    path = os.path.join(memory_dir, CACHE_NAME)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cache, f, ensure_ascii=False)
+    os.replace(tmp, path)

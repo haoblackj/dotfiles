@@ -38,5 +38,44 @@ class TestResolveMemoryDir(unittest.TestCase):
         self.assertEqual(got, proj + "/memory")
 
 
+class TestPureLogic(unittest.TestCase):
+    def test_normalize_unit_length(self):
+        v = mod.normalize([3.0, 4.0])
+        self.assertAlmostEqual(v[0], 0.6, places=6)
+        self.assertAlmostEqual(v[1], 0.8, places=6)
+
+    def test_normalize_zero_vector(self):
+        self.assertEqual(mod.normalize([0.0, 0.0]), [0.0, 0.0])
+
+    def test_read_description(self):
+        text = "---\nname: x\ndescription: 身長183cmのメモ\nmetadata:\n  type: user\n---\n本文"
+        self.assertEqual(mod.read_description(text), "身長183cmのメモ")
+
+    def test_read_description_missing(self):
+        self.assertEqual(mod.read_description("本文だけ"), "")
+
+    def test_list_memory_files_excludes(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in ["a.md", "MEMORY.md", ".embeddings.json", "b.txt", "c.md"]:
+                Path(d, name).write_text("x")
+            files = mod.list_memory_files(d)
+            self.assertEqual(sorted(files), ["a.md", "c.md"])
+
+    def test_cache_roundtrip_and_corruption(self):
+        with tempfile.TemporaryDirectory() as d:
+            cache = mod.load_cache(d)
+            self.assertEqual(cache, {"model": mod.MODEL, "entries": {}})
+            cache["entries"]["a.md"] = {"hash": "h", "description": "d", "vector": [1.0]}
+            mod.save_cache(d, cache)
+            self.assertEqual(mod.load_cache(d)["entries"]["a.md"]["hash"], "h")
+            # 破損 → 空で再出発
+            Path(d, mod.CACHE_NAME).write_text("{broken json")
+            self.assertEqual(mod.load_cache(d)["entries"], {})
+            # モデル不一致 → 空で再出発
+            Path(d, mod.CACHE_NAME).write_text(
+                '{"model": "old-model", "entries": {"a.md": {}}}')
+            self.assertEqual(mod.load_cache(d)["entries"], {})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
