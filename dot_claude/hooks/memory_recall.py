@@ -150,16 +150,18 @@ def update_index(memory_dir, cache, cfg, deadline):
             desc = read_description(text) or name
             pending.append((name, h, desc, text[:MAX_DOC_CHARS]))
     done_all = True
-    for i in range(0, len(pending), BATCH_SIZE):
-        if time.monotonic() > deadline - RESERVE_FOR_QUERY_SEC:
-            done_all = False
-            break
-        batch = pending[i:i + BATCH_SIZE]
-        vecs = embed_texts([t for _, _, _, t in batch], cfg)
-        for (name, h, desc, _), vec in zip(batch, vecs):
-            entries[name] = {"hash": h, "description": desc,
-                             "vector": normalize(vec)}
-        changed = True
-    if changed:
-        save_cache(memory_dir, cache)
+    try:
+        for i in range(0, len(pending), BATCH_SIZE):
+            if time.monotonic() > deadline - RESERVE_FOR_QUERY_SEC:
+                done_all = False
+                break
+            batch = pending[i:i + BATCH_SIZE]
+            vecs = embed_texts([t for _, _, _, t in batch], cfg)
+            for (name, h, desc, _), vec in zip(batch, vecs):
+                entries[name] = {"hash": h, "description": desc,
+                                 "vector": normalize(vec)}
+            changed = True
+    finally:
+        if changed:
+            save_cache(memory_dir, cache)
     return done_all

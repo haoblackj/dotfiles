@@ -157,6 +157,26 @@ class TestSecretsAndIndex(unittest.TestCase):
                 self.assertFalse(done)
                 self.assertEqual(len(cache["entries"]), 0)
 
+    def test_update_index_saves_partial_progress_on_exception(self):
+        with tempfile.TemporaryDirectory() as d:
+            for i in range(15):  # バッチ10件+5件の2バッチ分
+                Path(d, f"f{i:02}.md").write_text(f"中身{i}")
+            calls = []
+
+            def flaky_embed(texts, cfg, timeout=None):
+                calls.append(list(texts))
+                if len(calls) >= 2:
+                    raise RuntimeError("network down")
+                return [[1.0, 0.0] for _ in texts]
+
+            with patch.object(mod, "embed_texts", flaky_embed):
+                cache = mod.load_cache(d)
+                with self.assertRaises(RuntimeError):
+                    mod.update_index(d, cache, {}, time.monotonic() + 60)
+            # 1バッチ目(10件)はディスクに保存されているはず
+            reloaded = mod.load_cache(d)
+            self.assertEqual(len(reloaded["entries"]), 10)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
