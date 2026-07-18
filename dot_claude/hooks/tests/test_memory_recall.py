@@ -1,8 +1,10 @@
 import importlib.util
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HOOK_PATH = Path(__file__).resolve().parent.parent / "memory_recall.py"
 spec = importlib.util.spec_from_file_location("memory_recall", HOOK_PATH)
@@ -10,6 +12,24 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
 PROJECTS_BASE = os.path.join(os.path.expanduser("~"), ".claude", "projects")
+
+
+def fake_embed_factory(dim=4):
+    """テキストごとに決定論的な直交風ベクトルを返す偽embed。呼び出し回数を記録する。"""
+    calls = []
+
+    def fake_embed(texts, cfg, timeout=None):
+        calls.append(list(texts))
+        vecs = []
+        for t in texts:
+            i = abs(hash(t)) % dim
+            v = [0.0] * dim
+            v[i] = 1.0
+            vecs.append(v)
+        return vecs
+
+    fake_embed.calls = calls
+    return fake_embed
 
 
 class TestResolveMemoryDir(unittest.TestCase):
@@ -80,6 +100,62 @@ class TestPureLogic(unittest.TestCase):
             self.assertEqual(mod.load_cache(d)["entries"], {})
             Path(d, mod.CACHE_NAME).write_text("null")
             self.assertEqual(mod.load_cache(d)["entries"], {})
+
+
+class TestSecretsAndIndex(unittest.TestCase):
+    def test_load_secrets(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d, "tok")
+            p.write_text("# comment\nCF_ACCOUNT_ID=acct123\nCF_API_TOKEN=tok456\n")
+            cfg = mod.load_secrets(str(p))
+            self.assertEqual(cfg["CF_ACCOUNT_ID"], "acct123")
+            self.assertEqual(cfg["CF_API_TOKEN"], "tok456")
+
+    def test_load_secrets_missing_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d, "tok")
+            p.write_text("CF_ACCOUNT_ID=only\n")
+            with self.assertRaises(KeyError):
+                mod.load_secrets(str(p))
+
+    def test_update_index_embeds_new_and_skips_unchanged(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.md").write_text("---\ndescription: A\n---\n中身A")
+            Path(d, "b.md").write_text("---\ndescription: B\n---\n中身B")
+            fake = fake_embed_factory()
+            with patch.object(mod, "embed_texts", fake):
+                cache = mod.load_cache(d)
+                done = mod.update_index(d, cache, {}, time.monotonic() + 60)
+                self.assertTrue(done)
+                self.assertEqual(sorted(cache["entries"]), ["a.md", "b.md"])
+                self.assertEqual(len(fake.calls), 1)  # 1バッチ
+                # 2回目: 変更なし → 埋め込み呼び出しゼロ
+                done = mod.update_index(d, cache, {}, time.monotonic() + 60)
+                self.assertTrue(done)
+                self.assertEqual(len(fake.calls), 1)
+
+    def test_update_index_prunes_deleted(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "a.md").write_text("x")
+            fake = fake_embed_factory()
+            with patch.object(mod, "embed_texts", fake):
+                cache = mod.load_cache(d)
+                mod.update_index(d, cache, {}, time.monotonic() + 60)
+                Path(d, "a.md").unlink()
+                mod.update_index(d, cache, {}, time.monotonic() + 60)
+                self.assertEqual(cache["entries"], {})
+
+    def test_update_index_carries_over_on_deadline(self):
+        with tempfile.TemporaryDirectory() as d:
+            for i in range(25):  # バッチ10件 × 3回分
+                Path(d, f"f{i:02}.md").write_text(f"中身{i}")
+            fake = fake_embed_factory()
+            with patch.object(mod, "embed_texts", fake):
+                cache = mod.load_cache(d)
+                # 締切を過去にする → 1バッチも処理せず持ち越し
+                done = mod.update_index(d, cache, {}, time.monotonic() - 1)
+                self.assertFalse(done)
+                self.assertEqual(len(cache["entries"]), 0)
 
 
 if __name__ == "__main__":

@@ -100,3 +100,66 @@ def save_cache(memory_dir, cache):
     with open(tmp, "w") as f:
         json.dump(cache, f, ensure_ascii=False)
     os.replace(tmp, path)
+
+
+def load_secrets(path=SECRETS_PATH):
+    cfg = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                cfg[k.strip()] = v.strip()
+    if "CF_ACCOUNT_ID" not in cfg or "CF_API_TOKEN" not in cfg:
+        raise KeyError("CF_ACCOUNT_ID / CF_API_TOKEN missing")
+    return cfg
+
+
+def embed_texts(texts, cfg, timeout=API_TIMEOUT_SEC):
+    url = (f"https://api.cloudflare.com/client/v4/accounts/"
+           f"{cfg['CF_ACCOUNT_ID']}/ai/run/{MODEL}")
+    req = urllib.request.Request(
+        url,
+        data=json.dumps({"text": texts}).encode(),
+        headers={"Authorization": f"Bearer {cfg['CF_API_TOKEN']}",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        body = json.load(r)
+    if not body.get("success"):
+        raise RuntimeError(f"workers-ai error: {body.get('errors')}")
+    return body["result"]["data"]
+
+
+def update_index(memory_dir, cache, cfg, deadline):
+    files = list_memory_files(memory_dir)
+    entries = cache["entries"]
+    changed = False
+    for name in list(entries):
+        if name not in files:
+            del entries[name]
+            changed = True
+    pending = []
+    for name, path in files.items():
+        with open(path, "rb") as f:
+            raw = f.read()
+        h = hashlib.sha256(raw).hexdigest()
+        if entries.get(name, {}).get("hash") != h:
+            text = raw.decode("utf-8", errors="replace")
+            desc = read_description(text) or name
+            pending.append((name, h, desc, text[:MAX_DOC_CHARS]))
+    done_all = True
+    for i in range(0, len(pending), BATCH_SIZE):
+        if time.monotonic() > deadline - RESERVE_FOR_QUERY_SEC:
+            done_all = False
+            break
+        batch = pending[i:i + BATCH_SIZE]
+        vecs = embed_texts([t for _, _, _, t in batch], cfg)
+        for (name, h, desc, _), vec in zip(batch, vecs):
+            entries[name] = {"hash": h, "description": desc,
+                             "vector": normalize(vec)}
+        changed = True
+    if changed:
+        save_cache(memory_dir, cache)
+    return done_all
