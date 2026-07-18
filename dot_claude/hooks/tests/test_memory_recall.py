@@ -75,6 +75,11 @@ class TestPureLogic(unittest.TestCase):
             Path(d, mod.CACHE_NAME).write_text(
                 '{"model": "old-model", "entries": {"a.md": {}}}')
             self.assertEqual(mod.load_cache(d)["entries"], {})
+            # 有効なJSONだがdictでない → 空で再出発
+            Path(d, mod.CACHE_NAME).write_text("[1, 2, 3]")
+            self.assertEqual(mod.load_cache(d)["entries"], {})
+            Path(d, mod.CACHE_NAME).write_text("null")
+            self.assertEqual(mod.load_cache(d)["entries"], {})
 
 
 if __name__ == "__main__":

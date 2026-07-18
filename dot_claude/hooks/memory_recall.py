@@ -85,7 +85,9 @@ def load_cache(memory_dir):
     try:
         with open(path) as f:
             cache = json.load(f)
-        if cache.get("model") != MODEL or not isinstance(cache.get("entries"), dict):
+        if (not isinstance(cache, dict)
+                or cache.get("model") != MODEL
+                or not isinstance(cache.get("entries"), dict)):
             raise ValueError("model mismatch or bad shape")
         return cache
     except (OSError, ValueError):
