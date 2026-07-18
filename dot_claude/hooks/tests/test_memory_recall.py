@@ -266,6 +266,16 @@ class TestScoringAndMain(unittest.TestCase):
                 )
             self.assertEqual(out, "")
 
+    def test_main_logs_bad_stdin(self):
+        logged = []
+        with patch.object(mod, "log", logged.append):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                with patch.object(sys, "stdin", io.StringIO("not json at all")):
+                    mod.main()
+        self.assertEqual(out.getvalue(), "")
+        self.assertTrue(any("bad stdin payload" in m for m in logged))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

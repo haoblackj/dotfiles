@@ -183,7 +183,8 @@ def top_matches(qvec, entries, threshold=THRESHOLD, k=TOP_K):
 def main():
     try:
         payload = json.load(sys.stdin)
-    except ValueError:
+    except ValueError as e:
+        log(f"bad stdin payload: {e}")
         return
     prompt = payload.get("prompt") or ""
     if not isinstance(prompt, str) or len(prompt) < MIN_PROMPT_CHARS:
