@@ -80,6 +80,15 @@
             "command": "~/.claude/hooks/chezmoi-auto-apply.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/herdr-plan-preview.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -138,5 +147,7 @@
   "effortLevel": "high",
   "askUserQuestionTimeout": "never",
   "tui": "fullscreen",
-  "switchModelsOnFlag": true
+  "switchModelsOnFlag": true,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true
 }

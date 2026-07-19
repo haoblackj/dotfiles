@@ -57,4 +57,26 @@ right_click_passthrough_modifier = "ctrl"
 
 [experimental]
 reveal_hidden_cursor_for_cjk_ime = true
-cjk_ime_agents = ["claude"]
+cjk_ime_agents = ["claude", "codex"]
+cjk_ime_cursor_shape = "steady_block"
+
+# herdr-file-viewer: prefix+f で split 起動
+[[keys.command]]
+key = "prefix+f"
+type = "shell"
+command = "herdr plugin action invoke open-file-viewer --plugin herdr-file-viewer"
+description = "Open file viewer in split pane"
+
+# herdr-file-viewer: prefix+shift+f でタブ起動
+[[keys.command]]
+key = "prefix+shift+f"
+type = "shell"
+command = "herdr plugin action invoke open-file-viewer-tab --plugin herdr-file-viewer"
+description = "Open file viewer in new tab"
+
+# herdr-plugin-hunk: prefix+h で worktree diff
+[[keys.command]]
+key = "prefix+h"
+type = "shell"
+command = "herdr plugin action invoke hunk.diff.worktree-split"
+description = "Open worktree diff in split pane"
