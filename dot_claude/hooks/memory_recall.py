@@ -14,7 +14,7 @@ import time
 import urllib.request
 
 MODEL = "@cf/baai/bge-m3"
-THRESHOLD = 0.5
+THRESHOLD = 0.55
 TOP_K = 3
 MIN_PROMPT_CHARS = 15
 MAX_PROMPT_CHARS = 2000
