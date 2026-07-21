@@ -1,6 +1,5 @@
 {
   "env": {
-    "COMPACT_PLUS_PRIMARY_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
     "COMPACT_PLUS_FALLBACK_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
     "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
     "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
@@ -18,7 +17,9 @@
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)",
       "Bash(git branch -D*)",
-      "Bash(git checkout --*)",
+      "Bash(git checkout --*)"
+    ],
+    "ask": [
       "Bash(claude -p:*)",
       "Bash(claude --print:*)"
     ],
