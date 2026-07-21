@@ -53,6 +53,14 @@ require("lazy").setup({
   vim.wo.number = true
   vim.wo.relativenumber = false  -- 相対行番号を無効化
 
+-- Markdown表示設定(obsidian.nvim/render-markdown.nvimのconceal機能に必要)
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = "markdown",
+    callback = function()
+      vim.opt_local.conceallevel = 2
+    end,
+  })
+
 -- Configure colorscheme
   require("horizon-extended").setup({
   	style = "neo",
