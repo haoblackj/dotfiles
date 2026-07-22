@@ -15,13 +15,13 @@ description = "現在のタブのペイン幅を均等化"
 [[keys.command]]
 key = "prefix+s"
 type = "shell"
-command = "herdr agent start claude-$(date +%s%N) --split right --focus -- claude"
+command = "herdr pane split --current --direction right --focus > /tmp/herdr-split-$$.json && P=$(jq -r .result.pane.pane_id /tmp/herdr-split-$$.json) && herdr pane run $P claude && rm -f /tmp/herdr-split-$$.json"
 description = "縦分割してClaude Code起動"
 
 [[keys.command]]
 key = "prefix+d"
 type = "shell"
-command = "herdr agent start claude-$(date +%s%N) --split down --focus -- claude"
+command = "herdr pane split --current --direction down --focus > /tmp/herdr-split-$$.json && P=$(jq -r .result.pane.pane_id /tmp/herdr-split-$$.json) && herdr pane run $P claude && rm -f /tmp/herdr-split-$$.json"
 description = "横分割してClaude Code起動"
 
 [[keys.command]]
