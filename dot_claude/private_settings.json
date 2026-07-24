@@ -26,6 +26,7 @@
     "defaultMode": "auto"
   },
   "model": "sonnet[1m]",
+  "outputStyle": "エクシア（能天使）",
   "skillOverrides": {
     "book-to-skill": "off",
     "report-skills": "off"
