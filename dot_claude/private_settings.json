@@ -26,7 +26,6 @@
     "defaultMode": "auto"
   },
   "model": "sonnet[1m]",
-  "outputStyle": "エクシア（能天使）",
   "skillOverrides": {
     "book-to-skill": "off",
     "report-skills": "off"
@@ -146,11 +145,12 @@
       }
     }
   },
+  "outputStyle": "エクシア（能天使）",
   "effortLevel": "high",
   "askUserQuestionTimeout": "never",
   "tui": "fullscreen",
+  "skipWorkflowUsageWarning": false,
   "switchModelsOnFlag": true,
   "inputNeededNotifEnabled": true,
-  "agentPushNotifEnabled": true,
-  "skipWorkflowUsageWarning": false
+  "agentPushNotifEnabled": true
 }
