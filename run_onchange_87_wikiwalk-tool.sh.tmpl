@@ -10,6 +10,10 @@ if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
+# wikiwalk のリモート HEAD を埋め込む。更新が入るとこのスクリプトの内容が変わり、
+# run_onchange により再インストールが走る。git ls-remote でなく gh api を使うのは、
+# git の credential helper 設定に依存せず run_once_85_gh-setup.sh のログインだけで通るため。
+# wikiwalk HEAD: {{ output "gh" "api" "repos/haoblackj/wikiwalk/commits/HEAD" "--jq" ".sha" | trim }}
 if command -v uv >/dev/null 2>&1; then
   echo "wikiwalkインストール（uv tool install）"
   uv tool install --force git+https://github.com/haoblackj/wikiwalk
