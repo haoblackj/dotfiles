@@ -1,10 +1,12 @@
 #!/bin/bash
-# PostToolUse(Write): superpowersのプラン/spec初回書き込みをherdrの隣paneでglowレンダリング表示する
+# PostToolUse(Write): superpowersのプラン/spec初回書き込みをherdrの隣paneでwikiwalk表示する
 
 [ "${HERDR_ENV:-}" = "1" ] || exit 0
 [ -n "${HERDR_PANE_ID:-}" ] || exit 0
 [ -n "${HERDR_TAB_ID:-}" ] || exit 0
-command -v glow >/dev/null 2>&1 || exit 0
+# ~/.local/bin(uv tool)配下のためペイン側のPATHに頼らず絶対パスを解決しておく
+wikiwalk_bin=$(command -v wikiwalk 2>/dev/null) || exit 0
+[ -n "$wikiwalk_bin" ] || exit 0
 
 input=$(cat)
 file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
@@ -30,6 +32,6 @@ target_pane=$(printf '%s' "$split_out" | jq -r '.result.pane.pane_id // empty')
 [ -z "$target_pane" ] && exit 0
 
 "$herdr_bin" pane rename "$target_pane" "plan-preview" >/dev/null 2>&1
-"$herdr_bin" pane run "$target_pane" "glow -p '$file_path'" >/dev/null 2>&1
+"$herdr_bin" pane run "$target_pane" "'$wikiwalk_bin' '$file_path'" >/dev/null 2>&1
 
 jq -n --arg path "$file_path" '{"suppressOutput": true, "systemMessage": ("herdr隣paneでプレビューを開いた: " + $path)}'
