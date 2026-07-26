@@ -18,6 +18,8 @@ if command -v herdr >/dev/null 2>&1; then
   herdr plugin install smarzban/herdr-file-viewer --yes
   echo "herdr plugin: hunk diff を導入"
   herdr plugin install edmundmiller/herdr-plugin-hunk --yes
+  echo "herdr plugin: open-project(ローカル)をlink"
+  herdr plugin link "$HOME/.config/herdr/plugins/local/open-project"
 else
   echo "herdr が見つからないため herdr plugin 導入をスキップ"
 fi

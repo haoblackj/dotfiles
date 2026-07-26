@@ -30,6 +30,12 @@ type = "shell"
 command = "herdr tab create > /tmp/herdr-newtab-$$.json && T=$(jq -r .result.tab.tab_id /tmp/herdr-newtab-$$.json) && P=$(jq -r .result.root_pane.pane_id /tmp/herdr-newtab-$$.json) && herdr tab focus $T && herdr pane run $P claude && rm -f /tmp/herdr-newtab-$$.json"
 description = "話題ごとに新規タブを作ってClaude Code起動"
 
+[[keys.command]]
+key = "prefix+o"
+type = "plugin_action"
+command = "local.open-project.open"
+description = "プロジェクトを選んで新規ワークスペースでClaude起動"
+
 [theme]
 name = "tokyo-night"
 auto_switch = false
