@@ -149,7 +149,7 @@
   "effortLevel": "high",
   "askUserQuestionTimeout": "never",
   "tui": "fullscreen",
-  "skipWorkflowUsageWarning": false,
+  "skipWorkflowUsageWarning": true,
   "switchModelsOnFlag": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true
