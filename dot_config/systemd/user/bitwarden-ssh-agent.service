@@ -1,0 +1,11 @@
+[Unit]
+Description=Bitwarden SSH agent bridge (WSL unix socket -> Windows named pipe via npiperelay)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat UNIX-LISTEN:%t/bitwarden-ssh-agent.sock,fork,unlink-early EXEC:"/mnt/c/Users/yagu001/AppData/Local/Programs/npiperelay/npiperelay.exe -ei -s //./pipe/openssh-ssh-agent"
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

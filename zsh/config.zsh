@@ -70,8 +70,8 @@ export GH_CONFIG_DIR=~/.config/gh
 # tfenv設定
 export PATH="$HOME/.tfenv/bin:$PATH"
 
-# ssh-agent設定
-export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
+# ssh-agent設定(Bitwarden Desktop SSH Agent -> npiperelay/socat経由)
+export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/bitwarden-ssh-agent.sock"
 
 # Homebrew一括アップデート関数
 brewup() {
