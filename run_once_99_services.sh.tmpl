@@ -5,8 +5,9 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
-systemctl --user enable ssh-agent
-systemctl --user start ssh-agent
+systemctl --user disable --now ssh-agent 2>/dev/null || true
+systemctl --user enable bitwarden-ssh-agent
+systemctl --user start bitwarden-ssh-agent
 
 sudo systemctl enable my-settings.service
 sudo systemctl enable docker
