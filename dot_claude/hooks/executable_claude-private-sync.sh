@@ -83,10 +83,17 @@ case "${1:-pull}" in
     ensure_symlinks
     git -C "$ROOT" add -A
     git -C "$ROOT" diff --cached --quiet && exit 0
+    msg=""
+    for f in "$ROOT"/.pending-commit-message.*; do
+      [ -f "$f" ] || continue
+      msg="${msg:+$msg$'\n'}$(cat "$f")"
+      rm -f "$f"
+    done
+    [ -z "$msg" ] && msg="sync: $(date -Iseconds)"
     git -C "$ROOT" \
       -c user.name="haoblackj" \
       -c user.email="17177994+haoblackj@users.noreply.github.com" \
-      commit -q -m "sync: $(date -Iseconds)" || true
+      commit -q -m "$msg" || true
     git -C "$ROOT" push -q 2>/dev/null || echo "[claude-private-sync] push failed — retry: git -C $ROOT push" >&2
     ;;
 esac
