@@ -116,6 +116,17 @@ out="$(printf '%s' "{\"session_id\":\"a/b\",\"transcript_path\":\"$TR12\"}" | "$
 check "session_id=a/b → 空stdout" "" "$out"
 check "session_id=a/b → exit 0" "0" "$rc"
 
+# --- 13. claude-opus-5(サフィックス無し) → 200K窓・既定85%閾値と判定される ---
+TR13="$TMPDIR_TEST/t13.jsonl"
+make_transcript "$TR13" 140000 "claude-opus-5"   # 200,000のうち140002 tokens = 70% → 85%未満
+out="$(printf '%s' "{\"session_id\":\"sess-13\",\"transcript_path\":\"$TR13\"}" | "$SCRIPT")"
+check "opus-5(200K窓)は70%では既定85%閾値に届かず空stdout" "" "$out"
+
+TR13B="$TMPDIR_TEST/t13b.jsonl"
+make_transcript "$TR13B" 180000 "claude-opus-5"   # 200,000のうち180002 tokens = 90% → 85%超過
+out="$(printf '%s' "{\"session_id\":\"sess-13b\",\"transcript_path\":\"$TR13B\"}" | "$SCRIPT")"
+check "opus-5(200K窓)は90%で warn marker が作成される" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-13b" ] && echo yes || echo no)"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

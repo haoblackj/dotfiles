@@ -6,34 +6,16 @@
 # VSCode拡張は statusLine コマンドを未サポートのため、statusLine には依存せず
 # hook入力の transcript_path だけで完結させる設計にしている。
 #
-# コンテキストウィンドウ/警告閾値はモデル名から自動判定する:
-#   claude-haiku-4-5*                                                → 200,000 tokens window
-#   claude-fable-5* / mythos-5* / opus-4-* / sonnet-5* / sonnet-4-6* → 1,000,000 tokens window（標準1M、ベータ不要）
-#   未知のモデル文字列（旧世代等）                                     → 200,000 tokens window（保守的デフォルト）
-#   ウィンドウ >= 1,000,000 → 警告閾値60%、それ未満 → 85%
-#     （60%は元記事の値。1M context前提なら60%到達時点でもまだ約400Kトークンの余力があり、
-#      区切りまで作業を続ける余裕が十分にある。200K系では60%だと余力が少なすぎるため85%にする）
+# コンテキストウィンドウ/警告閾値の判定は lib/context-window.sh に切り出してある。
 #
 # overhead: cooldown中は marker file の test -f 1回で即 exit。
 # fail-open (常に exit 0)
 
 set -uo pipefail
 
-model_context_window() { # $1 = model name
-  case "$1" in
-    claude-haiku-4-5*) echo 200000 ;;
-    claude-fable-5*|claude-mythos-5*|claude-opus-4-*|claude-sonnet-5*|claude-sonnet-4-6*) echo 1000000 ;;
-    *) echo 200000 ;;
-  esac
-}
-
-default_threshold_for_window() { # $1 = context window tokens
-  if [ "$1" -ge 1000000 ]; then
-    echo 60
-  else
-    echo 85
-  fi
-}
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/context-window.sh
+. "$HOOK_DIR/lib/context-window.sh" 2>/dev/null || exit 0
 
 INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
