@@ -127,6 +127,57 @@ make_transcript "$TR13B" 180000 "claude-opus-5"   # 200,000のうち180002 token
 out="$(printf '%s' "{\"session_id\":\"sess-13b\",\"transcript_path\":\"$TR13B\"}" | "$SCRIPT")"
 check "opus-5(200K窓)は90%で warn marker が作成される" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-13b" ] && echo yes || echo no)"
 
+make_window_marker() { # session_id window
+  mkdir -p "$TMPDIR_TEST/claude-context-window"
+  printf '%s\n' "$2" > "$TMPDIR_TEST/claude-context-window/$1"
+}
+
+# --- 14. マーカーがあれば transcript のモデル名テーブルより優先される ---
+TR14="$TMPDIR_TEST/t14.jsonl"
+make_transcript "$TR14" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告。マーカー1Mなら18% → 警告なし
+make_window_marker "sess-14" 1000000
+out="$(printf '%s' "{\"session_id\":\"sess-14\",\"transcript_path\":\"$TR14\"}" | "$SCRIPT")"
+check "マーカー1M → transcriptのopus-5(200K)より優先され18%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-14" ] && echo yes || echo no)"
+
+# --- 15. 環境変数はマーカーより優先される ---
+TR15="$TMPDIR_TEST/t15.jsonl"
+make_transcript "$TR15" 180000 "claude-opus-5"
+make_window_marker "sess-15" 1000000
+out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=200000 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-15\\\",\\\"transcript_path\\\":\\\"$TR15\\\"}\" | \"$SCRIPT\"")"
+check "環境変数200K → マーカー1Mより優先され90%で警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-15" ] && echo yes || echo no)"
+check "環境変数優先時の PCT が90であること" "90" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-15" 2>/dev/null || echo '')"
+
+# --- 16. マーカーの値が不正なら transcript のテーブルに落ちる ---
+for bad in "notanumber" "0" "0100"; do
+  sid="sess-16-$bad"
+  TR16="$TMPDIR_TEST/t16-$bad.jsonl"
+  make_transcript "$TR16" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告
+  make_window_marker "$sid" "$bad"
+  stderr_file="$TMPDIR_TEST/t16-$bad.stderr"
+  out="$(printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$TR16\"}" | "$SCRIPT" 2>"$stderr_file")"; rc=$?
+  check "マーカー不正($bad) → exit 0" "0" "$rc"
+  check "マーカー不正($bad) → テーブル(200K)に落ちて90%で警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/$sid" ] && echo yes || echo no)"
+  check "マーカー不正($bad) → stderrノイズ無し" "" "$(cat "$stderr_file")"
+done
+
+# --- 17. マーカーが無ければ従来どおり transcript のテーブルに落ちる ---
+TR17="$TMPDIR_TEST/t17.jsonl"
+make_transcript "$TR17" 700000 "claude-sonnet-5"   # テーブルで1M窓 → 70%で60%閾値超過
+out="$(printf '%s' "{\"session_id\":\"sess-17\",\"transcript_path\":\"$TR17\"}" | "$SCRIPT")"
+check "マーカー無し → テーブル(1M)で70%の警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-17" ] && echo yes || echo no)"
+
+# --- 18. 使用量が窓幅を超えたら保険で1Mとして扱う(マーカー・環境変数なし) ---
+TR18="$TMPDIR_TEST/t18.jsonl"
+make_transcript "$TR18" 300000 "claude-opus-5"   # テーブルは200K窓。300002 tokens は窓を超えている
+out="$(printf '%s' "{\"session_id\":\"sess-18\",\"transcript_path\":\"$TR18\"}" | "$SCRIPT")"
+check "使用量>窓幅 → 保険で1M窓となり30%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-18" ] && echo yes || echo no)"
+
+# --- 19. 保険は環境変数による手動指定にも適用される ---
+TR19="$TMPDIR_TEST/t19.jsonl"
+make_transcript "$TR19" 300000 "claude-opus-5"
+out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=200000 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-19\\\",\\\"transcript_path\\\":\\\"$TR19\\\"}\" | \"$SCRIPT\"")"
+check "環境変数200Kでも使用量が超えていれば保険で1M窓となり警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-19" ] && echo yes || echo no)"
+
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

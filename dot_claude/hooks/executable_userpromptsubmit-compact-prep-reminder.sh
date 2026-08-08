@@ -7,6 +7,7 @@
 # hook入力の transcript_path だけで完結させる設計にしている。
 #
 # コンテキストウィンドウ/警告閾値の判定は lib/context-window.sh に切り出してある。
+# 窓幅は 環境変数 > SessionStartマーカー > transcriptのモデル名テーブル の順で決める。
 #
 # overhead: cooldown中は marker file の test -f 1回で即 exit。
 # fail-open (常に exit 0)
@@ -34,15 +35,20 @@ USAGE_LINE=$(tac "$TRANSCRIPT" 2>/dev/null | grep -m1 '"usage"')
 
 MODEL_NAME=$(printf '%s' "$USAGE_LINE" | jq -r '.message.model // empty' 2>/dev/null)
 DEFAULT_WINDOW=$(model_context_window "$MODEL_NAME")
-CONTEXT_WINDOW="${CLAUDE_CONTEXT_WINDOW_TOKENS:-$DEFAULT_WINDOW}"
-# 非数値・先頭ゼロ(桁数2以上、8進誤解釈の原因)の override は自動判定値にフォールバックする
-# (fail-open。set -u 下での算術式クラッシュ・8進誤パース防止)。
-# CONTEXT_WINDOW はさらに 0 も除外する(除数として使うためゼロ除算防止)。
-[[ "$CONTEXT_WINDOW" =~ ^(0|[1-9][0-9]*)$ ]] || CONTEXT_WINDOW="$DEFAULT_WINDOW"
-[[ "$CONTEXT_WINDOW" == "0" ]] && CONTEXT_WINDOW="$DEFAULT_WINDOW"
-DEFAULT_THRESHOLD=$(default_threshold_for_window "$CONTEXT_WINDOW")
-THRESHOLD="${CLAUDE_COMPACT_WARN_THRESHOLD:-$DEFAULT_THRESHOLD}"
-[[ "$THRESHOLD" =~ ^(0|[1-9][0-9]*)$ ]] || THRESHOLD="$DEFAULT_THRESHOLD"
+
+# 窓幅の決定は3段の優先順位:
+#   1. CLAUDE_CONTEXT_WINDOW_TOKENS 環境変数（手動override）
+#   2. SessionStart hook が書いたマーカー（transcript の model 名には [1m] が載らないため必要）
+#   3. transcript の model 名によるモデル世代テーブル
+# 各段とも、非数値・0・先頭ゼロ(8進誤解釈の原因)を弾いて次の段へ落ちる。
+WINDOW_MARKER="${TMPDIR:-/tmp}/claude-context-window/$SESSION_ID"
+MARKER_WINDOW=""
+if [[ -f "$WINDOW_MARKER" ]]; then
+  MARKER_WINDOW=$(head -n1 "$WINDOW_MARKER" 2>/dev/null)
+  [[ "$MARKER_WINDOW" =~ ^[1-9][0-9]*$ ]] || MARKER_WINDOW=""
+fi
+CONTEXT_WINDOW="${CLAUDE_CONTEXT_WINDOW_TOKENS:-}"
+[[ "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]] || CONTEXT_WINDOW="${MARKER_WINDOW:-$DEFAULT_WINDOW}"
 
 USED_TOKENS=$(printf '%s' "$USAGE_LINE" | jq -r '
   (.message.usage.input_tokens // 0) +
@@ -50,6 +56,17 @@ USED_TOKENS=$(printf '%s' "$USAGE_LINE" | jq -r '
   (.message.usage.cache_read_input_tokens // 0)
 ' 2>/dev/null)
 [[ -z "$USED_TOKENS" || "$USED_TOKENS" == "null" ]] && exit 0
+[[ "$USED_TOKENS" =~ ^(0|[1-9][0-9]*)$ ]] || exit 0
+
+# セッション途中のモデル切替(switchModelsOnFlag)等で窓幅の判定が古い場合の保険。
+# 窓幅を超えて動作している事実は、その窓幅が正しくないことの確定的な証拠になる。
+# 手動overrideにも適用する。窓幅より多く使っている状態でその窓幅を信じると
+# 使用率が常に100%を超え、警告が意味を失うため。
+[[ "$USED_TOKENS" -gt "$CONTEXT_WINDOW" ]] && CONTEXT_WINDOW=1000000
+
+DEFAULT_THRESHOLD=$(default_threshold_for_window "$CONTEXT_WINDOW")
+THRESHOLD="${CLAUDE_COMPACT_WARN_THRESHOLD:-$DEFAULT_THRESHOLD}"
+[[ "$THRESHOLD" =~ ^(0|[1-9][0-9]*)$ ]] || THRESHOLD="$DEFAULT_THRESHOLD"
 
 PCT=$(( USED_TOKENS * 100 / CONTEXT_WINDOW ))
 [[ "$PCT" -lt "$THRESHOLD" ]] && exit 0
