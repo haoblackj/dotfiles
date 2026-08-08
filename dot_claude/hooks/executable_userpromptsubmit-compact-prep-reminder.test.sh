@@ -127,32 +127,57 @@ make_transcript "$TR13B" 180000 "claude-opus-5"   # 200,000のうち180002 token
 out="$(printf '%s' "{\"session_id\":\"sess-13b\",\"transcript_path\":\"$TR13B\"}" | "$SCRIPT")"
 check "opus-5(200K窓)は90%で warn marker が作成される" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-13b" ] && echo yes || echo no)"
 
-make_window_marker() { # session_id window
+make_window_marker() { # session_id window model
   mkdir -p "$TMPDIR_TEST/claude-context-window"
-  printf '%s\n' "$2" > "$TMPDIR_TEST/claude-context-window/$1"
+  printf '%s %s\n' "$2" "$3" > "$TMPDIR_TEST/claude-context-window/$1"
 }
 
-# --- 14. マーカーがあれば transcript のモデル名テーブルより優先される ---
+# --- 14. マーカーがあれば transcript のモデル名テーブルより優先される(マーカーのモデル名がtranscriptと一致する場合) ---
 TR14="$TMPDIR_TEST/t14.jsonl"
-make_transcript "$TR14" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告。マーカー1Mなら18% → 警告なし
-make_window_marker "sess-14" 1000000
+make_transcript "$TR14" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告。マーカー1Mかつモデル一致なら18% → 警告なし
+make_window_marker "sess-14" 1000000 "claude-opus-5[1m]"
 out="$(printf '%s' "{\"session_id\":\"sess-14\",\"transcript_path\":\"$TR14\"}" | "$SCRIPT")"
-check "マーカー1M → transcriptのopus-5(200K)より優先され18%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-14" ] && echo yes || echo no)"
+check "マーカー1M(モデル一致) → transcriptのopus-5(200K)より優先され18%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-14" ] && echo yes || echo no)"
+
+# FINDING-3: 「警告が作られない」だけでなく、閾値を極端に下げて実際に1M窓が使われたこと(PCT=18)を直接主張する。
+out="$(CLAUDE_COMPACT_WARN_THRESHOLD=1 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-14\\\",\\\"transcript_path\\\":\\\"$TR14\\\"}\" | \"$SCRIPT\"")"
+check "[FINDING-3] ケース14を閾値1で再実行するとwarn markerの中身が18(1M窓が使われた直接証拠)" "18" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-14" 2>/dev/null || echo '')"
+
+# --- FINDING-1: マーカーのモデル名がtranscriptと食い違う場合、マーカーは無効になりテーブルに落ちる ---
+# 1Mセッション開始時にSessionStartが書いたマーカー(claude-opus-5[1m])が、/model による
+# 200Kモデル(claude-haiku-4-5)への切替後もそのまま残っている状況を再現する。
+TR_MISMATCH="$TMPDIR_TEST/t_mismatch.jsonl"
+make_transcript "$TR_MISMATCH" 180000 "claude-haiku-4-5"
+make_window_marker "sess-mismatch" 1000000 "claude-opus-5[1m]"
+out="$(printf '%s' "{\"session_id\":\"sess-mismatch\",\"transcript_path\":\"$TR_MISMATCH\"}" | "$SCRIPT")"
+check "[FINDING-1] マーカーのモデル(opus-5[1m])とtranscriptのモデル(haiku-4-5)が食い違う → マーカー破棄しテーブル(200K)で90%警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-mismatch" ] && echo yes || echo no)"
+warn_pct_mismatch="$(cat "$TMPDIR_TEST/claude-compact-warn/sess-mismatch" 2>/dev/null || echo '')"
+check "[FINDING-1] モデル食い違いケースのPCTが90" "90" "$warn_pct_mismatch"
+
+# --- FINDING-1 退行再現(実装前にRED確認済み): モデル名を伴わない旧形式マーカーは無効として扱う ---
+# 旧sessionstart(修正前)が書いていた「窓幅のみ」の1行マーカーがそのまま残っているケース。
+# 旧形式を信用すると/model切替後も古い窓幅が勝ち続け、警告が出ない退行がそのまま残る。
+TR_OLDFMT="$TMPDIR_TEST/t_oldfmt.jsonl"
+make_transcript "$TR_OLDFMT" 180000 "claude-haiku-4-5"
+mkdir -p "$TMPDIR_TEST/claude-context-window"
+printf '1000000\n' > "$TMPDIR_TEST/claude-context-window/sess-oldfmt"
+out="$(printf '%s' "{\"session_id\":\"sess-oldfmt\",\"transcript_path\":\"$TR_OLDFMT\"}" | "$SCRIPT")"
+check "[FINDING-1 退行再現] モデル名を伴わない旧形式マーカーは無効としテーブル(200K)で90%警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-oldfmt" ] && echo yes || echo no)"
 
 # --- 15. 環境変数はマーカーより優先される ---
 TR15="$TMPDIR_TEST/t15.jsonl"
 make_transcript "$TR15" 180000 "claude-opus-5"
-make_window_marker "sess-15" 1000000
+make_window_marker "sess-15" 1000000 "claude-opus-5[1m]"
 out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=200000 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-15\\\",\\\"transcript_path\\\":\\\"$TR15\\\"}\" | \"$SCRIPT\"")"
 check "環境変数200K → マーカー1Mより優先され90%で警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-15" ] && echo yes || echo no)"
 check "環境変数優先時の PCT が90であること" "90" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-15" 2>/dev/null || echo '')"
 
-# --- 16. マーカーの値が不正なら transcript のテーブルに落ちる ---
+# --- 16. マーカーの窓幅が不正なら transcript のテーブルに落ちる(モデル名は一致させ、窓幅だけを不正にして原因を切り分ける) ---
 for bad in "notanumber" "0" "0100"; do
   sid="sess-16-$bad"
   TR16="$TMPDIR_TEST/t16-$bad.jsonl"
   make_transcript "$TR16" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告
-  make_window_marker "$sid" "$bad"
+  make_window_marker "$sid" "$bad" "claude-opus-5[1m]"
   stderr_file="$TMPDIR_TEST/t16-$bad.stderr"
   out="$(printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$TR16\"}" | "$SCRIPT" 2>"$stderr_file")"; rc=$?
   check "マーカー不正($bad) → exit 0" "0" "$rc"
@@ -172,11 +197,34 @@ make_transcript "$TR18" 300000 "claude-opus-5"   # テーブルは200K窓。3000
 out="$(printf '%s' "{\"session_id\":\"sess-18\",\"transcript_path\":\"$TR18\"}" | "$SCRIPT")"
 check "使用量>窓幅 → 保険で1M窓となり30%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-18" ] && echo yes || echo no)"
 
+# FINDING-3: 閾値を1に下げて再実行し、warn markerの中身が30(=1M窓分母で計算された値)であることを直接主張する。
+out="$(CLAUDE_COMPACT_WARN_THRESHOLD=1 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-18\\\",\\\"transcript_path\\\":\\\"$TR18\\\"}\" | \"$SCRIPT\"")"
+check "[FINDING-3] ケース18を閾値1で再実行するとwarn markerの中身が30(保険で1M窓が使われた直接証拠)" "30" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-18" 2>/dev/null || echo '')"
+
+# --- FINDING-4: マーカー由来の窓幅を使用量が超えたケース(保険とマーカーの組み合わせ) ---
+TR_MARKER_INS="$TMPDIR_TEST/t_marker_ins.jsonl"
+make_transcript "$TR_MARKER_INS" 300000 "claude-opus-5"   # マーカー(200K, モデル一致)を使用量300002が超えている
+make_window_marker "sess-marker-ins" 200000 "claude-opus-5"
+out="$(printf '%s' "{\"session_id\":\"sess-marker-ins\",\"transcript_path\":\"$TR_MARKER_INS\"}" | "$SCRIPT")"
+check "[FINDING-4] マーカー由来の窓幅(200K)を使用量が超えたら保険で1M窓となり30%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-marker-ins" ] && echo yes || echo no)"
+
 # --- 19. 保険は環境変数による手動指定にも適用される ---
 TR19="$TMPDIR_TEST/t19.jsonl"
 make_transcript "$TR19" 300000 "claude-opus-5"
 out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=200000 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-19\\\",\\\"transcript_path\\\":\\\"$TR19\\\"}\" | \"$SCRIPT\"")"
 check "環境変数200Kでも使用量が超えていれば保険で1M窓となり警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-19" ] && echo yes || echo no)"
+
+# FINDING-3: 閾値を1に下げて再実行し、warn markerの中身が30(=1M窓分母で計算された値)であることを直接主張する。
+out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=200000 CLAUDE_COMPACT_WARN_THRESHOLD=1 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-19\\\",\\\"transcript_path\\\":\\\"$TR19\\\"}\" | \"$SCRIPT\"")"
+check "[FINDING-3] ケース19を閾値1で再実行するとwarn markerの中身が30(環境変数200Kでも保険で1M窓が使われた直接証拠)" "30" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-19" 2>/dev/null || echo '')"
+
+# --- FINDING-6: libのsourceに失敗した場合はfail-open(exit 0, 空stdout) ---
+NOLIB_DIR="$(mktemp -d)"
+cp "$SCRIPT" "$NOLIB_DIR/"
+out="$(printf '%s' '{"session_id":"sess-nolib","transcript_path":"/no/such/file"}' | bash "$NOLIB_DIR/$(basename "$SCRIPT")")"; rc=$?
+check "[FINDING-6] lib無し → 空stdout" "" "$out"
+check "[FINDING-6] lib無し → exit 0" "0" "$rc"
+rm -rf "$NOLIB_DIR"
 
 rm -rf "$TMPDIR_TEST"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

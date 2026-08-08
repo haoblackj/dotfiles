@@ -34,18 +34,28 @@ USAGE_LINE=$(tac "$TRANSCRIPT" 2>/dev/null | grep -m1 '"usage"')
 [[ -z "$USAGE_LINE" ]] && exit 0
 
 MODEL_NAME=$(printf '%s' "$USAGE_LINE" | jq -r '.message.model // empty' 2>/dev/null)
-DEFAULT_WINDOW=$(model_context_window "$MODEL_NAME")
+DEFAULT_WINDOW=$(context_window_for_model "$MODEL_NAME")
 
 # 窓幅の決定は3段の優先順位:
 #   1. CLAUDE_CONTEXT_WINDOW_TOKENS 環境変数（手動override）
 #   2. SessionStart hook が書いたマーカー（transcript の model 名には [1m] が載らないため必要）
 #   3. transcript の model 名によるモデル世代テーブル
 # 各段とも、非数値・0・先頭ゼロ(8進誤解釈の原因)を弾いて次の段へ落ちる。
+#
+# マーカーは「窓幅 モデル名」の1行(例: 1000000 claude-opus-5[1m])。
+# セッション途中で /model により実際のモデルが変わると、SessionStart は再発火しないため
+# マーカーは古いモデルのまま取り残される。これを見抜くため、マーカーのモデル名([1m]は除去して比較)と
+# transcript の現在のモデル名を突き合わせ、食い違えばマーカーごと無効として3段目に落とす。
+# モデル名が空(=モデル名を伴わない旧形式のマーカー)も同様に無効として扱う。
 WINDOW_MARKER="${TMPDIR:-/tmp}/claude-context-window/$SESSION_ID"
 MARKER_WINDOW=""
 if [[ -f "$WINDOW_MARKER" ]]; then
-  MARKER_WINDOW=$(head -n1 "$WINDOW_MARKER" 2>/dev/null)
-  [[ "$MARKER_WINDOW" =~ ^[1-9][0-9]*$ ]] || MARKER_WINDOW=""
+  MARKER_LINE=$(head -n1 "$WINDOW_MARKER" 2>/dev/null)
+  read -r MARKER_WINDOW_RAW MARKER_MODEL_RAW _ <<< "$MARKER_LINE"
+  if [[ "$MARKER_WINDOW_RAW" =~ ^[1-9][0-9]*$ && -n "$MARKER_MODEL_RAW" ]]; then
+    MARKER_MODEL="${MARKER_MODEL_RAW%\[1m\]}"
+    [[ "$MARKER_MODEL" == "$MODEL_NAME" ]] && MARKER_WINDOW="$MARKER_WINDOW_RAW"
+  fi
 fi
 CONTEXT_WINDOW="${CLAUDE_CONTEXT_WINDOW_TOKENS:-}"
 [[ "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]] || CONTEXT_WINDOW="${MARKER_WINDOW:-$DEFAULT_WINDOW}"

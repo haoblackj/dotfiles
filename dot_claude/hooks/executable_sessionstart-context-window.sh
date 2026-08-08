@@ -1,9 +1,13 @@
 #!/bin/bash
 # SessionStart hook: 入力JSONの model からコンテキストウィンドウ幅を判定し、
-# ${TMPDIR:-/tmp}/claude-context-window/$SESSION_ID に書き込む。
+# ${TMPDIR:-/tmp}/claude-context-window/$SESSION_ID に「窓幅 モデル名」の1行で書き込む
+#（例: 1000000 claude-opus-5[1m]）。
 #
 # UserPromptSubmit hook には model が渡らない（公式ドキュメント上、model を受け取れるのは
-# SessionStart だけで、それも存在は保証されない）。警告hook側はこのマーカーを読んで窓幅を決める。
+# SessionStart だけで、それも存在は保証されない）。警告hook側はこのマーカーを読んで窓幅を決めるが、
+# セッション途中で /model によりモデルが切り替わるとこのマーカーは更新されない(SessionStartは
+# /model では再発火しない)。警告hook側はマーカーのモデル名とtranscriptのモデル名を突き合わせ、
+# 食い違っていればマーカーを無効とみなす。そのためモデル名も併記しておく。
 #
 # stdout には何も出さない。SessionStart の stdout は additionalContext として会話に注入されるため。
 # fail-open (常に exit 0)
@@ -29,5 +33,5 @@ WINDOW=$(context_window_for_model "$MODEL")
 
 WINDOW_DIR="${TMPDIR:-/tmp}/claude-context-window"
 mkdir -p "$WINDOW_DIR" 2>/dev/null || exit 0
-printf '%s\n' "$WINDOW" > "$WINDOW_DIR/$SESSION_ID" 2>/dev/null || true
+printf '%s %s\n' "$WINDOW" "$MODEL" > "$WINDOW_DIR/$SESSION_ID" 2>/dev/null || true
 exit 0
