@@ -5,7 +5,10 @@ setlocal EnableExtensions
 {{- if eq .location "home" }}
 where komorebic.exe >nul 2>nul
 if not errorlevel 1 (
-    komorebic.exe enable-autostart
+    where pwsh.exe >nul 2>nul
+    if not errorlevel 1 (
+        powershell.exe -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\komorebi.lnk'); $s.TargetPath = (Get-Command pwsh.exe).Source; $s.Arguments = '-WindowStyle Hidden -Command komorebic.exe start --whkd'; $s.Save()"
+    )
 )
 {{- end }}
 
