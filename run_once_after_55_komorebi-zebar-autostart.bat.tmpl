@@ -1,0 +1,18 @@
+{{- if eq .chezmoi.os "windows" }}
+@echo off
+setlocal EnableExtensions
+
+{{- if eq .location "home" }}
+where komorebic.exe >nul 2>nul
+if not errorlevel 1 (
+    komorebic.exe enable-autostart
+)
+{{- end }}
+
+where zebar.exe >nul 2>nul
+if not errorlevel 1 (
+    powershell.exe -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\zebar.lnk'); $s.TargetPath = '%USERPROFILE%\scoop\shims\zebar.exe'; $s.Arguments = 'startup'; $s.WorkingDirectory = '%USERPROFILE%\scoop\shims'; $s.Save()"
+)
+
+exit /b 0
+{{- end }}
