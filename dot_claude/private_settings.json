@@ -91,15 +91,6 @@
             "command": "~/.claude/hooks/chezmoi-auto-apply.sh"
           }
         ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/herdr-plan-preview.sh"
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
@@ -133,7 +124,8 @@
     "andrej-karpathy-skills@karpathy-skills": false,
     "superpowers@claude-plugins-official": true,
     "claude-code-setup@claude-plugins-official": true,
-    "compact-plus@compact-plus-local": true
+    "compact-plus@compact-plus-local": true,
+    "reviewable-html-workbench@reviewable-html-workbench-local": true
   },
   "extraKnownMarketplaces": {
     "karpathy-skills": {
@@ -152,6 +144,12 @@
       "source": {
         "source": "github",
         "repo": "u-ichi/compact-plus"
+      }
+    },
+    "reviewable-html-workbench-local": {
+      "source": {
+        "source": "github",
+        "repo": "u-ichi/reviewable-html-workbench"
       }
     }
   },
