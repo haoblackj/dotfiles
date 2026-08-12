@@ -1,2 +1,3 @@
 dot_config/komorebi/applications.json
 __pycache__/
+.worktrees/
