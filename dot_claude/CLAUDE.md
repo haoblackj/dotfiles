@@ -8,6 +8,10 @@
   インライン実行（superpowers:executing-plans）にするのは、(1) ユーザーが明示的に指示した場合、
   または (2) 明らかにインラインが適切な場合（タスク1つの極小プラン等）のみ。
   このルールは言語・表記揺れ（subagent-driven / サブエージェント駆動 等）にかかわらず適用する。
+- EnterPlanModeでプランニングに入るときは、毎回以下をリーダーに一言添える（2026-08-12追記）:
+  - モデルをOpusへ切り替えるよう促す（プランニングは思考品質が重要なため。切替はリーダー自身の操作が必要でClaude側からは実行できない）。
+  - reviewable-html-workbenchのplan-previewスキルでプレビューURLを付けられることを思い出させる。
+  なお、reviewable-html-workbench導入後（2026-08-12〜）は`~/.claude/plans/`配下の最新プランに`Plan preview: <url>`または`Plan preview: unavailable (<理由>)`の記載がないとExitPlanMode自体がプラグインのフックにブロックされるため、この一言は「思い出させる」目的であり省略しても実行は止まる。ただし`docs/superpowers/plans/`配下のsuperpowers式プラン運用ではこの自動ブロックが効かない場合があるため、口頭のリマインドは継続する。
 
 ## コスト制約
 
