@@ -1,0 +1,8 @@
+[wsl2]
+{{- if hasPrefix "HIRO-DESKTOP" .chezmoi.hostname }}
+memory=48GB
+{{- end }}
+networkingMode=Mirrored
+
+[experimental]
+hostAddressLoopback=true
