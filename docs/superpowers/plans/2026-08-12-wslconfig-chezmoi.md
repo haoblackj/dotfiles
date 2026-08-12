@@ -19,6 +19,22 @@
 - Windows 側のユーザー名はマシンによって異なる。テンプレートやパス指定でユーザー名をハードコードしない(chezmoi がホーム相対で解決する)。
 - 作業開始時点で WSL 側 `main` は `origin/main` より 3 コミット先行、Windows 側は `origin/main` と同期・clean。
 
+### 作業環境
+
+Task 1 の実装は隔離ワークツリーで行う。
+
+```
+/home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi
+```
+
+ブランチは `feat/wslconfig-chezmoi`。以下、このパスを `$WT` と表記する。
+各コマンドの冒頭で `WT=/home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi` を定義してから実行する。
+
+chezmoi はソースディレクトリを `/home/yagu001/.local/share/chezmoi` に固定して解決するため、ワークツリー内のソース状態を評価するには `-S "$WT"` を必ず渡す。
+渡し忘れると本流のソースを見てしまい、検証が空振りする。
+
+`-S "$WT"` を付けた `chezmoi ignored` と `chezmoi execute-template` が本流と同一の結果を返すことは、作業開始前に確認済み。
+
 ## File Structure
 
 | ファイル | 役割 | 操作 |
@@ -36,8 +52,8 @@
 二つで一つの動作単位。
 
 **Files:**
-- Create: `/home/yagu001/.local/share/chezmoi/dot_wslconfig.tmpl`
-- Modify: `/home/yagu001/.local/share/chezmoi/.chezmoiignore`
+- Create: `$WT/dot_wslconfig.tmpl`
+- Modify: `$WT/.chezmoiignore`
 
 **Interfaces:**
 - Consumes: `.chezmoi.hostname`(chezmoi 組み込み変数)、`hasPrefix`(sprig 関数)
@@ -68,7 +84,7 @@ hostAddressLoopback=true
 
 - [ ] **Step 2: テンプレートを作成する**
 
-`/home/yagu001/.local/share/chezmoi/dot_wslconfig.tmpl` を以下の内容で作成する。
+`$WT/dot_wslconfig.tmpl` を以下の内容で作成する。
 
 ```
 [wsl2]
@@ -87,7 +103,8 @@ hostAddressLoopback=true
 - [ ] **Step 3: 実ホスト名での出力を検証する**
 
 ```bash
-cd /home/yagu001/.local/share/chezmoi && chezmoi execute-template < dot_wslconfig.tmpl
+WT=/home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi
+chezmoi -S "$WT" execute-template < "$WT/dot_wslconfig.tmpl"
 ```
 
 現在のホスト名は `HIRO-DESKTOP02` なので、Step 1 の 6 行版と完全一致すること。
@@ -98,7 +115,8 @@ cd /home/yagu001/.local/share/chezmoi && chezmoi execute-template < dot_wslconfi
 hostname 参照を固定文字列に差し替えて評価する。
 
 ```bash
-cd /home/yagu001/.local/share/chezmoi && sed 's/\.chezmoi\.hostname/"ESCO-PC-1234"/' dot_wslconfig.tmpl | chezmoi execute-template
+WT=/home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi
+sed 's/\.chezmoi\.hostname/"ESCO-PC-1234"/' "$WT/dot_wslconfig.tmpl" | chezmoi -S "$WT" execute-template
 ```
 
 Step 1 の 5 行版と完全一致すること。
@@ -123,16 +141,19 @@ Step 1 の 5 行版と完全一致すること。
 - [ ] **Step 7: WSL 側で除外されていることを検証する**
 
 ```bash
-cd /home/yagu001/.local/share/chezmoi && chezmoi ignored | grep -x '.wslconfig'
+WT=/home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi
+chezmoi -S "$WT" ignored | grep -x '.wslconfig'
 ```
 
 `.wslconfig` が 1 行出力されること(終了コード 0)。
+作業開始前の時点では出力されないことを確認済みなので、この変化が Step 5 と Step 6 の効果を示す。
 何も出ない場合は Step 6 の追加位置が非 Windows 向けブロックの外にある。
 
 - [ ] **Step 8: WSL 側のホームに配布されないことを検証する**
 
 ```bash
-cd /home/yagu001/.local/share/chezmoi && chezmoi apply --dry-run --verbose 2>&1 | grep -i wslconfig; echo "終了コード: $?"
+WT=/home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi
+chezmoi -S "$WT" apply --dry-run --verbose 2>&1 | grep -i wslconfig; echo "終了コード: $?"
 ```
 
 `grep` が何もマッチせず終了コード 1 になること。
@@ -150,7 +171,7 @@ ls -la /home/yagu001/.wslconfig 2>&1
 - [ ] **Step 10: コミット**
 
 ```bash
-cd /home/yagu001/.local/share/chezmoi && git add dot_wslconfig.tmpl .chezmoiignore && git commit -F - <<'EOF'
+cd /home/yagu001/.local/share/chezmoi/.worktrees/feat-wslconfig-chezmoi && git add dot_wslconfig.tmpl .chezmoiignore && git commit -F - <<'EOF'
 feat(wslconfig): .wslconfigをchezmoiテンプレート管理下に置く
 
 _windows11-dotfilesのプレーンファイルから移送。hostnameがHIRO-DESKTOPで
@@ -180,7 +201,26 @@ Windows 側でしか `.chezmoi.os` が `windows` にならないため、`.chezm
 - Consumes: Task 1 が作成した `dot_wslconfig.tmpl` と修正済み `.chezmoiignore`
 - Produces: Windows 側 `%USERPROFILE%\.wslconfig`。Task 3 はこれが正しく生成されたことを前提に旧ファイルを削除する
 
-- [ ] **Step 1: WSL 側から push する**
+- [ ] **Step 1: ワークツリーのブランチを `main` へマージする**
+
+Windows 側が pull するのは `origin/main` なので、作業ブランチのままでは届かない。
+
+```bash
+cd /home/yagu001/.local/share/chezmoi && git merge --no-ff feat/wslconfig-chezmoi -m "Merge branch 'feat/wslconfig-chezmoi'
+
+.wslconfigをchezmoiテンプレート管理下に移行。
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01J9KnN4rPfceoE59qtQrVEU" && git log --oneline -3
+```
+
+マージ後、`main` に `dot_wslconfig.tmpl` が存在することを確認する。
+
+```bash
+cd /home/yagu001/.local/share/chezmoi && git show HEAD --stat && ls -la dot_wslconfig.tmpl
+```
+
+- [ ] **Step 2: WSL 側から push する**
 
 ```bash
 cd /home/yagu001/.local/share/chezmoi && git push origin main && git log origin/main..HEAD --oneline
@@ -189,7 +229,10 @@ cd /home/yagu001/.local/share/chezmoi && git push origin main && git log origin/
 `git log` が何も出力しないこと。
 先行コミットが解消され、Windows 側が pull できる状態になる。
 
-- [ ] **Step 2: Windows 側で除外されていないことを先に確認する**
+push 対象には、この計画より前に積まれていた 3 コミット(`.gitconfig` の credential helper 変更、spec、plan)と `.worktrees/` の gitignore 追加も含まれる。
+これらはリーダーが push 済みを承諾している範囲。
+
+- [ ] **Step 3: Windows 側で除外されていないことを先に確認する**
 
 ```bash
 powershell.exe -NoProfile -Command "chezmoi ignored" 2>&1 | tr -d '\r' | grep -x '.wslconfig'; echo "終了コード: $?"
@@ -199,9 +242,9 @@ powershell.exe -NoProfile -Command "chezmoi ignored" 2>&1 | tr -d '\r' | grep -x
 Windows 側では `.wslconfig` が配布対象に含まれることを意味する。
 
 この時点では Windows 側のソースがまだ古く `dot_wslconfig.tmpl` を持たないが、`.chezmoiignore` の評価には影響しない。
-ここで `.wslconfig` がマッチした場合、Task 1 の Step 5 が反映されていないので Step 3 に進まない。
+ここで `.wslconfig` がマッチした場合、Task 1 の Step 5 が反映されていないので Step 4 に進まない。
 
-- [ ] **Step 3: Windows 側で更新を取り込む**
+- [ ] **Step 4: Windows 側で更新を取り込む**
 
 ```bash
 powershell.exe -NoProfile -Command "chezmoi update --verbose" 2>&1 | tr -d '\r'
@@ -213,7 +256,7 @@ powershell.exe -NoProfile -Command "chezmoi update --verbose" 2>&1 | tr -d '\r'
 Windows 側は作業開始時点で clean なので、pull は fast-forward で通る。
 コンフリクトが出た場合は Windows 側に手元の変更があるので、内容を確認するまで先に進まない。
 
-- [ ] **Step 4: 生成された `.wslconfig` を検証する**
+- [ ] **Step 5: 生成された `.wslconfig` を検証する**
 
 ```bash
 powershell.exe -NoProfile -Command "Get-Content \$env:USERPROFILE\.wslconfig" 2>&1 | tr -d '\r'
@@ -222,16 +265,16 @@ powershell.exe -NoProfile -Command "Get-Content \$env:USERPROFILE\.wslconfig" 2>
 Task 1 Step 1 の 6 行版と完全一致すること。
 メインPCのホスト名は `HIRO-DESKTOP02` なので `memory=48GB` を含む。
 
-- [ ] **Step 5: WSL 側から同じファイルを読んで二重確認する**
+- [ ] **Step 6: WSL 側から同じファイルを読んで二重確認する**
 
 ```bash
 cat /mnt/c/Users/$(powershell.exe -NoProfile -Command '$env:UserName' 2>/dev/null | tr -d '\r')/.wslconfig
 ```
 
-Step 4 と同じ内容が出ること。
+Step 5 と同じ内容が出ること。
 Windows 側パスとの往復で、書き込み先が想定どおりかを確かめる。
 
-- [ ] **Step 6: 反映済みであることを記録する**
+- [ ] **Step 7: 反映済みであることを記録する**
 
 `memory=48GB` が実際に WSL2 に効くのは次回の VM 起動時。
 `wsl --shutdown` は現在の WSL セッション自身を終了させるため、この計画の中では実行しない。
@@ -252,8 +295,17 @@ free -g | awk '/^Mem:/ {print $2 "GB"}'
 Task 2 で chezmoi 経由の配布が実際に動いたことを確認してから実行する。
 順序を逆にすると、どちらの管理も効いていない期間が生まれる。
 
+このタスクは `_windows11-dotfiles` リポジトリの隔離ワークツリーで行う。
+
+```
+/home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles/.worktrees/chore-drop-wslconfig
+```
+
+ブランチは `chore/drop-wslconfig`。以下、このパスを `$WT3` と表記する。
+chezmoi のワークツリー(`$WT`)とは別物なので取り違えない。
+
 **Files:**
-- Delete: `/home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles/.wslconfig`
+- Delete: `$WT3/.wslconfig`
 
 **Interfaces:**
 - Consumes: Task 2 で検証済みの Windows 側 `.wslconfig`
@@ -262,16 +314,19 @@ Task 2 で chezmoi 経由の配布が実際に動いたことを確認してか�
 - [ ] **Step 1: 削除前に現在の状態を確認する**
 
 ```bash
-cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && git status --short && git log origin/master..HEAD --oneline
+WT3=/home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles/.worktrees/chore-drop-wslconfig
+cd "$WT3" && git status --short && git log origin/master..HEAD --oneline
 ```
 
-working tree が clean で、`5d52122` が未 push のまま 1 コミット先行していること。
-未 push の変更が他にもある場合は、削除に進む前に内容を確認する。
+working tree が clean であること。
+`git log` には `5d52122`(memory を 48GB にした未 push のコミット)と `c41d497`(`.worktrees/` の gitignore 追加)の 2 件が出る。
+これ以外の未 push コミットがある場合は、削除に進む前に内容を確認する。
 
 - [ ] **Step 2: `.wslconfig` を削除する**
 
 ```bash
-cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && git rm .wslconfig
+WT3=/home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles/.worktrees/chore-drop-wslconfig
+cd "$WT3" && git rm .wslconfig
 ```
 
 `5d52122` は revert しない。
@@ -280,7 +335,8 @@ cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && git rm .wslcon
 - [ ] **Step 3: 他に `.wslconfig` を参照している箇所が無いか確認する**
 
 ```bash
-cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && grep -rn "wslconfig" --exclude-dir=.git .; echo "終了コード: $?"
+WT3=/home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles/.worktrees/chore-drop-wslconfig
+cd "$WT3" && grep -rn "wslconfig" --exclude-dir=.git --exclude-dir=.worktrees .; echo "終了コード: $?"
 ```
 
 何もマッチせず終了コード 1 になること。
@@ -290,7 +346,8 @@ cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && grep -rn "wslc
 - [ ] **Step 4: コミット**
 
 ```bash
-cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && git commit -F - <<'EOF'
+WT3=/home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles/.worktrees/chore-drop-wslconfig
+cd "$WT3" && git commit -F - <<'EOF'
 chore: .wslconfigをchezmoi管理へ移したため削除
 
 haoblackj/dotfiles の dot_wslconfig.tmpl が唯一の正となった。
@@ -304,13 +361,33 @@ Claude-Session: https://claude.ai/code/session_01J9KnN4rPfceoE59qtQrVEU
 EOF
 ```
 
-- [ ] **Step 5: push の可否を確認する**
+- [ ] **Step 5: `master` へマージして push する**
 
-`5d52122`(`memory=48GB` への変更)は push が保留されたままになっている。
-削除コミットと合わせて push すると、リモート上では「48GB にした後で削除した」という履歴になり、危険な状態が公開リポジトリに残らない。
+`5d52122`(`memory=48GB` への変更)は push が保留されたままだった。
+削除コミットと合わせて push することで、リモート上は「48GB にした後で chezmoi へ移送して削除した」という履歴になる。
+物理 48GB 未満のマシンで clone しても危険な設定が降ってこない状態が、公開リポジトリ上で成立する。
 
-push するかどうかはリーダーに確認してから実行する。
-保留のままにする判断もあり得るため、この計画では push を既定の動作にしない。
+push はリーダーの承諾済み。
+
+```bash
+cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && git merge --no-ff chore/drop-wslconfig -m "Merge branch 'chore/drop-wslconfig'
+
+.wslconfigをchezmoi管理へ移送したため削除。
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01J9KnN4rPfceoE59qtQrVEU" && git push origin master && git log origin/master..HEAD --oneline
+```
+
+`git log` が何も出力しないこと。
+
+- [ ] **Step 6: リモートから消えたことを確認する**
+
+```bash
+cd /home/yagu001/repo/github.com/haoblackj/_windows11-dotfiles && git ls-tree -r origin/master --name-only | grep -x '.wslconfig'; echo "終了コード(1=消えている): $?"
+```
+
+終了コード 1 になること。
+リモートの `master` に `.wslconfig` が存在しないことを意味する。
 
 ---
 
