@@ -6,7 +6,8 @@
 
 WSL2 のホスト側設定 `.wslconfig`(Windows のユーザーホーム直下)が、chezmoi ではなく `haoblackj/_windows11-dotfiles` にプレーンファイルとして置かれている。
 
-このリポジトリはブートストラップ専用で、マシンごとの差分を表現する手段を持たない。
+このリポジトリには `.configuration/home-configuration.dsc.yaml` と `home-desktop-configuration.dsc.yaml` があり、マシン種別単位の粗い分岐は表現できる。
+しかし単一ファイルの中身をマシンごとに変える手段は持たない。
 そのため 2026-08-12 に QwenImage LoRA 学習(musubi-tuner の `blocks_to_swap` による RAM オフロード)向けへ `memory=48GB` を書いたコミット `5d52122` は、そのまま職場 PC など物理メモリの少ない機械へ展開すると、WSL2 が物理を超える確保を試みて Windows 側のページファイルに落ち、体感が著しく重くなる。
 このリスクを避けるため `5d52122` は push を保留したままになっている。
 
@@ -98,6 +99,20 @@ README の手順 8(`chezmoi init --apply`)が `.wslconfig` の配布も担うよ
 `HIRO-DESKTOP` で始まらないホスト名を渡したとき `memory` 行が消え、`[wsl2]` セクションが `networkingMode` だけになること。
 
 生成結果が `.wslconfig` として妥当な INI であること(セクションヘッダ直後に空行が入らず、`[experimental]` の前に空行が残ること)も確認する。
+
+## 受け入れる副作用
+
+移行前は `_windows11-dotfiles` に `.wslconfig` の実体が無く、chezmoi が配布するファイルとしても存在しなかった。
+そのため `chezmoi apply` をどのマシンで実行しても `.wslconfig` は生成されていなかった。
+
+`dot_wslconfig.tmpl` を追加すると、`chezmoi apply` を実行するすべての Windows マシンに `.wslconfig` が新規生成される。
+`networkingMode=Mirrored` と `[experimental] hostAddressLoopback=true` はホスト名の判定を挟まず、全マシン共通で出力される。
+
+職場 PC のような自宅デスクトップ以外のマシンでは、これにより WSL2 のネットワークモードが既定の NAT から Mirrored へ切り替わる。
+そのマシンに手書きの `.wslconfig` が既にあった場合も、`chezmoi apply` によって無条件に上書きされる。
+
+この副作用はリーダーに提示済みで、`networkingMode` と `hostAddressLoopback` は全マシン共通のまま出す方針を選んだ結果である。
+見落としではなく、確認したうえでの選択である。
 
 ## 対象外
 

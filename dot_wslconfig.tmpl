@@ -1,3 +1,9 @@
+{{- /*
+HIRO-DESKTOP から始まるホスト名の機械は、物理メモリ48GB以上であることを前提にしている。
+物理48GB未満の機械にこの名前を振ると memory=48GB がそのまま出力され、WSL2が物理を超える確保を試みてページファイルへ落ちる。
+hasPrefix は大文字小文字とセパレータを区別する。
+hiro-desktop02 や HIRO_DESKTOP02 はこの条件に一致せず、memory行が出ない安全側になる。
+*/ -}}
 [wsl2]
 {{- if hasPrefix "HIRO-DESKTOP" .chezmoi.hostname }}
 memory=48GB
