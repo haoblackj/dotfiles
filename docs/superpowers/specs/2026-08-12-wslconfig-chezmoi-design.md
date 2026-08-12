@@ -21,7 +21,8 @@ Windows の `COMPUTERNAME` は `HIRO-DESKTOP02` で、WSL 側の `chezmoi.hostna
 よって hostname による分岐は Windows ネイティブ実行でも WSL 実行でも同一の結果になる。
 
 `chezmoi execute-template` で `hasPrefix` が使えることを確認した。
-`HIRO-DESKTOP02` と `HIRO-DESKTOP03` は一致し、`HIRO-LAPTOP01` と `ESCO-PC-1234` は一致しない。
+実在する `HIRO-DESKTOP02` と、分岐確認のために置いた架空の `HIRO-DESKTOP03` は一致する。
+同じく架空の `HIRO-LAPTOP01` と `ESCO-PC-1234` は一致しない。
 
 `.wslconfig` の `memory` を指定しなかった場合、WSL2 は総物理メモリの 50% を割り当てる([公式ドキュメント](https://learn.microsoft.com/windows/wsl/wsl-config#wslconfig))。
 つまり `memory` 行を出力しないことが、そのまま安全側の既定値になる。
@@ -47,7 +48,9 @@ networkingMode=Mirrored
 hostAddressLoopback=true
 ```
 
-Windows 側で `chezmoi apply` すると `C:\Users\yagu001\.wslconfig` に着地する。
+Windows 側で `chezmoi apply` すると `%USERPROFILE%\.wslconfig` に着地する。
+ターゲットはホームディレクトリ相対なので、chezmoi が実行時にパスを解決する。
+Windows 側のユーザー名はマシンによって異なる(WSL 側は `yagu001` に統一しているが、Windows 側が同じとは限らない)ものの、テンプレート側でユーザー名を扱う必要はない。
 `HIRO-DESKTOP` で始まらないホスト名では `memory` 行が出力されず、WSL2 の既定(物理の 50%)が効く。
 
 判定キーに `.chezmoi.toml.tmpl` の `location`(自宅なら `home`)ではなく hostname のプレフィックスを選んだ。
