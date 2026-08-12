@@ -11,6 +11,9 @@
     quotepath = false
 [credential]
     helper = "/mnt/c/Users/{{ .windowsUsername }}/scoop/apps/git/current/mingw64/bin/git-credential-manager.exe"
+[credential "https://github.com"]
+    helper =
+    helper = !gh auth git-credential
 [alias]
     cob = checkout -b
     co = checkout
