@@ -7,7 +7,7 @@
 # hook入力の transcript_path だけで完結させる設計にしている。
 #
 # コンテキストウィンドウ/警告閾値の判定は lib/context-window.sh に切り出してある。
-# 窓幅は 環境変数 > SessionStartマーカー > transcriptのモデル名テーブル の順で決める。
+# 窓幅は 環境変数 > SessionStartマーカー > statusLineマーカー > transcriptのモデル名テーブル の順で決める。
 #
 # overhead: cooldown中は marker file の test -f 1回で即 exit。
 # fail-open (常に exit 0)
@@ -36,10 +36,11 @@ USAGE_LINE=$(tac "$TRANSCRIPT" 2>/dev/null | grep -m1 '"usage"')
 MODEL_NAME=$(printf '%s' "$USAGE_LINE" | jq -r '.message.model // empty' 2>/dev/null)
 DEFAULT_WINDOW=$(context_window_for_model "$MODEL_NAME")
 
-# 窓幅の決定は3段の優先順位:
+# 窓幅の決定は4段の優先順位:
 #   1. CLAUDE_CONTEXT_WINDOW_TOKENS 環境変数（手動override）
 #   2. SessionStart hook が書いたマーカー（transcript の model 名には [1m] が載らないため必要）
-#   3. transcript の model 名によるモデル世代テーブル
+#   3. statusLine hook が書いたマーカー（実測値そのまま。SessionStartマーカーが無効な場合のみ試す）
+#   4. transcript の model 名によるモデル世代テーブル
 # 各段とも、非数値・0・先頭ゼロ(8進誤解釈の原因)を弾いて次の段へ落ちる。
 #
 # マーカーは「窓幅 モデル名」の1行(例: 1000000 claude-opus-5[1m])。
@@ -57,8 +58,20 @@ if [[ -f "$WINDOW_MARKER" ]]; then
     [[ "$MARKER_MODEL" == "$MODEL_NAME" ]] && MARKER_WINDOW="$MARKER_WINDOW_RAW"
   fi
 fi
+# SessionStartマーカーが無効(欠落・モデル不一致)なときのみ、statusLineマーカーを試す。
+# statusLineマーカーはClaude Code本体が計算した実測値をそのまま転記したものなので、
+# モデル名との突き合わせは不要(推測が入らないため陳腐化の概念がない)。
+STATUS_WINDOW=""
+if [[ -z "$MARKER_WINDOW" ]]; then
+  STATUS_MARKER="${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID"
+  if [[ -f "$STATUS_MARKER" ]]; then
+    STATUS_WINDOW=$(head -n1 "$STATUS_MARKER" 2>/dev/null)
+    [[ "$STATUS_WINDOW" =~ ^[1-9][0-9]*$ ]] || STATUS_WINDOW=""
+  fi
+fi
+
 CONTEXT_WINDOW="${CLAUDE_CONTEXT_WINDOW_TOKENS:-}"
-[[ "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]] || CONTEXT_WINDOW="${MARKER_WINDOW:-$DEFAULT_WINDOW}"
+[[ "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]] || CONTEXT_WINDOW="${MARKER_WINDOW:-${STATUS_WINDOW:-$DEFAULT_WINDOW}}"
 
 USED_TOKENS=$(printf '%s' "$USAGE_LINE" | jq -r '
   (.message.usage.input_tokens // 0) +

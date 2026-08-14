@@ -218,6 +218,54 @@ check "環境変数200Kでも使用量が超えていれば保険で1M窓とな�
 out="$(CLAUDE_CONTEXT_WINDOW_TOKENS=200000 CLAUDE_COMPACT_WARN_THRESHOLD=1 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-19\\\",\\\"transcript_path\\\":\\\"$TR19\\\"}\" | \"$SCRIPT\"")"
 check "[FINDING-3] ケース19を閾値1で再実行するとwarn markerの中身が30(環境変数200Kでも保険で1M窓が使われた直接証拠)" "30" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-19" 2>/dev/null || echo '')"
 
+make_status_marker() { # session_id window
+  mkdir -p "$TMPDIR_TEST/claude-status-context-window"
+  printf '%s\n' "$2" > "$TMPDIR_TEST/claude-status-context-window/$1"
+}
+
+# --- 20. SessionStartマーカーが無く、statusLineマーカーがあるとき → statusLineマーカーの窓幅が使われる ---
+TR20="$TMPDIR_TEST/t20.jsonl"
+make_transcript "$TR20" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告。statusLineマーカー1Mなら18% → 警告なし
+make_status_marker "sess-20" 1000000
+out="$(printf '%s' "{\"session_id\":\"sess-20\",\"transcript_path\":\"$TR20\"}" | "$SCRIPT")"
+check "statusLineマーカーのみ(1M) → テーブル(200K)より優先され18%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-20" ] && echo yes || echo no)"
+
+out="$(CLAUDE_COMPACT_WARN_THRESHOLD=1 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-20\\\",\\\"transcript_path\\\":\\\"$TR20\\\"}\" | \"$SCRIPT\"")"
+check "ケース20を閾値1で再実行するとwarn markerの中身が18(statusLineマーカーの1M窓が使われた直接証拠)" "18" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-20" 2>/dev/null || echo '')"
+
+# --- 21. SessionStartマーカーとstatusLineマーカーが両方あるとき → SessionStartマーカーが優先される ---
+TR21="$TMPDIR_TEST/t21.jsonl"
+make_transcript "$TR21" 180000 "claude-opus-5"
+make_window_marker "sess-21" 200000 "claude-opus-5"   # SessionStartマーカー: 200K(モデル一致)
+make_status_marker "sess-21" 1000000                  # statusLineマーカー: 1M
+out="$(printf '%s' "{\"session_id\":\"sess-21\",\"transcript_path\":\"$TR21\"}" | "$SCRIPT")"
+check "両マーカーあり → SessionStartマーカー(200K)が優先され90%で警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-21" ] && echo yes || echo no)"
+
+# --- 22. statusLineマーカーの値が不正(SessionStartマーカー無し) → テーブルに落ちる ---
+for bad in "notanumber" "0" "0100"; do
+  sid="sess-22-$bad"
+  TR22="$TMPDIR_TEST/t22-$bad.jsonl"
+  make_transcript "$TR22" 180000 "claude-opus-5"   # テーブルなら200K窓で90% → 警告
+  make_status_marker "$sid" "$bad"
+  out="$(printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$TR22\"}" | "$SCRIPT")"
+  check "statusLineマーカー不正($bad) → テーブル(200K)に落ちて90%で警告" "yes" "$([ -f "$TMPDIR_TEST/claude-compact-warn/$sid" ] && echo yes || echo no)"
+done
+
+# --- 23. SessionStartマーカーがモデル不一致で無効、statusLineマーカーが有効 → statusLineマーカーへフォールスルーする ---
+# /clear直後、SessionStartマーカーが古いモデルのまま残っている(またはmodelが渡らず存在しない)状況でも、
+# statusLineマーカーがあればテーブルより先にそちらを使う。
+# statusLineマーカーの値をテーブルデフォルト(haiku-4-5=200K)とは異なる1Mにして、
+# 「実際にstatusLineマーカーが読まれた」ことをテーブルへの取りこぼしと区別できるようにする。
+TR23="$TMPDIR_TEST/t23.jsonl"
+make_transcript "$TR23" 180000 "claude-haiku-4-5"   # テーブルなら200K窓で90% → 警告。statusLineマーカー1Mなら18% → 警告なし
+make_window_marker "sess-23" 1000000 "claude-opus-5[1m]"   # SessionStartマーカー: モデル不一致で無効になる
+make_status_marker "sess-23" 1000000                       # statusLineマーカー: 1M(テーブルの200Kとは異なる値)
+out="$(printf '%s' "{\"session_id\":\"sess-23\",\"transcript_path\":\"$TR23\"}" | "$SCRIPT")"
+check "SessionStartマーカー無効 → statusLineマーカー(1M)へフォールスルーし18%で警告なし" "no" "$([ -f "$TMPDIR_TEST/claude-compact-warn/sess-23" ] && echo yes || echo no)"
+
+out="$(CLAUDE_COMPACT_WARN_THRESHOLD=1 bash -c "printf '%s' \"{\\\"session_id\\\":\\\"sess-23\\\",\\\"transcript_path\\\":\\\"$TR23\\\"}\" | \"$SCRIPT\"")"
+check "ケース23を閾値1で再実行するとwarn markerの中身が18(statusLineマーカーの1M窓が実際に読まれた直接証拠、テーブル(200K)なら90になるはず)" "18" "$(cat "$TMPDIR_TEST/claude-compact-warn/sess-23" 2>/dev/null || echo '')"
+
 # --- FINDING-6: libのsourceに失敗した場合はfail-open(exit 0, 空stdout) ---
 NOLIB_DIR="$(mktemp -d)"
 cp "$SCRIPT" "$NOLIB_DIR/"
