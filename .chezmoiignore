@@ -18,6 +18,7 @@
 /.bash_profile
 /.bash_aliases
 /.zshrc
+/.zshenv
 /.zprofile
 /.profile
 /.czrc

@@ -1,0 +1,5 @@
+# Ubuntu の /etc/zsh/zshrc は ~/.zshrc より先に compinit を走らせる（同ファイル 114-120 行）。
+# その時点では Homebrew の site-functions も zi のプラグインも fpath に入っていないため、
+# 補完定義を取りこぼしたダンプが ~/.zcompdump に作られてしまう。
+# 補完の初期化は ~/zsh/config.zsh 側でプラグイン読み込み後に一度だけ行うので、ここでは抑止する。
+skip_global_compinit=1

@@ -24,12 +24,54 @@ function ghview(){
 #setopt prompt_subst
 
 # --------------------------------------------------
+#  コマンド履歴
+# --------------------------------------------------
+
+HISTFILE=~/.zsh_history
+HISTSIZE=100000            # メモリ上に保持する件数
+SAVEHIST=100000            # ファイルへ保存する件数
+
+setopt inc_append_history  # 実行のたびに追記する（閉じ忘れても失われない）
+setopt extended_history    # 実行時刻と所要時間も記録する
+setopt hist_ignore_dups    # 直前と同じコマンドは記録しない
+setopt hist_ignore_space   # 先頭が空白のコマンドは記録しない
+setopt hist_reduce_blanks  # 余分な空白を詰めて記録する
+setopt hist_verify         # 履歴展開の結果を実行前に確認できる
+
+# --------------------------------------------------
 #  コマンド入力補完
 # --------------------------------------------------
 
-# 補完機能有効にする
-autoload -U compinit
-compinit -u
+# 自前で生成した補完定義の置き場。生成物なので chezmoi の管理下には置かない。
+_zsh_comp_dir=~/zsh/completions
+[[ -d $_zsh_comp_dir ]] || mkdir -p $_zsh_comp_dir
+fpath=($_zsh_comp_dir $fpath)
+
+# chezmoi は補完定義を配布していないので、初回だけ生成してキャッシュする
+if [[ ! -f $_zsh_comp_dir/_chezmoi ]] && (( $+commands[chezmoi] )); then
+  chezmoi completion zsh > $_zsh_comp_dir/_chezmoi
+fi
+
+# 補完機能を有効にする。plugins.zsh より後で1回だけ走らせること。
+# ダンプが24時間以内なら compaudit を省いて起動を早める（実測 207ms -> 12ms）。
+zmodload -F zsh/stat b:zstat
+zmodload zsh/datetime
+autoload -Uz compinit
+_zcompdump=${ZDOTDIR:-$HOME}/.zcompdump
+if zstat -A _zc +mtime $_zcompdump 2>/dev/null && (( EPOCHSECONDS - _zc[1] < 86400 )); then
+  compinit -C -d $_zcompdump
+else
+  compinit -d $_zcompdump
+fi
+unset _zc _zcompdump _zsh_comp_dir
+
+# zi 自身の補完（_comps は compinit の後でないと存在しない）
+(( ${+_comps} )) && _comps[zi]=_zi
+
+# pyenv は compctl 形式の補完を同梱しており、fpath 経由では読み込めない
+if [[ -n $HOMEBREW_PREFIX && -r $HOMEBREW_PREFIX/opt/pyenv/completions/pyenv.zsh ]]; then
+  source $HOMEBREW_PREFIX/opt/pyenv/completions/pyenv.zsh
+fi
 
 # 補完候補に色つける
 autoload -U colors
