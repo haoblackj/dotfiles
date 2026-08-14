@@ -44,7 +44,16 @@ source ~/zsh/wsl_only.zsh
 [[ ! -f ~/zsh/p10k.zsh ]] || source ~/zsh/p10k.zsh
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+# --no-use を付けて nvm の自動バージョン選択を止める。既定バージョンの解決に
+# 実測で 450ms 前後かかっており、起動時間の主要因のひとつだった。
+# 代わりに、インストール済みで最も新しいバージョンの bin を glob で直接 PATH へ通す。
+# (N/n[-1]) は「ディレクトリのみ・数値順・最後」の意味。バージョン番号を書かないので
+# マシンごとに node のバージョンが違っても同じ設定で動き、chezmoi のテンプレート化が要らない。
+# nvm コマンド自体は生きているので、バージョンを切り替えたいときは今まで通り nvm use が使える。
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+_nvm_bin=($NVM_DIR/versions/node/*/bin(N/n[-1]))
+(( $#_nvm_bin )) && path=($_nvm_bin[1] $path)
+unset _nvm_bin
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 . "/home/yagu001/.deno/env"
