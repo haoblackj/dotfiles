@@ -1,15 +1,18 @@
 # Path設定
 export PATH="$HOME/.local/bin:$PATH"
-export PATH="$HOME/.tfenv/bin:$PATH"
+# tfenv は未インストール（~/.tfenv が存在しない）。使い始めるときに戻す。
+#export PATH="$HOME/.tfenv/bin:$PATH"
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export DENO_INSTALL="/home/yagu001/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 export PATH=$HOME/bin:/usr/local/bin:$PATH
-export PATH="$HOME/.local/bin:$PATH"
+# 2行目と同じものを足していた重複。
+#export PATH="$HOME/.local/bin:$PATH"
 
 
 # Go実装のasdf用（v0.16.0 以降）
-export PATH="$HOME/.asdf/bin:$PATH"
+# asdf は未インストール（~/.asdf が存在しない）。使い始めるときに戻す。
+#export PATH="$HOME/.asdf/bin:$PATH"
 
 # ghq設定
 # zle ウィジェットの中で cd してもプロンプトは描き直されないため、

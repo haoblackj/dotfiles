@@ -112,18 +112,22 @@ SPROMPT="correct: %F{red}%R%f -> %F{green}%r%f ? [Yes/No/Abort/Edit] => "
 # export PATH=$PATH:/usr/local/go/bin
 
 # pyenv設定
-export PYENV_ROOT="${HOME}/.pyenv"
-if [ -d "${PYENV_ROOT}" ]; then
-    export PATH=${PYENV_ROOT}/bin:$PATH
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)"
-fi
+# 実際に使っている pyenv は Homebrew 版で、初期化は .zshrc 側が
+# PYENV_ROOT="$(brew --prefix pyenv)" として行っている。
+# ~/.pyenv は存在しないため、この条件は常に偽で中身は一度も実行されていなかった。
+#export PYENV_ROOT="${HOME}/.pyenv"
+#if [ -d "${PYENV_ROOT}" ]; then
+#    export PATH=${PYENV_ROOT}/bin:$PATH
+#    eval "$(pyenv init -)"
+#    eval "$(pyenv virtualenv-init -)"
+#fi
 
 # gh設定
 export GH_CONFIG_DIR=~/.config/gh
 
 # tfenv設定
-export PATH="$HOME/.tfenv/bin:$PATH"
+# tfenv は未インストール（~/.tfenv が存在しない）。使い始めるときに戻す。
+#export PATH="$HOME/.tfenv/bin:$PATH"
 
 # ssh-agent設定(Bitwarden Desktop SSH Agent -> npiperelay/socat経由)
 export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/bitwarden-ssh-agent.sock"

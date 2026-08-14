@@ -24,7 +24,8 @@ if [ -d "$HOME/.local/bin" ] ; then
     PATH="$HOME/.local/bin:$PATH"
 fi
 
-export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
+# asdf は未インストール（~/.asdf が存在しない）。使い始めるときに戻す。
+#export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
 
 # Windowsのユーザー名を取得
 WINDOWS_USER=$(powershell.exe 'echo $env:UserName' | tr -d '\r')
@@ -37,4 +38,5 @@ snap_bin_path="/snap/bin"
 if [ -n "${PATH##*${snap_bin_path}}" -a -n "${PATH##*${snap_bin_path}:*}" ]; then
     export PATH=$PATH:${snap_bin_path}
 fi
-. "/home/yagu001/.deno/env"
+# deno は zsh なら .zshrc、bash なら .bashrc と .bash_profile がそれぞれ読み込むため、ここは重複。
+#. "/home/yagu001/.deno/env"
