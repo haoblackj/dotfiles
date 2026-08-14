@@ -12,6 +12,10 @@
   - モデルをOpusへ切り替えるよう促す（プランニングは思考品質が重要なため。切替はリーダー自身の操作が必要でClaude側からは実行できない）。
   - reviewable-html-workbenchのplan-previewスキルでプレビューURLを付けられることを思い出させる。
   なお、reviewable-html-workbench導入後（2026-08-12〜）は`~/.claude/plans/`配下の最新プランに`Plan preview: <url>`または`Plan preview: unavailable (<理由>)`の記載がないとExitPlanMode自体がプラグインのフックにブロックされるため、この一言は「思い出させる」目的であり省略しても実行は止まる。ただし`docs/superpowers/plans/`配下のsuperpowers式プラン運用ではこの自動ブロックが効かない場合があるため、口頭のリマインドは継続する。
+- spec/plan文書を`docs/superpowers/specs/`または`docs/superpowers/plans/`に保存したら、リーダーに承認を求める前に必ず`adversarial-review`スキルで敵対的レビューを回す（2026-08-14追記）。
+  実行してよいか確認を取る必要はない。保存→レビュー→結果提示までを一続きで行う。
+  レビュー結果（Status / Issues / Recommendations）は書き換えずに提示し、承認の判断はリーダーに委ねる。`Status: Approved`でも実装に自動で進まない。
+  スキル側のdescriptionにも同趣旨の発火条件があるが、それはモデルの判断に委ねる仕組みで確実に発火しないため、ここに恒久ルールとして明記する。
 
 ## コスト制約
 
