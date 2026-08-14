@@ -58,8 +58,13 @@ check "session_id=../evil → TMPDIR直下にファイルが作られない" "no
 check "session_id=../evil → exit 0" "0" "$rc"
 
 # --- 5. context_window_size が 0 や不正値 → マーカー未作成 ---
+# sid を bad から独立させる。"notanumber"(引用符付き)を直接sidに埋め込むと
+# session_id自体が正規表現に落ちてしまい、window_sizeの検証経路を実際には通らないまま
+# アサーションだけ通ってしまう(意図した経路を検証できていない)ため。
+i=0
 for bad in "0" '"notanumber"' "-5"; do
-  sid="sess-5-$bad"
+  i=$((i + 1))
+  sid="sess-5-$i"
   input="{\"session_id\":\"$sid\",\"context_window\":{\"context_window_size\":$bad}}"
   printf '%s' "$input" | "$SCRIPT" >/dev/null
   check "context_window_size不正($bad) → マーカー未作成" "" "$(marker_of "$sid")"

@@ -3,11 +3,11 @@
 # 閾値超過なら claude-compact-warn マーカファイルを書き込む（cooldown付き, one-shot的に1サイクル1回）。
 # compact-plus プラグインの reminder hook が claude-compact-warn を消費し、ユーザーに通知する。
 #
-# VSCode拡張は statusLine コマンドを未サポートのため、statusLine には依存せず
-# hook入力の transcript_path だけで完結させる設計にしている。
+# VSCode拡張は statusLine コマンドを未サポートのため、そこでは statusLine マーカーが一切書かれず、
+# SessionStart マーカー(それも無ければ transcript のモデル名テーブル)にフォールバックする。
 #
 # コンテキストウィンドウ/警告閾値の判定は lib/context-window.sh に切り出してある。
-# 窓幅は 環境変数 > SessionStartマーカー > statusLineマーカー > transcriptのモデル名テーブル の順で決める。
+# 窓幅は 環境変数 > statusLineマーカー > SessionStartマーカー > transcriptのモデル名テーブル の順で決める。
 #
 # overhead: cooldown中は marker file の test -f 1回で即 exit。
 # fail-open (常に exit 0)
@@ -38,40 +38,48 @@ DEFAULT_WINDOW=$(context_window_for_model "$MODEL_NAME")
 
 # 窓幅の決定は4段の優先順位:
 #   1. CLAUDE_CONTEXT_WINDOW_TOKENS 環境変数（手動override）
-#   2. SessionStart hook が書いたマーカー（transcript の model 名には [1m] が載らないため必要）
-#   3. statusLine hook が書いたマーカー（実測値そのまま。SessionStartマーカーが無効な場合のみ試す）
+#   2. statusLine hook が書いたマーカー（Claude Code本体が計算した実測値そのもの。ground truth）
+#   3. SessionStart hook が書いたマーカー（transcript の model 名テーブル由来の推測値。statusLineマーカーが
+#      無効な場合のみ試す）
 #   4. transcript の model 名によるモデル世代テーブル
 # 各段とも、非数値・0・先頭ゼロ(8進誤解釈の原因)を弾いて次の段へ落ちる。
 #
-# マーカーは「窓幅 モデル名」の1行(例: 1000000 claude-opus-5[1m])。
+# 2段目と3段目の順序は「精度の高い方を先に試す」という原則に基づく。3段目(SessionStartマーカー)は
+# 4段目と同じモデル名テーブルが生成する値であり推測に過ぎず、2段目(statusLineマーカー)はClaude Code
+# 本体の実測値なので、2段目を優先しないと「テーブルに未登録の新モデル」で3段目が2段目より低い精度の
+# 判定を勝たせてしまう。
+#
+# SessionStartマーカーは「窓幅 モデル名」の1行(例: 1000000 claude-opus-5[1m])。
 # セッション途中で /model により実際のモデルが変わると、SessionStart は再発火しないため
 # マーカーは古いモデルのまま取り残される。これを見抜くため、マーカーのモデル名([1m]は除去して比較)と
-# transcript の現在のモデル名を突き合わせ、食い違えばマーカーごと無効として3段目に落とす。
+# transcript の現在のモデル名を突き合わせ、食い違えばマーカーごと無効として4段目に落とす。
 # モデル名が空(=モデル名を伴わない旧形式のマーカー)も同様に無効として扱う。
-WINDOW_MARKER="${TMPDIR:-/tmp}/claude-context-window/$SESSION_ID"
-MARKER_WINDOW=""
-if [[ -f "$WINDOW_MARKER" ]]; then
-  MARKER_LINE=$(head -n1 "$WINDOW_MARKER" 2>/dev/null)
-  read -r MARKER_WINDOW_RAW MARKER_MODEL_RAW _ <<< "$MARKER_LINE"
-  if [[ "$MARKER_WINDOW_RAW" =~ ^[1-9][0-9]*$ && -n "$MARKER_MODEL_RAW" ]]; then
-    MARKER_MODEL="${MARKER_MODEL_RAW%\[1m\]}"
-    [[ "$MARKER_MODEL" == "$MODEL_NAME" ]] && MARKER_WINDOW="$MARKER_WINDOW_RAW"
-  fi
-fi
-# SessionStartマーカーが無効(欠落・モデル不一致)なときのみ、statusLineマーカーを試す。
-# statusLineマーカーはClaude Code本体が計算した実測値をそのまま転記したものなので、
-# モデル名との突き合わせは不要(推測が入らないため陳腐化の概念がない)。
+#
+# statusLineマーカーにはモデル名突き合わせが無い。Claude Code本体が毎ターン再計算した値をそのまま
+# 転記するだけで推測が入らないためだが、/model切替直後の1ターンだけは前ターン終了時点の値が残り、
+# 次ターンで自己修復する(切替直後1ターンに限り古い窓幅が使われうる)。
 STATUS_WINDOW=""
-if [[ -z "$MARKER_WINDOW" ]]; then
-  STATUS_MARKER="${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID"
-  if [[ -f "$STATUS_MARKER" ]]; then
-    STATUS_WINDOW=$(head -n1 "$STATUS_MARKER" 2>/dev/null)
-    [[ "$STATUS_WINDOW" =~ ^[1-9][0-9]*$ ]] || STATUS_WINDOW=""
+STATUS_MARKER="${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID"
+if [[ -f "$STATUS_MARKER" ]]; then
+  STATUS_WINDOW=$(head -n1 "$STATUS_MARKER" 2>/dev/null)
+  [[ "$STATUS_WINDOW" =~ ^[1-9][0-9]*$ ]] || STATUS_WINDOW=""
+fi
+
+MARKER_WINDOW=""
+if [[ -z "$STATUS_WINDOW" ]]; then
+  WINDOW_MARKER="${TMPDIR:-/tmp}/claude-context-window/$SESSION_ID"
+  if [[ -f "$WINDOW_MARKER" ]]; then
+    MARKER_LINE=$(head -n1 "$WINDOW_MARKER" 2>/dev/null)
+    read -r MARKER_WINDOW_RAW MARKER_MODEL_RAW _ <<< "$MARKER_LINE"
+    if [[ "$MARKER_WINDOW_RAW" =~ ^[1-9][0-9]*$ && -n "$MARKER_MODEL_RAW" ]]; then
+      MARKER_MODEL="${MARKER_MODEL_RAW%\[1m\]}"
+      [[ "$MARKER_MODEL" == "$MODEL_NAME" ]] && MARKER_WINDOW="$MARKER_WINDOW_RAW"
+    fi
   fi
 fi
 
 CONTEXT_WINDOW="${CLAUDE_CONTEXT_WINDOW_TOKENS:-}"
-[[ "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]] || CONTEXT_WINDOW="${MARKER_WINDOW:-${STATUS_WINDOW:-$DEFAULT_WINDOW}}"
+[[ "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]] || CONTEXT_WINDOW="${STATUS_WINDOW:-${MARKER_WINDOW:-$DEFAULT_WINDOW}}"
 
 USED_TOKENS=$(printf '%s' "$USAGE_LINE" | jq -r '
   (.message.usage.input_tokens // 0) +
