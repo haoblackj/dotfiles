@@ -12,12 +12,17 @@ export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.asdf/bin:$PATH"
 
 # ghq設定
+# zle ウィジェットの中で cd してもプロンプトは描き直されないため、
+# reset-prompt を呼んで表示中のカレントディレクトリを追従させる。
+# $WIDGET はウィジェットとして呼ばれたときだけ定義される。関数として直接
+# 実行したときに zle を呼ぶとエラーになるので、その場合は何もしない。
 function ghq_peco {
   local dir="$( ghq list -p | peco )"
   if [ ! -z "$dir" ] ; then
     cd "$dir"
     code .
   fi
+  (( ${+WIDGET} )) && zle reset-prompt
 }
 
 # ghq cd設定
@@ -26,6 +31,7 @@ function ghq_peco_cd {
   if [ ! -z "$dir" ] ; then
     cd "$dir"
   fi
+  (( ${+WIDGET} )) && zle reset-prompt
 }
 
 # # xsel設定

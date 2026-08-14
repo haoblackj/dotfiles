@@ -1,11 +1,18 @@
 setopt no_beep
 
+# fzf を Esc で閉じると選択結果が空になる。そのまま gh へ渡すとエラーになるので黙って戻る。
 function ghclone(){
-  gh repo clone $(gh repo list $1 --json nameWithOwner -q '.[].nameWithOwner' | fzf)
+  local repo
+  repo=$(gh repo list $1 --json nameWithOwner -q '.[].nameWithOwner' | fzf) || return
+  [[ -n $repo ]] || return
+  gh repo clone $repo
 }
 
 function ghview(){
-  gh repo view --web $(gh repo list $1 --json nameWithOwner -q '.[].nameWithOwner' | fzf)
+  local repo
+  repo=$(gh repo list $1 --json nameWithOwner -q '.[].nameWithOwner' | fzf) || return
+  [[ -n $repo ]] || return
+  gh repo view --web $repo
 }
 
 ## --------------------------------------------------
@@ -73,9 +80,13 @@ if [[ -n $HOMEBREW_PREFIX && -r $HOMEBREW_PREFIX/opt/pyenv/completions/pyenv.zsh
   source $HOMEBREW_PREFIX/opt/pyenv/completions/pyenv.zsh
 fi
 
-# 補完候補に色つける
+# 補完候補に色つける。
+# dircolors を通さないと LS_COLORS が空のままで、下の list-colors が何も効かない。
 autoload -U colors
 colors
+if [[ -z $LS_COLORS ]] && (( $+commands[dircolors] )); then
+  eval "$(dircolors -b)"
+fi
 zstyle ':completion:*' list-colors "${LS_COLORS}"
 
 # 単語の入力途中でもTab補完を有効化
@@ -91,7 +102,9 @@ setopt list_packed
 
 # コマンドの打ち間違いを指摘してくれる
 setopt correct
-SPROMPT="correct: $RED%R$DEFAULT -> $GREEN%r$DEFAULT ? [Yes/No/Abort/Edit] => "
+# $RED や $GREEN は zsh の colors が定義しない変数で、以前は空文字に展開されて
+# 色がついていなかった。プロンプト展開の %F{...} を使う。
+SPROMPT="correct: %F{red}%R%f -> %F{green}%r%f ? [Yes/No/Abort/Edit] => "
 
 # Go Path設定
 #export GOPATH=$HOME
@@ -117,7 +130,10 @@ export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/bitwarden-ssh-agent.sock"
 
 # Homebrew一括アップデート関数
 brewup() {
-  set -e  # エラーが発生したらそこで中断する
+  # エラーが発生したらそこで中断する。
+  # zsh の `set -e` は関数を抜けてもシェル全体に残り、以降コマンドが1つ失敗しただけで
+  # 対話シェルが終了してしまう。localoptions を付けると関数を出た時点で元に戻る。
+  setopt localoptions errexit
   echo "== brew update =="
   brew update
   echo ""
