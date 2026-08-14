@@ -116,7 +116,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "ccstatusline",
+    "command": "bash ~/.claude/hooks/statusline-context-window.sh",
     "padding": 0
   },
   "enabledPlugins": {
