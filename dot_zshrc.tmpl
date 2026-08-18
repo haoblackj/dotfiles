@@ -88,3 +88,6 @@ if [[ -z "$_CHEZMOI_CHECKED" ]] && command -v chezmoi &>/dev/null; then
     print -P "%F{yellow}   - ソースをホームに適用: chezmoi apply%f"
   fi
 fi
+# .NET SDK (Maylander の開発で導入、2026-08-19)
+export DOTNET_ROOT="$HOME/.dotnet"
+export PATH="$DOTNET_ROOT:$PATH"
