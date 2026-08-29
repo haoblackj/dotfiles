@@ -11,8 +11,9 @@
       },
       {
         "id": "1",
-        "type": "model",
-        "rawValue": true,
+        "type": "custom-command",
+        "commandPath": "/home/yagu001/.config/ccstatusline/model-name.sh",
+        "timeout": 1000,
         "color": "hex:26bbd9"
       },
       {
@@ -71,6 +72,15 @@
         "type": "weekly-reset-timer",
         "rawValue": true,
         "color": "hex:666666"
+      },
+      {
+        "id": "weekly-reset-elapsed-pct",
+        "type": "weekly-reset-timer",
+        "rawValue": true,
+        "color": "hex:666666",
+        "metadata": {
+          "display": "slider"
+        }
       }
     ],
     [
