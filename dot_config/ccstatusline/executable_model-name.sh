@@ -30,5 +30,5 @@ short = re.sub(r"\s*\(.*\)$", "", name).strip()
 # 表示名が無く id へフォールバックしたときの "claude-opus-5[1m]" から重複する印を落とす。
 short = re.sub(r"\[[^\]]*\]$", "", short).strip()
 is_1m = bool(re.search(r"\(\s*1M\b", name, re.I) or re.search(r"\[1m\]", model_id, re.I))
-sys.stdout.write(short + (" 1M" if is_1m else ""))
+sys.stdout.write(short + (" [1M]" if is_1m else ""))
 '
