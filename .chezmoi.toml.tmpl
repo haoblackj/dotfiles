@@ -22,6 +22,12 @@
     {{- $windowsUsername = output "powershell.exe" "-NoProfile" "-Command" "$env:UserName" | trim -}}
 {{- end -}}
 
+# SSHログインでは pam_umask が /etc/login.defs の USERGROUPS_ENAB=yes を見て
+# umask を 022 から 002 へ緩めるため、wsl.exe からの通常起動（022）と食い違う。
+# chezmoi は実行時の umask からターゲットの期待モードを算出するので、固定しないと
+# 入口によって管理下の全ファイルが差分扱いになる。
+umask = 0o022
+
 [data]
     location = {{ $location | quote }}
     isWSL = {{ $isWSL }}
