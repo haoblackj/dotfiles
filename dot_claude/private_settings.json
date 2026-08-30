@@ -89,6 +89,14 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/stop-fabricated-turn-guard.py"
+          }
+        ]
       }
     ],
     "PreToolUse": [
