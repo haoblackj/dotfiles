@@ -41,7 +41,7 @@ M=CODEX_DELEGATION_OK=1
 C='node /home/u/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs'
 W='scripts/codex-task.sh'
 
-echo "=== 1. 金を使う三つは、印が無ければ確認を出す ==="
+echo "=== 1. 枠を使う三つは、印が無ければ確認を出す ==="
 expect_ask   "task (ラッパー)"                "$W task --write --background --prompt-file b.md"
 expect_ask   "adversarial-review (今回の事故)" "$W adversarial-review --base HEAD"
 expect_ask   "review"                          "$W review"
@@ -53,7 +53,7 @@ expect_allow "task に印"               "$M $W task --write --background --prom
 expect_allow "adversarial-review に印" "$M $W adversarial-review --base HEAD"
 expect_allow "実体を直に叩く形でも印があれば" "$M $C task --write"
 
-echo "=== 3. 金を使わないものは印が無くても通す ==="
+echo "=== 3. 枠を使わないものは印が無くても通す ==="
 expect_allow "status (引数なし)" "$W status"
 expect_allow "status (job id)"   "$W status task-abc --json"
 expect_allow "result"            "$W result task-abc"

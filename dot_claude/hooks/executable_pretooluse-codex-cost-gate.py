@@ -2,17 +2,21 @@
 """codex を実際に起動する Bash 呼び出しに、確認の関門を置く PreToolUse フック。
 
 置いた理由。サブエージェントが「前景経路が素通しすることを確かめる」つもりで
-`codex-task.sh adversarial-review` を実物へ投げ、有料のジョブが起動した
+`codex-task.sh adversarial-review` を実物へ投げ、意図しない codex の実行が起きた
 (Maylander、2026-08-30)。指示で「実物を叩くな」と書いても、検証のために叩くのは
 自然な発想なので、規律ではなく仕組みで止める。
 
 判定の方針。
 
-  金を使うのは task / review / adversarial-review の三つだけ。status / result /
+  枠を使うのは task / review / adversarial-review の三つだけ。status / result /
   cancel はジョブ記録を読む・止めるだけで codex を起動しないので通す。内省の口
   (--print-companion / --print-flags) も通す。
 
-  金を使う三つは、コマンドに CODEX_DELEGATION_OK=1 が付いていれば通し、無ければ
+  「枠」と書いているのは、この機械の codex が ~/.codex/auth.json の auth_mode=chatgpt、
+  すなわち ChatGPT アカウントのサブスク枠で動いているためである (API キーは未設定で、
+  トークンあたりの請求は立たない)。API キー認証へ切り替えたらここは実費の話になる。
+
+  枠を使う三つは、コマンドに CODEX_DELEGATION_OK=1 が付いていれば通し、無ければ
   確認を出す (deny ではなく ask)。deny にするとリーダー自身の /codex:review が
   止まる。あれはプラグインが codex-companion.mjs を直に叩く経路で、フックからは
   サブエージェントの誤爆と区別が付かない。
@@ -30,8 +34,8 @@ import sys
 
 # 実体と、リポジトリ側のラッパー。どちらの綴りでも捕まえる。
 ENTRY = re.compile(r"(codex-companion\.mjs|codex-task\.sh)")
-# codex を起動する = 金を使うサブコマンド。
-COSTS_MONEY = {"task", "review", "adversarial-review"}
+# codex を起動する = 枠を使うサブコマンド。
+USES_QUOTA = {"task", "review", "adversarial-review"}
 # ラッパーの内省の口。サブコマンドではないので、これが先頭なら見るまでもなく通す。
 INTROSPECTION = {"--print-companion", "--print-flags"}
 MARKER = "CODEX_DELEGATION_OK=1"
@@ -89,13 +93,13 @@ def main():
     if sub is None:
         # 実体を指しているのにサブコマンドが読めない。想定外の綴りなので確認を出す。
         ask("codex の呼び出しに見えるが、サブコマンドを読み取れなかった。"
-            "実行すると有料のジョブが起動する可能性がある。")
-    if sub not in COSTS_MONEY:
+            "実行すると codex が起動し、サブスクの枠を消費する可能性がある。")
+    if sub not in USES_QUOTA:
         allow()
     if MARKER in command:
         allow()
 
-    ask(f"`{sub}` は codex を実際に起動し、リーダーの枠を消費する。"
+    ask(f"`{sub}` は codex を実際に起動し、サブスクの利用枠を消費する。"
         f"委譲として意図した実行なら、コマンドの先頭へ {MARKER} を付けて叩き直すこと。"
         f"検証や動作確認が目的なら、実物ではなく偽の companion を "
         f"CODEX_COMPANION で差して行うこと。")
