@@ -20,6 +20,7 @@ brew bundle install --no-upgrade --file=- <<'BREWFILE'
 brew "aicommit2"      # AI でコミットメッセージ生成
 brew "bitwarden-cli"  # パスワードマネージャ CLI
 brew "fzf"            # ファジーファインダー
+brew "gemini-cli"     # Google Gemini モデルの CLI
 brew "gh"             # GitHub CLI
 brew "ghq"            # リモートリポジトリ管理
 brew "git-delta"      # chezmoi/git の diff 表示（構文ハイライト付き）
@@ -27,14 +28,20 @@ brew "glow"           # ターミナルmarkdownレンダラー（herdr-file-view
 brew "herdr"          # AI エージェント向けターミナルマルチプレクサ
 brew "jq"             # JSON プロセッサ（hook 群が依存）
 brew "lazygit"        # git TUI
+brew "mono"           # クロスプラットフォームの .NET 実行環境
 brew "pandoc"         # マークアップ変換
 brew "peco"           # インタラクティブフィルタ
+brew "pipx"           # Python 製 CLI ツールを隔離環境で導入
 brew "poppler"        # PDF レンダリング（pdftotext 等）
 brew "rtk"            # LLM トークン削減 CLI プロキシ
+brew "sevenzip"       # 7-Zip 書庫の圧縮・展開
 brew "tesseract"      # OCR エンジン
 brew "tesseract-lang" # Tesseract 追加言語データ
 brew "tmux"           # MulmoTerminalのセッション永続化バックエンド（未導入時はplain PTYにフォールバック）
+brew "trash-cli"      # freedesktop 準拠のゴミ箱 CLI
 brew "uv"             # Pythonパッケージ・ツール管理（wikiwalk等のuv tool install対象に必要）
+cask "claude-code"    # Claude Code 本体
+cask "gcloud-cli"     # Google Cloud SDK（gcloud/gsutil）
 BREWFILE
 echo "CLIツール一括インストール完了"
 
