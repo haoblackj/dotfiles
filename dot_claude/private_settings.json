@@ -17,7 +17,9 @@
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)",
       "Bash(git branch -D*)",
-      "Bash(git checkout --*)"
+      "Bash(git checkout --*)",
+      "Bash(rm *)",
+      "Bash(shred *)"
     ],
     "ask": [
       "Bash(claude -p:*)",
@@ -115,6 +117,16 @@
           {
             "type": "command",
             "command": "python3 \"$HOME/.claude/hooks/pretooluse-codex-cost-gate.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/route-deletes-to-trash.sh\"",
+            "timeout": 10
           }
         ]
       }
