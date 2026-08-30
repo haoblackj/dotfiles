@@ -27,8 +27,10 @@ fi
 # asdf は未インストール（~/.asdf が存在しない）。使い始めるときに戻す。
 #export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
 
-# Windowsのユーザー名を取得
-WINDOWS_USER=$(powershell.exe 'echo $env:UserName' | tr -d '\r')
+# Windowsのユーザー名。chezmoi init 時に powershell.exe から取得した値を埋め込む。
+# ログインのたびに powershell.exe を起動すると 0.18 秒かかるうえ、SSH ログインは
+# systemd 起動の sshd から PATH を継ぐため /mnt/c が無く command not found になる。
+WINDOWS_USER={{ .windowsUsername | quote }}
 
 # zenhanのパスを設定
 export zenhan="/mnt/c/Users/$WINDOWS_USER/scoop/apps/zenhan/current/zenhan.exe"
