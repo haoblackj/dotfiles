@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
+GH_PR_BODY_LIBRARY_ONLY=1
+source "$SCRIPT_DIR/executable_gh-pr-body"
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf -- "$tmp_dir"' EXIT
+
+failures=0
+sections=0
+
+lines_file() {
+  local path=$1 count=$2 text=${3:-line}
+  awk -v count="$count" -v text="$text" 'BEGIN { for (i = 1; i <= count; i++) print text i }' >"$path"
+}
+
+expect_stop() {
+  if gh_pr_body_validate "$1" "$2" "${3:-false}" >/dev/null 2>&1; then
+    return 1
+  fi
+}
+
+expect_pass() {
+  gh_pr_body_validate "$1" "$2" "${3:-false}" >/dev/null 2>&1
+}
+
+run_section() {
+  local name=$1
+  shift
+  sections=$((sections + 1))
+  if "$@"; then
+    printf 'PASS %s\n' "$name"
+  else
+    printf 'FAIL %s\n' "$name"
+    failures=$((failures + 1))
+  fi
+}
+
+section_empty() {
+  : >"$tmp_dir/empty"
+  lines_file "$tmp_dir/current" 3
+  lines_file "$tmp_dir/nonempty" 3 content
+  expect_stop "$tmp_dir/empty" "$tmp_dir/current" &&
+    expect_pass "$tmp_dir/nonempty" "$tmp_dir/current"
+}
+
+section_whitespace() {
+  printf '  \n\t\n  \n' >"$tmp_dir/whitespace"
+  lines_file "$tmp_dir/text" 3 text
+  expect_stop "$tmp_dir/whitespace" "$tmp_dir/current" &&
+    expect_pass "$tmp_dir/text" "$tmp_dir/current"
+}
+
+section_min_lines() {
+  lines_file "$tmp_dir/two" 2
+  lines_file "$tmp_dir/three" 3
+  expect_stop "$tmp_dir/two" "$tmp_dir/current" &&
+    expect_pass "$tmp_dir/three" "$tmp_dir/current"
+}
+
+section_half() {
+  lines_file "$tmp_dir/current44" 44
+  lines_file "$tmp_dir/twenty" 20
+  lines_file "$tmp_dir/twentythree" 23
+  expect_stop "$tmp_dir/twenty" "$tmp_dir/current44" &&
+    expect_pass "$tmp_dir/twentythree" "$tmp_dir/current44"
+}
+
+section_force() {
+  expect_pass "$tmp_dir/twenty" "$tmp_dir/current44" true &&
+    expect_stop "$tmp_dir/empty" "$tmp_dir/current44" true &&
+    expect_stop "$tmp_dir/two" "$tmp_dir/current44" true
+}
+
+section_special_text() {
+  local special="$tmp_dir/special" before="$tmp_dir/special.before"
+  cat >"$special" <<'EOF'
+`backticks` and # hash
+$dollar is literal
+日本語の本文
+EOF
+  cp -- "$special" "$before" || return 1
+  expect_pass "$special" "$tmp_dir/current" && cmp -s -- "$before" "$special"
+}
+
+run_section 'empty/nonempty' section_empty
+run_section 'whitespace/text' section_whitespace
+run_section '2-lines/3-lines' section_min_lines
+run_section 'half-boundary-44-lines' section_half
+run_section 'force-keeps-hard-limits' section_force
+run_section 'literal-special-characters' section_special_text
+
+printf 'SUMMARY sections=%s failures=%s\n' "$sections" "$failures"
+(( failures == 0 ))

@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+
+readonly STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/gh-pr-body"
+
+gh_pr_body_line_count() {
+  awk 'END { print NR }' "$1"
+}
+
+gh_pr_body_validate() {
+  local candidate=$1
+  local current=$2
+  local force=${3:-false}
+  local candidate_lines current_lines
+
+  if [[ ! -f "$candidate" || ! -r "$candidate" ]]; then
+    printf 'gh-pr-body: file does not exist or is not readable: %s\n' "$candidate" >&2
+    return 1
+  fi
+  if ! LC_ALL=C grep -q '[^[:space:]]' "$candidate"; then
+    printf 'gh-pr-body: body is empty or contains only whitespace: %s\n' "$candidate" >&2
+    return 1
+  fi
+
+  candidate_lines=$(gh_pr_body_line_count "$candidate") || return 1
+  if (( candidate_lines < 3 )); then
+    printf 'gh-pr-body: body has fewer than 3 lines: %s (%s lines)\n' \
+      "$candidate" "$candidate_lines" >&2
+    return 1
+  fi
+
+  if [[ "$force" != true ]] &&
+    ! [[ "${GH_PR_BODY_LIBRARY_ONLY:-}" == 1 && "${GH_PR_BODY_FAULT:-}" == skip_half ]]; then
+    current_lines=$(gh_pr_body_line_count "$current") || return 1
+    if (( candidate_lines * 2 < current_lines )); then
+      printf 'gh-pr-body: body is less than half the current length: %s (%s < half of %s lines)\n' \
+        "$candidate" "$candidate_lines" "$current_lines" >&2
+      return 1
+    fi
+  fi
+}
+
+if [[ "${GH_PR_BODY_LIBRARY_ONLY:-}" == 1 ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  gh-pr-body get <owner/name> <number>
+  gh-pr-body set [--force] <owner/name> <number> <file>
+  gh-pr-body restore [--force] <backup-file> <owner/name> <number>
+EOF
+}
+
+require_gh() {
+  if ! command -v gh >/dev/null 2>&1; then
+    printf 'gh-pr-body: gh is not installed or is not in PATH\n' >&2
+    return 1
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    printf 'gh-pr-body: gh is not authenticated; run gh auth login\n' >&2
+    return 1
+  fi
+}
+
+validate_target() {
+  local repo=$1
+  local number=$2
+  if [[ ! "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    printf 'gh-pr-body: repository must have the form owner/name: %s\n' "$repo" >&2
+    return 1
+  fi
+  if [[ ! "$number" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'gh-pr-body: PR number must be a positive integer: %s\n' "$number" >&2
+    return 1
+  fi
+}
+
+BACKUP_PATH=
+BACKUP_TEMP=
+cleanup() {
+  if [[ -n "$BACKUP_TEMP" && -e "$BACKUP_TEMP" ]]; then
+    rm -f -- "$BACKUP_TEMP"
+  fi
+}
+trap cleanup EXIT
+
+backup_current_body() {
+  local repo=$1
+  local number=$2
+  local safe_repo timestamp
+
+  if ! mkdir -p -m 700 -- "$STATE_DIR"; then
+    printf 'gh-pr-body: could not create backup directory: %s\n' "$STATE_DIR" >&2
+    return 1
+  fi
+  if ! BACKUP_TEMP=$(mktemp "$STATE_DIR/.backup.XXXXXXXXXX"); then
+    printf 'gh-pr-body: could not create a temporary backup file in: %s\n' "$STATE_DIR" >&2
+    return 1
+  fi
+  if ! gh pr view "$number" --repo "$repo" --json body -q .body >"$BACKUP_TEMP"; then
+    printf 'gh-pr-body: could not read PR %s from %s; no update was made\n' "$number" "$repo" >&2
+    return 1
+  fi
+
+  safe_repo=${repo//\//-}
+  timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ) || {
+    printf 'gh-pr-body: could not create a UTC timestamp; no update was made\n' >&2
+    return 1
+  }
+  BACKUP_PATH="$STATE_DIR/$safe_repo-$number-$timestamp.md"
+  if ! ln -- "$BACKUP_TEMP" "$BACKUP_PATH"; then
+    printf 'gh-pr-body: could not save backup (the name may already exist): %s\n' "$BACKUP_PATH" >&2
+    return 1
+  fi
+  if ! rm -f -- "$BACKUP_TEMP"; then
+    printf 'gh-pr-body: backup was saved but its temporary file could not be removed: %s\n' "$BACKUP_TEMP" >&2
+    return 1
+  fi
+  BACKUP_TEMP=
+}
+
+parse_force() {
+  FORCE=false
+  if [[ "${1:-}" == --force ]]; then
+    FORCE=true
+    shift
+  fi
+  PARSED_ARGS=("$@")
+}
+
+command_get() {
+  [[ $# == 2 ]] || { usage; return 2; }
+  validate_target "$1" "$2" || return 2
+  require_gh || return 1
+  backup_current_body "$1" "$2" || return 1
+  printf 'gh-pr-body: backup saved to %s\n' "$BACKUP_PATH" >&2
+  cat -- "$BACKUP_PATH"
+}
+
+command_set() {
+  parse_force "$@"
+  set -- "${PARSED_ARGS[@]}"
+  [[ $# == 3 ]] || { usage; return 2; }
+  local repo=$1 number=$2 candidate=$3
+
+  validate_target "$repo" "$number" || return 2
+  require_gh || return 1
+  backup_current_body "$repo" "$number" || return 1
+  if ! gh_pr_body_validate "$candidate" "$BACKUP_PATH" "$FORCE"; then
+    printf 'gh-pr-body: validation failed; no update was made (backup: %s)\n' "$BACKUP_PATH" >&2
+    return 1
+  fi
+  if ! gh pr edit "$number" --repo "$repo" --body-file "$candidate" >&2; then
+    printf 'gh-pr-body: gh could not update the PR (backup: %s)\n' "$BACKUP_PATH" >&2
+    return 1
+  fi
+  printf '%s\n' "$BACKUP_PATH"
+}
+
+command_restore() {
+  parse_force "$@"
+  set -- "${PARSED_ARGS[@]}"
+  [[ $# == 3 ]] || { usage; return 2; }
+  if [[ "$FORCE" == true ]]; then
+    command_set --force "$2" "$3" "$1"
+  else
+    command_set "$2" "$3" "$1"
+  fi
+}
+
+case "${1:-}" in
+  get) shift; command_get "$@" ;;
+  set) shift; command_set "$@" ;;
+  restore) shift; command_restore "$@" ;;
+  *) usage; exit 2 ;;
+esac
