@@ -18,6 +18,9 @@
   規則の置き場で、委譲契約は含まない。
   委譲は`~/.codex/codex-delegate.sh <brief-file>`をBashで叩く。ラッパーが3本を連結して
   `codex exec`へ渡すので、契約や知識を呼び出し側で組み立てない。
+  このラッパーには`--add-dir`相当の口がなく、書き込み範囲は`-C`で渡すリポジトリに根付くため、
+  ブリーフや報告の置き場がリポジトリ外にある委譲には使えない。素の`codex exec`へ落ちる場合は、
+  コスト関門が`codex-companion.mjs` / `codex-task.sh` / `codex-delegate.sh`の綴りだけを見るため、その呼び出しは関門を通らない。
   `codex:codex-rescue`は委譲の経路ではない。公式プラグインが`developerInstructions`を
   渡さないため契約が届かないので、契約を要さない調査やセカンドオピニオンの用途に限って使う。
   委譲先が無い・使えない状況ではClaude Codeのサブエージェントで

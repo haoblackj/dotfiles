@@ -8,9 +8,10 @@
 
 判定の方針。
 
-  枠を使うのは task / review / adversarial-review の三つだけ。status / result /
-  cancel はジョブ記録を読む・止めるだけで codex を起動しないので通す。内省の口
-  (--print-companion / --print-flags) も通す。
+  codex-task.sh / codex-companion.mjs で枠を使うのは task / review /
+  adversarial-review。status / result / cancel はジョブ記録を読む・止めるだけで codex を
+  起動しないので通す。内省の口 (--print-companion / --print-flags / --print-command) も通す。
+  新しい codex-delegate.sh はサブコマンドを持たずに枠を使うため、専用の分岐で判定する。
 
   「枠」と書いているのは、この機械の codex が ~/.codex/auth.json の auth_mode=chatgpt、
   すなわち ChatGPT アカウントのサブスク枠で動いているためである (API キーは未設定で、
