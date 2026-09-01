@@ -41,7 +41,7 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$BRIEF" ] || die "ブリーフのファイルを渡すこと。使い方: $(basename "$0") [--repo DIR] [-m MODEL] [-s SANDBOX] [-o FILE] [--print-command] <brief-file>"
-[ -f "$BRIEF" ] || die "ブリーフのファイルが無い: $BRIEF"
+[ -f "$BRIEF" ] || die "ブリーフがファイルとして読めない: $BRIEF"
 
 # 契約が無いまま委譲を走らせない。chezmoi apply が済んでいない状態が主な原因である。
 [ -f "$CONTRACT" ] || die "委譲契約が無い: $CONTRACT (chezmoi apply ~/.codex/delegation-contract.md を実行する)"
@@ -57,6 +57,12 @@ fi
 parts=("$CONTRACT")
 [ -f "$REPO/AGENTS.md" ]          && parts+=("$REPO/AGENTS.md")
 [ -f "$REPO/AGENTS.delegate.md" ] && parts+=("$REPO/AGENTS.delegate.md")
+
+# [ -f ] は読めることを意味しない。読めないまま cat すると、その 1 本が抜けた
+# 起動コマンドが黙って出る。連結はスクリプトの責任なので、ここで止める。
+for f in "${parts[@]}"; do
+  [ -r "$f" ] || die "読めない: $f"
+done
 
 # 末尾に区切り行を置く。-c の値は末尾の 1 文字が黙って落ちる場合があるので、
 # 落ちても内容に影響しない行で吸収する。
