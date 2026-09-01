@@ -33,11 +33,11 @@ import shlex
 import sys
 
 # 実体と、リポジトリ側のラッパー。どちらの綴りでも捕まえる。
-ENTRY = re.compile(r"(codex-companion\.mjs|codex-task\.sh)")
+ENTRY = re.compile(r"(codex-companion\.mjs|codex-task\.sh|codex-delegate\.sh)")
 # codex を起動する = 枠を使うサブコマンド。
 USES_QUOTA = {"task", "review", "adversarial-review"}
 # ラッパーの内省の口。サブコマンドではないので、これが先頭なら見るまでもなく通す。
-INTROSPECTION = {"--print-companion", "--print-flags"}
+INTROSPECTION = {"--print-companion", "--print-flags", "--print-command"}
 MARKER = "CODEX_DELEGATION_OK=1"
 
 
@@ -84,6 +84,15 @@ def main():
         rest = tokens[i + 1:]
         if rest and rest[0] in INTROSPECTION:
             allow()
+        # codex-delegate.sh はサブコマンドを持たず、内省の口を除けば必ず codex を起動する。
+        # 位置引数はブリーフのファイルパスなので、既存のサブコマンド探索に載せると
+        # USES_QUOTA に無い語を拾って素通りする。
+        if "codex-delegate.sh" in tok:
+            if MARKER in command:
+                allow()
+            ask("`codex-delegate.sh` は codex を実際に起動し、サブスクの利用枠を消費する。"
+                f"委譲として意図した実行なら、コマンドの先頭へ {MARKER} を付けて叩き直すこと。"
+                "組み立てた内容を見るだけなら --print-command を使うこと。")
         for candidate in rest:
             if not candidate.startswith("-"):
                 sub = candidate

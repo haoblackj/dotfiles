@@ -40,6 +40,7 @@ expect_allow() {
 M=CODEX_DELEGATION_OK=1
 C='node /home/u/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs'
 W='scripts/codex-task.sh'
+D='/home/yagu001/.codex/codex-delegate.sh'
 
 echo "=== 1. 枠を使う三つは、印が無ければ確認を出す ==="
 expect_ask   "task (ラッパー)"                "$W task --write --background --prompt-file b.md"
@@ -76,6 +77,11 @@ expect_ask   "サブコマンドが読めない" "$W --write --background"
 echo "=== 7. ツールが Bash でなければ何もしない ==="
 out="$(decide "$W task --write" Edit)"
 [ -z "$out" ] && pass "Edit ツールには関与しない" || fail "Edit ツールに反応した: $out"
+
+echo "=== 8. 委譲のラッパーは、印が無ければ確認を出す ==="
+expect_ask   "codex-delegate.sh (ブリーフを渡す)" "$D /tmp/brief.md"
+expect_allow "codex-delegate.sh に印"             "$M $D /tmp/brief.md"
+expect_allow "--print-command は通る"             "$D --print-command /tmp/brief.md"
 
 echo
 [ "$FAILED" -eq 0 ] && echo "すべて通った。" || { echo "落ちた判定がある。" >&2; exit 1; }
