@@ -124,15 +124,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/hooks/pretooluse-codex-cost-gate.py\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/route-deletes-to-trash.sh\"",
             "timeout": 10
           }
