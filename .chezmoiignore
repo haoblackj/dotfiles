@@ -60,6 +60,7 @@ setup_vall_e_x.sh
 .config/nvim
 zsh
 install-packages.sh
+.codex
 {{- end }}
 
 {{- if ne .chezmoi.os "windows" -}}
