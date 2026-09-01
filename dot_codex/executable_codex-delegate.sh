@@ -27,7 +27,13 @@ while [ $# -gt 0 ]; do
     -m|--model)   MODEL="${2:-}";   [ -n "$MODEL" ]   || die "-m に値がない";   shift 2 ;;
     -s|--sandbox) SANDBOX="${2:-}"; [ -n "$SANDBOX" ] || die "-s に値がない"; shift 2 ;;
     -o|--output-last-message) OUTFILE="${2:-}"; [ -n "$OUTFILE" ] || die "-o に値がない"; shift 2 ;;
-    --) shift ;;
+    --) shift
+        # 以降はフラグに見えても位置引数として扱う（POSIX の慣習）。
+        while [ $# -gt 0 ]; do
+          [ -z "$BRIEF" ] || die "ブリーフのファイルを 2 つ渡している: $BRIEF と $1"
+          BRIEF="$1"; shift
+        done
+        ;;
     -*) die "知らないフラグ: $1" ;;
     *)  [ -z "$BRIEF" ] || die "ブリーフのファイルを 2 つ渡している: $BRIEF と $1"
         BRIEF="$1"; shift ;;
