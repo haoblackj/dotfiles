@@ -2,9 +2,11 @@
 
 set -uo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET="${GH_PR_BODY:-$HERE/gh-pr-body}"
+[ -x "$TARGET" ] || { echo "NG: 本体が見つからないか実行できない: $TARGET" >&2; exit 1; }
 GH_PR_BODY_LIBRARY_ONLY=1
-source "$SCRIPT_DIR/executable_gh-pr-body"
+source "$TARGET"
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
@@ -94,4 +96,6 @@ run_section 'force-keeps-hard-limits' section_force
 run_section 'literal-special-characters' section_special_text
 
 printf 'SUMMARY sections=%s failures=%s\n' "$sections" "$failures"
-(( failures == 0 ))
+if (( failures > 0 )); then
+  exit 1
+fi
