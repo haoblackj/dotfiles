@@ -8,23 +8,6 @@
   インライン実行（superpowers:executing-plans）にするのは、(1) ユーザーが明示的に指示した場合、
   または (2) 明らかにインラインが適切な場合（タスク1つの極小プラン等）のみ。
   このルールは言語・表記揺れ（subagent-driven / サブエージェント駆動 等）にかかわらず適用する。
-- **役割分担**（2026-08-30追記）: Claude Codeがオーケストレーター・レビュアー・テスター、
-  Codexが実装担当。実装プランの実行では、上記サブエージェント駆動の枠組み
-  （ブリーフ → 実装 → レビュー → 台帳）を維持したまま、実装を担うサブエージェントをCodexへの
-  委譲に置き換える。ブリーフの作成、レビューの手配、テストの実行、受け入れ判定はClaude Code側が
-  持つ（Codexは`scripts/verify.sh`等の受け入れ関門を実行できないため、完了判定を委ねない）。
-  委譲の共通ルールは`~/.codex/delegation-contract.md`、リポジトリ固有の注意は各リポジトリの
-  `AGENTS.md`と`AGENTS.delegate.md`にある。`~/.codex/AGENTS.md`は対話でも委譲でも変わらない
-  規則の置き場で、委譲契約は含まない。
-  委譲は`~/.codex/codex-delegate.sh <brief-file>`をBashで叩く。ラッパーが3本を連結して
-  `codex exec`へ渡すので、契約や知識を呼び出し側で組み立てない。
-  このラッパーには`--add-dir`相当の口がなく、書き込み範囲は`-C`で渡すリポジトリに根付くため、
-  ブリーフや報告の置き場がリポジトリ外にある委譲には使えない。素の`codex exec`へ落ちる場合は、
-  コスト関門が`codex-companion.mjs` / `codex-task.sh` / `codex-delegate.sh`の綴りだけを見るため、その呼び出しは関門を通らない。
-  `codex:codex-rescue`は委譲の経路ではない。公式プラグインが`developerInstructions`を
-  渡さないため契約が届かないので、契約を要さない調査やセカンドオピニオンの用途に限って使う。
-  委譲先が無い・使えない状況ではClaude Codeのサブエージェントで
-  実行してよいが、その旨をリーダーに伝える。
 - 実装を伴う作業は、brainstormingのboundedパスでプラン文書を省略しない（2026-08-14追記）。
   spec/plan文書を作り、上記のサブエージェント駆動で実行する。省略してよいのはリーダーが明示した場合のみ。
   ただし下記「開発フローの既定運用」の軽微な修正（typo修正・ドキュメント追記など、コードの挙動や
@@ -36,10 +19,6 @@
   issueが一行の要望しか書いていないなら、それは設計が存在しないということなので通常どおり文書を作る。
   この節が定めるのは本来「プランをどう実行するか」だけで、「プランを作るか」は定めていなかった。
   boundedパスは文書を作らず実装へ進むことを正当な選択肢として持つため、規定がないと素通りする。
-- EnterPlanModeでプランニングに入るときは、毎回以下をリーダーに一言添える（2026-08-12追記）:
-  - モデルをOpusへ切り替えるよう促す（プランニングは思考品質が重要なため。切替はリーダー自身の操作が必要でClaude側からは実行できない）。
-  - reviewable-html-workbenchのplan-previewスキルでプレビューURLを付けられることを思い出させる。
-  なお、reviewable-html-workbench導入後（2026-08-12〜）は`~/.claude/plans/`配下の最新プランに`Plan preview: <url>`または`Plan preview: unavailable (<理由>)`の記載がないとExitPlanMode自体がプラグインのフックにブロックされるため、この一言は「思い出させる」目的であり省略しても実行は止まる。ただし`docs/superpowers/plans/`配下のsuperpowers式プラン運用ではこの自動ブロックが効かない場合があるため、口頭のリマインドは継続する。
 - spec/plan文書を`docs/superpowers/specs/`または`docs/superpowers/plans/`に保存したら、リーダーに承認を求める前に必ず`adversarial-review`スキルで敵対的レビューを回す（2026-08-14追記）。
   実行してよいか確認を取る必要はない。保存→レビュー→結果提示までを一続きで行う。
   レビュー結果（Status / Issues / Recommendations）は書き換えずに提示し、承認の判断はリーダーに委ねる。`Status: Approved`でも実装に自動で進まない。
@@ -73,7 +52,9 @@
 
 スコープを広げたくなったら、手を動かす前に1行で確認する。ただし指示されたことの実行自体にいちいち確認は不要。
 
-巻き戻しには `git restore`（必要なら `git reset --soft`）を使う。`git reset --hard`・`git push --force`・`git clean -f` は、指示の有無にかかわらず提案も実行もしない。理由: `git reset --hard` を2つの別セッションで繰り返し提案し、都度止められた（comfy-batch-runner、2026-08-13および08-14）。
+巻き戻しには `git restore`（必要なら `git reset --soft`）を使う。`git reset --hard`・`git push --force`・`git clean -f`・`git branch -D`・`git checkout --` は、指示の有無にかかわらず提案も実行もしない。理由: `git reset --hard` を2つの別セッションで繰り返し提案し、都度止められた（comfy-batch-runner、2026-08-13および08-14）。
+
+ファイルを消すときは `rm` ではなく `trash-put` を使う。間違えても `trash-restore` で戻せる。一覧は `trash-list`。理由: cwd を取り違えたまま掃除のつもりで実行し、別の作業の記録ごと消した事故がある。
 
 ## 本番データの保護（2026-08-15追記）
 
