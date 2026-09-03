@@ -919,6 +919,26 @@ class TestIsolation(unittest.TestCase):
             mod.process_batch(batch, {}, time.monotonic() + 10, collected)
         self.assertEqual(len(collected), 4)
 
+    def test_document_split_on_odd_batch_is_a_true_halve(self):
+        """document は parts=2。奇数件の束を割ったとき単発1件×n個ではなく
+        ちょうど2束(2件+3件)に分かれることを確認する。固定ステップの旧実装だと
+        2,2,1 の3束になり、この境界計算でしか通らない。"""
+        batch = [(f"f{i}.md", 0, f"text{i}") for i in range(5)]
+        sizes = []
+
+        def fails_only_on_full_batch(texts, cfg, timeout=None):
+            sizes.append(len(texts))
+            if len(texts) == 5:
+                raise mod.EmbedError("document",
+                                     {"message": "Sequence too long: 9000 > 8192"})
+            return fake_embed_factory()(texts, cfg, timeout)
+
+        collected = {}
+        with patch.object(mod, "embed_texts", fails_only_on_full_batch):
+            mod.process_batch(batch, {}, time.monotonic() + 10, collected)
+        self.assertEqual(sizes, [5, 2, 3])
+        self.assertEqual(len(collected), 5)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

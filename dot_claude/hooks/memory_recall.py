@@ -336,10 +336,13 @@ def process_batch(batch, cfg, deadline, collected):
             parts = 2
             if e.kind == "batch" and e.detail.get("tokens") and e.detail.get("limit"):
                 parts = max(2, -(-e.detail["tokens"] // e.detail["limit"]))
-            size = max(1, len(batch) // parts)
+            n = len(batch)
+            parts = min(parts, n)
+            bounds = [n * k // parts for k in range(parts + 1)]
             ok = True
-            for i in range(0, len(batch), size):
-                ok = process_batch(batch[i:i + size], cfg, deadline, collected) and ok
+            for a, b in zip(bounds, bounds[1:]):
+                if b > a:
+                    ok = process_batch(batch[a:b], cfg, deadline, collected) and ok
             return ok
         rec = {"stage": "index", "kind": e.kind, **e.detail}
         # api は特定のファイルに紐づかない扱いなので target を付けない。
