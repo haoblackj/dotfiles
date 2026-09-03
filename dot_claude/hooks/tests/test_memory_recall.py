@@ -269,7 +269,7 @@ class TestScoringAndMain(unittest.TestCase):
                         {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
                     )
             self.assertEqual(out, "")
-            self.assertTrue(any("boom" in m for m in logged))
+            self.assertTrue(any("boom" in (m.get("message") or "") for m in logged))
 
     def test_main_logs_bad_stdin(self):
         logged = []
@@ -279,7 +279,82 @@ class TestScoringAndMain(unittest.TestCase):
                 with patch.object(sys, "stdin", io.StringIO("not json at all")):
                     mod.main()
         self.assertEqual(out.getvalue(), "")
-        self.assertTrue(any("bad stdin payload" in m for m in logged))
+        self.assertTrue(any("bad stdin payload" in (m.get("message") or "") for m in logged))
+
+
+class TestLogging(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log_path = os.path.join(self.tmp.name, "memory-recall.log")
+        self.patches = [
+            patch.object(mod, "LOG_PATH", self.log_path),
+            patch.object(mod, "LOCK_PATH", self.log_path + ".lock"),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def read_lines(self):
+        with open(self.log_path) as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def test_writes_json_line_with_offset_timestamp(self):
+        mod.log({"stage": "index", "kind": "document", "target": "a.md"})
+        rows = self.read_lines()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["kind"], "document")
+        self.assertEqual(rows[0]["target"], "a.md")
+        # ts はオフセット付き（末尾が +0900 のような形）
+        self.assertRegex(rows[0]["ts"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4}$")
+
+    def test_appends_without_truncating(self):
+        mod.log({"kind": "api", "message": "one"})
+        mod.log({"kind": "api", "message": "two"})
+        self.assertEqual([r["message"] for r in self.read_lines()], ["one", "two"])
+
+    def test_rotates_into_generations_and_drops_oldest(self):
+        with patch.object(mod, "LOG_MAX_BYTES", 50):
+            for i in range(6):
+                mod.log({"kind": "api", "message": f"m{i}" * 20})
+        self.assertTrue(os.path.exists(self.log_path + ".1"))
+        self.assertTrue(os.path.exists(self.log_path + ".3"))
+        self.assertFalse(os.path.exists(self.log_path + ".4"))
+
+    def test_log_generations_newest_first(self):
+        mod.log({"kind": "api", "message": "x"})
+        open(self.log_path + ".1", "w").close()
+        open(self.log_path + ".2", "w").close()
+        self.assertEqual(
+            mod.log_generations(),
+            [self.log_path, self.log_path + ".1", self.log_path + ".2"],
+        )
+
+    def test_skips_rotation_when_lock_is_held(self):
+        # 先に上限を超えるログを作らないと、rotate_log_if_needed が
+        # getsize の判定で return してロックの分岐を一度も通らない。
+        # 詰め物も JSON にしておく（read_lines が全行を解析するため）。
+        mod.log({"kind": "api", "message": "filler"})
+        open(self.log_path + ".lock", "w").close()
+        with patch.object(mod, "LOG_MAX_BYTES", 10):
+            mod.log({"kind": "api", "message": "held"})
+        # ロックが取れないので退避せず、追記だけ行う
+        self.assertFalse(os.path.exists(self.log_path + ".1"))
+        self.assertEqual([r["message"] for r in self.read_lines()],
+                         ["filler", "held"])
+
+    def test_steals_stale_lock(self):
+        mod.log({"kind": "api", "message": "filler"})
+        lock = self.log_path + ".lock"
+        open(lock, "w").close()
+        os.utime(lock, (time.time() - 999, time.time() - 999))
+        with patch.object(mod, "LOG_MAX_BYTES", 10):
+            mod.log({"kind": "api", "message": "steal"})
+        self.assertTrue(os.path.exists(self.log_path + ".1"))
+        self.assertFalse(os.path.exists(lock))  # 使い終わったロックは消えている
 
 
 if __name__ == "__main__":

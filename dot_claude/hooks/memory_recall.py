@@ -4,6 +4,7 @@
 発言と意味的に関連する保存済みメモリを検索してコンテキストに注入する。
 設計: penguinEx docs/superpowers/specs/2026-07-18-memory-semantic-recall-design.md
 """
+import datetime
 import hashlib
 import json
 import math
@@ -36,18 +37,83 @@ SECRETS_PATH = os.path.expanduser(
     "~/.local/share/claude-private/secrets/cloudflare-workers-ai-token")
 LOG_PATH = os.path.expanduser("~/.claude/logs/memory-recall.log")
 LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_GENERATIONS = 3
+LOCK_PATH = LOG_PATH + ".lock"
+LOCK_STALE_SEC = 60
 CACHE_NAME = ".embeddings.json"
 EXCLUDE = {"MEMORY.md"}
 
 
-def log(msg):
+def now_stamp():
+    return datetime.datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def log_generations():
+    """現行のログと退避世代のパスを新しい順に返す。存在するものだけ。"""
+    paths = [LOG_PATH] + [f"{LOG_PATH}.{i}" for i in range(1, LOG_GENERATIONS + 1)]
+    return [p for p in paths if os.path.exists(p)]
+
+
+def acquire_rotate_lock():
+    """退避用のロックを取る。取れなければ False。古いロックは奪う。"""
+    for attempt in (1, 2):
+        try:
+            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+            return True
+        except FileExistsError:
+            if attempt == 2:
+                return False
+            try:
+                if time.time() - os.path.getmtime(LOCK_PATH) <= LOCK_STALE_SEC:
+                    return False
+                os.remove(LOCK_PATH)
+            except OSError:
+                return False
+        except OSError:
+            return False
+    return False
+
+
+def rotate_log_if_needed():
+    """上限に達していたら世代を繰り下げる。同時実行では諦める側へ倒す。"""
+    try:
+        if os.path.getsize(LOG_PATH) <= LOG_MAX_BYTES:
+            return
+    except OSError:
+        return
+    if not acquire_rotate_lock():
+        return
+    try:
+        oldest = f"{LOG_PATH}.{LOG_GENERATIONS}"
+        if os.path.exists(oldest):
+            os.remove(oldest)
+        for i in range(LOG_GENERATIONS - 1, 0, -1):
+            src = f"{LOG_PATH}.{i}"
+            if os.path.exists(src):
+                os.replace(src, f"{LOG_PATH}.{i + 1}")
+        if os.path.exists(LOG_PATH):
+            os.replace(LOG_PATH, f"{LOG_PATH}.1")
+    except OSError:
+        pass
+    finally:
+        try:
+            os.remove(LOCK_PATH)
+        except OSError:
+            pass
+
+
+def log(record):
+    """1行1レコードの JSON Lines を追記する。呼び出し元を止めない。"""
     try:
         os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-        if os.path.exists(LOG_PATH) and os.path.getsize(LOG_PATH) > LOG_MAX_BYTES:
-            open(LOG_PATH, "w").close()
-        with open(LOG_PATH, "a") as f:
-            f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}\n")
-    except OSError:
+        rotate_log_if_needed()
+        line = json.dumps({"ts": now_stamp(), **record}, ensure_ascii=False) + "\n"
+        fd = os.open(LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            os.write(fd, line.encode())
+        finally:
+            os.close(fd)
+    except (OSError, ValueError, TypeError):
         pass
 
 
@@ -217,7 +283,7 @@ def main():
     try:
         payload = json.load(sys.stdin)
     except ValueError as e:
-        log(f"bad stdin payload: {e}")
+        log({"stage": "startup", "kind": "local", "message": f"bad stdin payload: {e}"})
         return
     prompt = payload.get("prompt") or ""
     if not isinstance(prompt, str) or len(prompt) < MIN_PROMPT_CHARS:
@@ -230,15 +296,15 @@ def main():
     try:
         cfg = load_secrets(os.environ.get("MEMORY_RECALL_SECRETS") or SECRETS_PATH)
     except (OSError, KeyError) as e:
-        log(f"secrets unavailable: {e}")
+        log({"stage": "startup", "kind": "auth", "message": f"secrets unavailable: {e}"})
         return
     cache = load_cache(memory_dir)
     try:
         if not update_index(memory_dir, cache, cfg, deadline):
-            log("index partial; carrying over to next prompt")
+            log({"kind": "partial"})
         qvec = normalize(embed_texts([prompt[:MAX_PROMPT_CHARS]], cfg)[0])
     except Exception as e:
-        log(f"recall skipped: {type(e).__name__}: {e}")
+        log({"stage": "index", "kind": "api", "message": f"{type(e).__name__}: {e}"})
         return
     matches = top_matches(qvec, cache["entries"])
     if not matches:
@@ -254,5 +320,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:  # 最後の砦: どんな失敗でも会話を止めない
-        log(f"unexpected: {type(e).__name__}: {e}")
+        log({"stage": "startup", "kind": "local", "message": f"unexpected: {type(e).__name__}: {e}"})
     sys.exit(0)
