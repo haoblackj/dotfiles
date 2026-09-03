@@ -10,8 +10,10 @@ import json
 import math
 import os
 import re
+import socket
 import sys
 import time
+import urllib.error
 import urllib.request
 
 MODEL = "@cf/baai/bge-m3"
@@ -200,6 +202,51 @@ def load_secrets(path=SECRETS_PATH):
     return cfg
 
 
+class EmbedError(Exception):
+    """埋め込み API の失敗。kind は spec 設計3の5分類。"""
+
+    def __init__(self, kind, detail):
+        super().__init__(detail.get("message") or kind)
+        self.kind = kind
+        self.detail = detail
+
+
+def classify_http_error(e):
+    """HTTPError の本文を読んで (kind, detail) を返す。
+
+    本文を読まないと 400 の理由が分からない。事故の期間のログが
+    "HTTP Error 400: Bad Request" だけだったのはこれを捨てていたため。
+    """
+    try:
+        raw = e.read().decode("utf-8", "replace")
+    except Exception:
+        raw = ""
+    code = None
+    message = raw[:500]
+    try:
+        errors = (json.loads(raw) or {}).get("errors") or []
+        if errors:
+            code = errors[0].get("code")
+            message = errors[0].get("message") or message
+    except (ValueError, AttributeError):
+        pass
+    detail = {"http": e.code, "code": code, "message": message}
+    if e.code in (401, 403):
+        return "auth", detail
+    if e.code == 400:
+        m = re.search(r"Sequence too long:\s*(\d+)\s*>\s*(\d+)", message)
+        if m:
+            detail["tokens"], detail["limit"] = int(m.group(1)), int(m.group(2))
+            return "document", detail
+        m = re.search(r"Max context reached\s*(\d+)\s*tokens but model "
+                      r"supports only\s*(\d+)", message)
+        if m:
+            detail["tokens"], detail["limit"] = int(m.group(1)), int(m.group(2))
+            return "batch", detail
+    # 5分類で閉じる。受け皿は api。
+    return "api", detail
+
+
 def embed_texts(texts, cfg, timeout=API_TIMEOUT_SEC):
     url = (f"https://api.cloudflare.com/client/v4/accounts/"
            f"{cfg['CF_ACCOUNT_ID']}/ai/run/{MODEL}")
@@ -210,10 +257,18 @@ def embed_texts(texts, cfg, timeout=API_TIMEOUT_SEC):
                  "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        body = json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = json.load(r)
+    except urllib.error.HTTPError as e:
+        kind, detail = classify_http_error(e)
+        raise EmbedError(kind, detail)
+    except urllib.error.URLError as e:
+        raise EmbedError("api", {"message": f"URLError: {e.reason}"})
+    except (TimeoutError, socket.timeout) as e:
+        raise EmbedError("api", {"message": f"timeout: {e}"})
     if not body.get("success"):
-        raise RuntimeError(f"workers-ai error: {body.get('errors')}")
+        raise EmbedError("api", {"message": f"workers-ai error: {body.get('errors')}"})
     return body["result"]["data"]
 
 

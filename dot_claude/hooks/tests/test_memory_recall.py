@@ -415,5 +415,57 @@ class TestLoadCacheReason(unittest.TestCase):
         self.assertTrue(mod.CACHE_MODEL.startswith(mod.MODEL))
 
 
+class FakeHTTPError(Exception):
+    """urllib.error.HTTPError の read() と code だけを真似る。"""
+    def __init__(self, code, body):
+        self.code = code
+        self._body = body.encode()
+    def read(self):
+        return self._body
+
+
+class TestClassify(unittest.TestCase):
+    def classify(self, code, body):
+        return mod.classify_http_error(FakeHTTPError(code, body))
+
+    def test_auth(self):
+        kind, detail = self.classify(
+            401, '{"result":null,"success":false,'
+                 '"errors":[{"code":10000,"message":"Authentication error"}]}')
+        self.assertEqual(kind, "auth")
+        self.assertEqual(detail["code"], 10000)
+
+    def test_document_with_measured_tokens(self):
+        kind, detail = self.classify(
+            400, '{"errors":[{"message":"AiError: AiError: Sequence too long: '
+                 '9003 > 8192 (f660721d)","code":3030}],"success":false}')
+        self.assertEqual(kind, "document")
+        self.assertEqual(detail["tokens"], 9003)
+        self.assertEqual(detail["limit"], 8192)
+
+    def test_batch_with_measured_tokens(self):
+        kind, detail = self.classify(
+            400, '{"errors":[{"message":"AiError: AiError: Max context reached '
+                 '80030 tokens but model supports only 60000 (173b31cf)",'
+                 '"code":3030}],"success":false}')
+        self.assertEqual(kind, "batch")
+        self.assertEqual(detail["tokens"], 80030)
+        self.assertEqual(detail["limit"], 60000)
+
+    def test_unclassified_400_falls_back_to_api_and_keeps_body(self):
+        kind, detail = self.classify(
+            400, '{"errors":[{"code":7000,"message":"No route for that URI"}]}')
+        self.assertEqual(kind, "api")
+        self.assertIn("No route", detail["message"])
+
+    def test_unknown_status_falls_back_to_api(self):
+        kind, _ = self.classify(418, "not json at all")
+        self.assertEqual(kind, "api")
+
+    def test_server_error_is_api(self):
+        kind, _ = self.classify(503, '{"errors":[{"message":"upstream"}]}')
+        self.assertEqual(kind, "api")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
