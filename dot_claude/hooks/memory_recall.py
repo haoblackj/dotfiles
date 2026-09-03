@@ -19,7 +19,7 @@ import urllib.request
 MODEL = "@cf/baai/bge-m3"
 # キャッシュの model へ書き、照合に使う値。URL には使わない。
 # ベクトルの作り方を変えたら印を足して作り直しを起こす（タスク7で "#wavg1" を付ける）。
-CACHE_MODEL = MODEL
+CACHE_MODEL = MODEL + "#wavg1"
 THRESHOLD = 0.55
 TOP_K = 3
 MIN_PROMPT_CHARS = 15
@@ -291,17 +291,17 @@ def embed_texts(texts, cfg, timeout=API_TIMEOUT_SEC):
     return body["result"]["data"]
 
 
-def make_batches(pending):
-    """埋め込みAPIの上限に収まるようバッチを組む。
+def make_batches(units):
+    """埋め込みAPIの上限に収まるよう束を組む。
 
-    件数・合計文字数・パディング後文字数（件数×最長文書）の3つを同時に満たす。
-    1件だけで上限を超える文書はその1件だけのバッチになる（本文は呼び出し側が
-    MAX_DOC_CHARS で切り詰め済み）。
+    units は (name, index, text) の並び。件数・合計文字数・パディング後文字数
+    （件数×最長）の3つを同時に満たす。断片は FRAGMENT_CHARS で頭打ちなので、
+    合計文字数の条件が先に効いて1リクエストは最大6断片になる。
     """
     batches = []
     cur, cur_sum, cur_max = [], 0, 0
-    for item in pending:
-        n = len(item[3])
+    for item in units:
+        n = len(item[2])
         nxt_max = cur_max if cur_max > n else n
         if cur and (len(cur) + 1 > BATCH_SIZE
                     or cur_sum + n > MAX_BATCH_CHARS
@@ -317,37 +317,94 @@ def make_batches(pending):
 
 
 def update_index(memory_dir, cache, cfg, deadline):
+    """索引を更新する。確定はファイル単位で、全断片が揃ったものだけ書き込む。"""
     files = list_memory_files(memory_dir)
     entries = cache["entries"]
     changed = False
+
+    # 消えたファイルの項目を取り除く。これだけでも保存する経路になる。
     for name in list(entries):
         if name not in files:
             del entries[name]
             changed = True
+
     pending = []
     for name, path in files.items():
-        with open(path, "rb") as f:
-            raw = f.read()
+        try:
+            with open(path, "rb") as f:
+                raw = f.read()
+        except OSError as e:
+            log({"stage": "index", "kind": "local", "target": name,
+                 "message": f"read failed: {e}"})
+            continue
         h = hashlib.sha256(raw).hexdigest()
-        if entries.get(name, {}).get("hash") != h:
-            text = raw.decode("utf-8", errors="replace")
-            desc = read_description(text) or name
-            pending.append((name, h, desc, text[:FRAGMENT_CHARS]))
-    done_all = True
-    try:
-        for batch in make_batches(pending):
-            if time.monotonic() > deadline:
-                done_all = False
+        if entries.get(name, {}).get("hash") == h:
+            continue
+        text = raw.decode("utf-8", errors="replace")
+        frags = split_fragments(text)
+        pending.append({"name": name, "hash": h,
+                        "description": read_description(text) or name,
+                        "frags": frags})
+
+    # 極端に長い1件が締め切りを食い潰さないよう、短いものから処理する。
+    pending.sort(key=lambda p: sum(len(f) for f in p["frags"]))
+
+    meta = {p["name"]: p for p in pending}
+    units = [(p["name"], i, frag)
+             for p in pending for i, frag in enumerate(p["frags"])]
+
+    collected = {}
+    hit_deadline = False
+    stopped = False
+    for batch in make_batches(units):
+        if time.monotonic() > deadline:
+            hit_deadline = True
+            break
+        try:
+            vecs = embed_texts([t for _, _, t in batch], cfg)
+        except EmbedError as e:
+            rec = {"stage": "index", "kind": e.kind, **e.detail}
+            if e.kind not in ("auth", "api"):   # auth / api は target を持たない
+                rec["target"] = sorted({n for n, _, _ in batch})
+            log(rec)
+            if e.kind == "auth":
+                stopped = True
                 break
-            vecs = embed_texts([t for _, _, _, t in batch], cfg)
-            for (name, h, desc, _), vec in zip(batch, vecs):
-                entries[name] = {"hash": h, "description": desc,
-                                 "vector": normalize(vec)}
-            changed = True
-    finally:
-        if changed:
+            continue
+        except Exception as e:
+            # api は特定のファイルに紐づかないので target を持たない（spec のログ形式）
+            log({"stage": "index", "kind": "api",
+                 "message": f"{type(e).__name__}: {e}"})
+            continue
+        for (name, i, _), vec in zip(batch, vecs):
+            collected.setdefault(name, {})[i] = normalize(vec)
+
+    # 全断片が揃ったファイルだけを確定する。
+    # 欠けたまま平均を保存すると、ハッシュが一致するせいで二度と直らない。
+    written = 0
+    for name, got in collected.items():
+        info = meta[name]
+        if len(got) != len(info["frags"]):
+            continue
+        vectors = [got[i] for i in sorted(got)]
+        weights = [len(f) for f in info["frags"]]
+        entries[name] = {"hash": info["hash"], "description": info["description"],
+                         "vector": weighted_average(vectors, weights)}
+        changed = True
+        written += 1
+
+    if hit_deadline:
+        log({"kind": "partial", "done": written,
+             "pending": len(pending) - written})
+
+    if changed:
+        try:
             save_cache(memory_dir, cache)
-    return done_all
+        except OSError as e:
+            log({"stage": "index", "kind": "local", "target": CACHE_NAME,
+                 "message": f"cache save failed: {e}"})
+            return False
+    return not (hit_deadline or stopped) and written == len(pending)
 
 
 def top_matches(qvec, entries, threshold=THRESHOLD, k=TOP_K):
