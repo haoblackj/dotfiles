@@ -36,6 +36,13 @@ def fake_embed_factory(dim=4):
     return fake_embed
 
 
+def const_embed(vec=(1.0, 0.0, 0.0, 0.0)):
+    """常に同じベクトルを返す偽 embed。文書も発言も同じ向きになり類似度が1.0になる。"""
+    def fake(texts, cfg, timeout=None):
+        return [list(vec) for _ in texts]
+    return fake
+
+
 class TestResolveMemoryDir(unittest.TestCase):
     def test_rejects_non_string(self):
         self.assertIsNone(mod.resolve_memory_dir(None))
@@ -219,10 +226,12 @@ class TestScoringAndMain(unittest.TestCase):
                 return [[1.0, 0.0] for _ in texts]  # 全部同一 → 類似度1.0
 
             with patch.object(mod, "embed_texts", fake_embed):
+                env = {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)}
+                # 1回目: 想起は空だが索引が作られる
+                self._run_main({"prompt": "背が高い人向けの家具を探している"}, env)
+                # 2回目: 前回作った索引に対して想起する
                 out = self._run_main(
-                    {"prompt": "背が高い人向けの家具を探している"},
-                    {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
-                )
+                    {"prompt": "背が高い人向けの家具を探している"}, env)
             self.assertIn("[memory-recall]", out)
             self.assertIn("height.md", out)
             self.assertIn("身長183cm", out)
@@ -465,6 +474,103 @@ class TestClassify(unittest.TestCase):
     def test_server_error_is_api(self):
         kind, _ = self.classify(503, '{"errors":[{"message":"upstream"}]}')
         self.assertEqual(kind, "api")
+
+
+class TestMainOrder(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+        with open(os.path.join(self.dir, "a.md"), "w") as f:
+            f.write("---\ndescription: あるメモ\n---\n本文")
+        self.log_path = os.path.join(self.dir, "log")
+        self.p = [patch.object(mod, "LOG_PATH", self.log_path),
+                  patch.object(mod, "LOCK_PATH", self.log_path + ".lock")]
+        for p in self.p:
+            p.start()
+        self.env = patch.dict(os.environ, {"MEMORY_RECALL_DIR": self.dir})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        for p in self.p:
+            p.stop()
+        self.tmp.cleanup()
+
+    def rows(self):
+        if not os.path.exists(self.log_path):
+            return []
+        with open(self.log_path) as f:
+            return [json.loads(x) for x in f if x.strip()]
+
+    def run_main(self, prompt="メモの想起がちゃんと動くかを確かめたい"):  # 19文字
+        buf = io.StringIO()
+        with patch.object(sys, "stdin", io.StringIO(json.dumps({"prompt": prompt}))), \
+             contextlib.redirect_stdout(buf), \
+             patch.object(mod, "load_secrets", lambda *a, **k: {
+                 "CF_ACCOUNT_ID": "x", "CF_API_TOKEN": "y"}):
+            mod.main()
+        return buf.getvalue()
+
+    def test_recall_returns_even_if_index_update_raises(self):
+        """索引の更新が例外を投げても想起は返る。issue #11 の本体。"""
+        fake = const_embed()
+        # 先に索引を作っておく
+        with patch.object(mod, "embed_texts", fake):
+            self.run_main()
+        with patch.object(mod, "embed_texts", fake), \
+             patch.object(mod, "update_index",
+                          lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))):
+            out = self.run_main("あるメモについて詳しく教えてほしい")  # 17文字
+        self.assertIn("[memory-recall]", out)
+
+    def test_query_failure_skips_index_update(self):
+        called = []
+        def boom(texts, cfg, timeout=None):
+            raise mod.EmbedError("api", {"message": "down"})
+        with patch.object(mod, "embed_texts", boom), \
+             patch.object(mod, "update_index",
+                          lambda *a, **k: called.append(True)):
+            self.run_main()
+        self.assertEqual(called, [])
+        self.assertEqual(self.rows()[-1]["stage"], "query")
+        self.assertEqual(self.rows()[-1]["kind"], "api")
+
+    def test_migration_saved_and_logged_even_when_query_fails(self):
+        """捨てた回の保存と migration は、想起が失敗しても済んでいる。"""
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            json.dump({"model": "old-model", "entries": {"gone.md": {}}}, f)
+        def boom(texts, cfg, timeout=None):
+            raise mod.EmbedError("auth", {"message": "no key"})
+        with patch.object(mod, "embed_texts", boom):
+            self.run_main()
+        with open(os.path.join(self.dir, mod.CACHE_NAME)) as f:
+            saved = json.load(f)
+        self.assertEqual(saved["model"], mod.CACHE_MODEL)
+        self.assertEqual(saved["entries"], {})
+        kinds = [r["kind"] for r in self.rows()]
+        self.assertIn("migration", kinds)
+
+    def test_first_run_does_not_log_migration(self):
+        with patch.object(mod, "embed_texts", fake_embed_factory()):
+            self.run_main()
+        self.assertNotIn("migration", [r["kind"] for r in self.rows()])
+
+    def test_recall_proceeds_when_the_empty_cache_cannot_be_saved(self):
+        """手順2の保存が失敗しても想起は止めない（目標1）。"""
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            json.dump({"model": "old-model", "entries": {}}, f)
+        called = []
+        def boom_save(memory_dir, cache):
+            raise OSError("読み取り専用")
+        with patch.object(mod, "save_cache", boom_save), \
+             patch.object(mod, "embed_texts",
+                          lambda *a, **k: called.append(True) or [[1.0, 0, 0, 0]]):
+            self.run_main()
+        # 発言の埋め込みまで到達している
+        self.assertTrue(called)
+        rec = [r for r in self.rows()
+               if r.get("kind") == "local" and r.get("stage") == "startup"]
+        self.assertTrue(rec)
 
 
 if __name__ == "__main__":

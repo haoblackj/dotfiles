@@ -36,7 +36,6 @@ MAX_BATCH_CHARS = 40000  # 1リクエストの合計文字数上限
 # 合計文字数だけ抑えても、長い1件と短い多数が同居すると超える。
 MAX_BATCH_PADDED_CHARS = 50000  # 件数 × 最長文書の文字数の上限
 DEADLINE_SEC = 4.2
-RESERVE_FOR_QUERY_SEC = 1.2
 API_TIMEOUT_SEC = 3.0
 SECRETS_PATH = os.path.expanduser(
     "~/.local/share/claude-private/secrets/cloudflare-workers-ai-token")
@@ -317,7 +316,7 @@ def update_index(memory_dir, cache, cfg, deadline):
     done_all = True
     try:
         for batch in make_batches(pending):
-            if time.monotonic() > deadline - RESERVE_FOR_QUERY_SEC:
+            if time.monotonic() > deadline:
                 done_all = False
                 break
             vecs = embed_texts([t for _, _, _, t in batch], cfg)
@@ -363,22 +362,58 @@ def main():
     except (OSError, KeyError) as e:
         log({"stage": "startup", "kind": "auth", "message": f"secrets unavailable: {e}"})
         return
-    cache, _reason, _prev = load_cache(memory_dir)
+
+    # 1. キャッシュを読む
+    cache, reason, previous_model = load_cache(memory_dir)
+
+    # 2. 捨てていたら空のキャッシュを保存し、model_mismatch なら migration を記録する。
+    #    3 が失敗して早期終了する回でも済ませるため、想起より前に置く。
+    if reason in ("unreadable", "model_mismatch"):
+        if reason == "unreadable":
+            log({"stage": "startup", "kind": "local", "target": CACHE_NAME,
+                 "message": "cache unreadable; rebuilding"})
+        # 件数は try の外で取る。中に入れると、ディレクトリの読み取り失敗が
+        # "cache save failed" という誤ったメッセージで記録される。
+        try:
+            pending_count = len(list_memory_files(memory_dir))
+        except OSError:
+            pending_count = None
+        try:
+            save_cache(memory_dir, cache)
+            if reason == "model_mismatch":
+                log({"kind": "migration", "from": previous_model, "to": CACHE_MODEL,
+                     "pending": pending_count})
+        except OSError as e:
+            # 保存に失敗しても想起は止めない（目標1）
+            log({"stage": "startup", "kind": "local", "target": CACHE_NAME,
+                 "message": f"cache save failed: {e}"})
+
+    # 3. 発言を埋め込む
     try:
-        if not update_index(memory_dir, cache, cfg, deadline):
-            log({"kind": "partial"})
         qvec = normalize(embed_texts([prompt[:MAX_PROMPT_CHARS]], cfg)[0])
+    except EmbedError as e:
+        log({"stage": "query", "kind": e.kind, **e.detail})
+        return
     except Exception as e:
-        log({"stage": "index", "kind": "api", "message": f"{type(e).__name__}: {e}"})
+        log({"stage": "query", "kind": "api",
+             "message": f"{type(e).__name__}: {e}"})
         return
+
+    # 4. 想起を出力する
     matches = top_matches(qvec, cache["entries"])
-    if not matches:
-        return
-    lines = ["[memory-recall] この発言に関連しそうな保存済みメモリ:"]
-    for s, name, desc in matches:
-        lines.append(f"- {os.path.join(memory_dir, name)} — {desc} (類似度{s:.2f})")
-    lines.append("必要ならReadで本文を確認すること。")
-    print("\n".join(lines))
+    if matches:
+        lines = ["[memory-recall] この発言に関連しそうな保存済みメモリ:"]
+        for s, name, desc in matches:
+            lines.append(f"- {os.path.join(memory_dir, name)} — {desc} (類似度{s:.2f})")
+        lines.append("必要ならReadで本文を確認すること。")
+        print("\n".join(lines))
+
+    # 5. 残り時間で索引を更新する。ここで何が起きても想起は既に返っている。
+    try:
+        update_index(memory_dir, cache, cfg, deadline)
+    except Exception as e:
+        log({"stage": "index", "kind": "api",
+             "message": f"{type(e).__name__}: {e}"})
 
 
 if __name__ == "__main__":
