@@ -24,11 +24,9 @@ THRESHOLD = 0.55
 TOP_K = 3
 MIN_PROMPT_CHARS = 15
 MAX_PROMPT_CHARS = 2000
-# 本文全文が原則。異常に長いファイルだけ抑える安全弁。
-# bge-m3 は1件あたり8,192トークンが上限（実測: 15,371文字=8,230トークンで
-# "Sequence too long: 8230 > 8192"）。実測比は0.54トークン/文字だが、
-# 日本語が濃い文書はこれより上がりうるので1.0トークン/文字でも収まる値にする。
-MAX_DOC_CHARS = 8000
+# 断片の大きさ。実測した最悪比率 1.0009 トークン/文字で約 6,005 トークンとなり、
+# 1件あたり上限 8,192 に対して余裕 26.7%。設計9の判定にも同じ値を使う。
+FRAGMENT_CHARS = 6000
 BATCH_SIZE = 10  # 1リクエストの件数上限
 MAX_BATCH_CHARS = 40000  # 1リクエストの合計文字数上限
 # Workers AI は 1リクエストを「件数 × 最長文書」にパディングして
@@ -137,6 +135,28 @@ def normalize(vec):
     if n == 0:
         return [0.0] * len(vec)
     return [round(x / n, 6) for x in vec]
+
+
+def split_fragments(text):
+    """文書を FRAGMENT_CHARS ごとに分ける。重なりは設けない。切り捨てもしない。"""
+    if len(text) <= FRAGMENT_CHARS:
+        return [text]
+    return [text[i:i + FRAGMENT_CHARS]
+            for i in range(0, len(text), FRAGMENT_CHARS)]
+
+
+def weighted_average(vectors, weights):
+    """正規化済みのベクトルを断片の文字数で重み付けして平均し、正規化して返す。
+
+    断片ごとに索引へ載せると長い文書が枠を余分に取るため、1本へまとめる。
+    """
+    total = float(sum(weights)) or 1.0
+    acc = [0.0] * len(vectors[0])
+    for vec, w in zip(vectors, weights):
+        f = w / total
+        for i, x in enumerate(vec):
+            acc[i] += x * f
+    return normalize(acc)
 
 
 def read_description(text):
@@ -312,7 +332,7 @@ def update_index(memory_dir, cache, cfg, deadline):
         if entries.get(name, {}).get("hash") != h:
             text = raw.decode("utf-8", errors="replace")
             desc = read_description(text) or name
-            pending.append((name, h, desc, text[:MAX_DOC_CHARS]))
+            pending.append((name, h, desc, text[:FRAGMENT_CHARS]))
     done_all = True
     try:
         for batch in make_batches(pending):

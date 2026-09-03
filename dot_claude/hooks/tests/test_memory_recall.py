@@ -573,5 +573,53 @@ class TestMainOrder(unittest.TestCase):
         self.assertTrue(rec)
 
 
+class TestFragments(unittest.TestCase):
+    def test_short_text_is_one_fragment(self):
+        self.assertEqual(mod.split_fragments("あいう"), ["あいう"])
+
+    def test_empty_text_is_one_fragment(self):
+        self.assertEqual(mod.split_fragments(""), [""])
+
+    def test_splits_without_overlap_and_loses_nothing(self):
+        text = "x" * (mod.FRAGMENT_CHARS * 2 + 123)
+        frags = mod.split_fragments(text)
+        self.assertEqual(len(frags), 3)
+        self.assertEqual("".join(frags), text)
+        self.assertEqual(len(frags[0]), mod.FRAGMENT_CHARS)
+        self.assertEqual(len(frags[2]), 123)
+
+    def test_exact_multiple_has_no_empty_tail(self):
+        frags = mod.split_fragments("y" * (mod.FRAGMENT_CHARS * 2))
+        self.assertEqual(len(frags), 2)
+
+    def test_single_fragment_average_equals_the_vector(self):
+        v = mod.normalize([1.0, 2.0, 3.0, 4.0])
+        got = mod.weighted_average([v], [4000])
+        for a, b in zip(got, v):
+            self.assertAlmostEqual(a, b, places=5)
+
+    def test_average_is_unit_length(self):
+        a = mod.normalize([1.0, 0.0, 0.0, 0.0])
+        b = mod.normalize([0.0, 1.0, 0.0, 0.0])
+        got = mod.weighted_average([a, b], [6000, 6000])
+        self.assertAlmostEqual(sum(x * x for x in got), 1.0, places=4)
+
+    def test_longer_fragment_pulls_the_average(self):
+        a = mod.normalize([1.0, 0.0, 0.0, 0.0])
+        b = mod.normalize([0.0, 1.0, 0.0, 0.0])
+        got = mod.weighted_average([a, b], [6000, 1000])
+        self.assertGreater(got[0], got[1])
+
+    def test_empty_file_does_not_crash(self):
+        """空のメモリファイルは断片1つ・重み0になる。落ちないこと。
+
+        spec の実測どおり API は空文字列を正常に返すので、この経路は実在する。
+        得られるのはゼロベクトルで、閾値を超えないだけ。
+        """
+        got = mod.weighted_average([mod.normalize([0.0, 0.0, 0.0, 0.0])], [0])
+        self.assertEqual(len(got), 4)
+        self.assertEqual(sum(abs(x) for x in got), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
