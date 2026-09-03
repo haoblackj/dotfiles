@@ -316,6 +316,55 @@ def make_batches(units):
     return batches
 
 
+def process_batch(batch, cfg, deadline, collected):
+    """束を埋め込む。document / batch で落ちたら割って再挑戦する。
+
+    設計5の断片化でサイズ由来の失敗は起きなくなる見込みで、これは保険。
+    成功した側の結果は捨てずに collected へ入れる。
+    """
+    # 再帰の入口ごとに締め切りを見る。分割の直前で1回だけ見る形にすると、
+    # 深く割ったあとも締め切りを越えて呼び続ける。
+    if time.monotonic() > deadline:
+        return False
+    try:
+        vecs = embed_texts([t for _, _, t in batch], cfg)
+    except EmbedError as e:
+        if e.kind == "auth":
+            raise
+        splittable = e.kind in ("document", "batch") and len(batch) > 1
+        if splittable and time.monotonic() < deadline:
+            parts = 2
+            if e.kind == "batch" and e.detail.get("tokens") and e.detail.get("limit"):
+                parts = max(2, -(-e.detail["tokens"] // e.detail["limit"]))
+            size = max(1, len(batch) // parts)
+            ok = True
+            for i in range(0, len(batch), size):
+                ok = process_batch(batch[i:i + size], cfg, deadline, collected) and ok
+            return ok
+        rec = {"stage": "index", "kind": e.kind, **e.detail}
+        # api は特定のファイルに紐づかない扱いなので target を付けない。
+        # 付けると健診が「欠けていないファイル宛」として捨て、報告から消える。
+        if e.kind in ("document", "batch"):
+            if len(batch) == 1:
+                name, idx, text = batch[0]
+                rec["target"] = name
+                rec["fragment"] = idx
+                rec["span"] = [idx * FRAGMENT_CHARS,
+                               idx * FRAGMENT_CHARS + len(text)]
+            else:
+                rec["target"] = sorted({n for n, _, _ in batch})
+        log(rec)
+        return False
+    except Exception as e:
+        # api は target を持たない（spec のログ形式）
+        log({"stage": "index", "kind": "api",
+             "message": f"{type(e).__name__}: {e}"})
+        return False
+    for (name, i, _), vec in zip(batch, vecs):
+        collected.setdefault(name, {})[i] = normalize(vec)
+    return True
+
+
 def update_index(memory_dir, cache, cfg, deadline):
     """索引を更新する。確定はファイル単位で、全断片が揃ったものだけ書き込む。"""
     files = list_memory_files(memory_dir)
@@ -361,23 +410,13 @@ def update_index(memory_dir, cache, cfg, deadline):
             hit_deadline = True
             break
         try:
-            vecs = embed_texts([t for _, _, t in batch], cfg)
+            process_batch(batch, cfg, deadline, collected)
         except EmbedError as e:
-            rec = {"stage": "index", "kind": e.kind, **e.detail}
-            if e.kind not in ("auth", "api"):   # auth / api は target を持たない
-                rec["target"] = sorted({n for n, _, _ in batch})
-            log(rec)
-            if e.kind == "auth":
-                stopped = True
-                break
-            continue
-        except Exception as e:
-            # api は特定のファイルに紐づかないので target を持たない（spec のログ形式）
-            log({"stage": "index", "kind": "api",
-                 "message": f"{type(e).__name__}: {e}"})
-            continue
-        for (name, i, _), vec in zip(batch, vecs):
-            collected.setdefault(name, {})[i] = normalize(vec)
+            # auth だけがここへ来る。鍵が直るまで何度試しても失敗するので打ち切る。
+            # auth は target を持たない（spec のログ形式）
+            log({"stage": "index", "kind": e.kind, **e.detail})
+            stopped = True
+            break
 
     # 全断片が揃ったファイルだけを確定する。
     # 欠けたまま平均を保存すると、ハッシュが一致するせいで二度と直らない。

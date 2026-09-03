@@ -202,6 +202,22 @@ class TestSecretsAndIndex(unittest.TestCase):
 
 
 class TestScoringAndMain(unittest.TestCase):
+    def setUp(self):
+        # main() は update_index 経由で自分の log() を呼ぶ。差し替えないと
+        # 遅いマシンで締め切りを越えたとき本番の ~/.claude/logs/memory-recall.log へ
+        # partial レコードが書き込まれる（過去に実際に汚染した事故がある）。
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log_path = os.path.join(self.tmp.name, "log")
+        self.p = [patch.object(mod, "LOG_PATH", self.log_path),
+                  patch.object(mod, "LOCK_PATH", self.log_path + ".lock")]
+        for p in self.p:
+            p.start()
+
+    def tearDown(self):
+        for p in self.p:
+            p.stop()
+        self.tmp.cleanup()
+
     def test_top_matches_threshold_order_k(self):
         entries = {
             "hi.md": {"description": "高", "vector": [1.0, 0.0]},
@@ -710,8 +726,9 @@ class TestUpdateIndexFileLevelCommit(unittest.TestCase):
         with patch.object(mod, "BATCH_SIZE", 1), \
              patch.object(mod, "embed_texts", slow), \
              patch.object(mod, "time") as fake_time:
-            # 1回目は締め切り前、2回目の判定で締め切り後にする
-            fake_time.monotonic.side_effect = [0, 100]
+            # 1回目(update_indexの束チェック)と2回目(process_batch入口)は締め切り前、
+            # 3回目(次の束のupdate_indexチェック)で締め切り後にする
+            fake_time.monotonic.side_effect = [0, 0, 100]
             mod.update_index(self.dir, cache := self.fresh_cache(), {}, 10)
         self.assertEqual(cache["entries"], {})
 
@@ -806,6 +823,101 @@ class TestUpdateIndexFileLevelCommit(unittest.TestCase):
                 mod.update_index(d, cache, {}, time.monotonic() + 60)
             self.assertEqual(sorted(cache["entries"]),
                              ["f0.md", "f1.md", "f2.md"])   # 全件が作り直された
+
+
+class TestIsolation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log_path = os.path.join(self.tmp.name, "log")
+        self.p = [patch.object(mod, "LOG_PATH", self.log_path),
+                  patch.object(mod, "LOCK_PATH", self.log_path + ".lock")]
+        for p in self.p:
+            p.start()
+
+    def tearDown(self):
+        for p in self.p:
+            p.stop()
+        self.tmp.cleanup()
+
+    def rows(self):
+        with open(self.log_path) as f:
+            return [json.loads(x) for x in f if x.strip()]
+
+    def test_binary_split_names_the_single_culprit(self):
+        batch = [(f"f{i}.md", 0, f"text{i}") for i in range(4)]
+
+        def fails_on_f2(texts, cfg, timeout=None):
+            if any(t == "text2" for t in texts):
+                raise mod.EmbedError("document",
+                                     {"message": "Sequence too long: 9000 > 8192",
+                                      "tokens": 9000, "limit": 8192})
+            return fake_embed_factory()(texts, cfg, timeout)
+
+        collected = {}
+        with patch.object(mod, "embed_texts", fails_on_f2):
+            mod.process_batch(batch, {}, time.monotonic() + 10, collected)
+        docs = [r for r in self.rows() if r["kind"] == "document"]
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0]["target"], "f2.md")
+        self.assertEqual(docs[0]["tokens"], 9000)
+        self.assertEqual(docs[0]["stage"], "index")   # stage の3値目を照合する
+
+    def test_successful_half_is_kept(self):
+        batch = [(f"f{i}.md", 0, f"text{i}") for i in range(4)]
+
+        def fails_on_f2(texts, cfg, timeout=None):
+            if any(t == "text2" for t in texts):
+                raise mod.EmbedError("document", {"message": "Sequence too long: 9000 > 8192"})
+            return fake_embed_factory()(texts, cfg, timeout)
+
+        collected = {}
+        with patch.object(mod, "embed_texts", fails_on_f2):
+            mod.process_batch(batch, {}, time.monotonic() + 10, collected)
+        self.assertEqual(set(collected), {"f0.md", "f1.md", "f3.md"})
+
+    def test_records_fragment_position(self):
+        batch = [("long.md", 2, "x" * 100)]
+
+        def always_doc(texts, cfg, timeout=None):
+            raise mod.EmbedError("document", {"message": "Sequence too long: 9000 > 8192"})
+
+        with patch.object(mod, "embed_texts", always_doc):
+            mod.process_batch(batch, {}, time.monotonic() + 10, {})
+        rec = [r for r in self.rows() if r["kind"] == "document"][0]
+        self.assertEqual(rec["fragment"], 2)
+        self.assertEqual(rec["span"], [2 * mod.FRAGMENT_CHARS,
+                                       2 * mod.FRAGMENT_CHARS + 100])
+
+    def test_api_failure_carries_no_target(self):
+        """api は target を持たない。付けると健診が捨てて報告から消える。"""
+        batch = [("only.md", 0, "text")]
+
+        def always_api(texts, cfg, timeout=None):
+            raise mod.EmbedError("api", {"message": "down"})
+
+        with patch.object(mod, "embed_texts", always_api):
+            mod.process_batch(batch, {}, time.monotonic() + 10, {})
+        rec = [r for r in self.rows() if r["kind"] == "api"][0]
+        self.assertNotIn("target", rec)
+        self.assertNotIn("fragment", rec)
+
+    def test_batch_kind_is_resplit(self):
+        batch = [(f"f{i}.md", 0, f"t{i}") for i in range(4)]
+        calls = {"n": 0}
+
+        def big_first(texts, cfg, timeout=None):
+            calls["n"] += 1
+            if len(texts) == 4:
+                raise mod.EmbedError("batch",
+                                     {"message": "Max context reached 120000 tokens "
+                                                 "but model supports only 60000",
+                                      "tokens": 120000, "limit": 60000})
+            return fake_embed_factory()(texts, cfg, timeout)
+
+        collected = {}
+        with patch.object(mod, "embed_texts", big_first):
+            mod.process_batch(batch, {}, time.monotonic() + 10, collected)
+        self.assertEqual(len(collected), 4)
 
 
 if __name__ == "__main__":
