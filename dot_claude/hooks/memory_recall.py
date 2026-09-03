@@ -18,8 +18,17 @@ THRESHOLD = 0.55
 TOP_K = 3
 MIN_PROMPT_CHARS = 15
 MAX_PROMPT_CHARS = 2000
-MAX_DOC_CHARS = 20000  # 本文全文が原則。異常に長いファイルだけ抑える安全弁
-BATCH_SIZE = 10
+# 本文全文が原則。異常に長いファイルだけ抑える安全弁。
+# bge-m3 は1件あたり8,192トークンが上限（実測: 15,371文字=8,230トークンで
+# "Sequence too long: 8230 > 8192"）。実測比は0.54トークン/文字だが、
+# 日本語が濃い文書はこれより上がりうるので1.0トークン/文字でも収まる値にする。
+MAX_DOC_CHARS = 8000
+BATCH_SIZE = 10  # 1リクエストの件数上限
+MAX_BATCH_CHARS = 40000  # 1リクエストの合計文字数上限
+# Workers AI は 1リクエストを「件数 × 最長文書」にパディングして
+# 60,000トークン上限と突き合わせる（実測: 31件×8,230トークン=255,130と報告）。
+# 合計文字数だけ抑えても、長い1件と短い多数が同居すると超える。
+MAX_BATCH_PADDED_CHARS = 50000  # 件数 × 最長文書の文字数の上限
 DEADLINE_SEC = 4.2
 RESERVE_FOR_QUERY_SEC = 1.2
 API_TIMEOUT_SEC = 3.0
@@ -132,6 +141,31 @@ def embed_texts(texts, cfg, timeout=API_TIMEOUT_SEC):
     return body["result"]["data"]
 
 
+def make_batches(pending):
+    """埋め込みAPIの上限に収まるようバッチを組む。
+
+    件数・合計文字数・パディング後文字数（件数×最長文書）の3つを同時に満たす。
+    1件だけで上限を超える文書はその1件だけのバッチになる（本文は呼び出し側が
+    MAX_DOC_CHARS で切り詰め済み）。
+    """
+    batches = []
+    cur, cur_sum, cur_max = [], 0, 0
+    for item in pending:
+        n = len(item[3])
+        nxt_max = cur_max if cur_max > n else n
+        if cur and (len(cur) + 1 > BATCH_SIZE
+                    or cur_sum + n > MAX_BATCH_CHARS
+                    or (len(cur) + 1) * nxt_max > MAX_BATCH_PADDED_CHARS):
+            batches.append(cur)
+            cur, cur_sum, nxt_max = [], 0, n
+        cur.append(item)
+        cur_sum += n
+        cur_max = nxt_max
+    if cur:
+        batches.append(cur)
+    return batches
+
+
 def update_index(memory_dir, cache, cfg, deadline):
     files = list_memory_files(memory_dir)
     entries = cache["entries"]
@@ -151,11 +185,10 @@ def update_index(memory_dir, cache, cfg, deadline):
             pending.append((name, h, desc, text[:MAX_DOC_CHARS]))
     done_all = True
     try:
-        for i in range(0, len(pending), BATCH_SIZE):
+        for batch in make_batches(pending):
             if time.monotonic() > deadline - RESERVE_FOR_QUERY_SEC:
                 done_all = False
                 break
-            batch = pending[i:i + BATCH_SIZE]
             vecs = embed_texts([t for _, _, _, t in batch], cfg)
             for (name, h, desc, _), vec in zip(batch, vecs):
                 entries[name] = {"hash": h, "description": desc,
