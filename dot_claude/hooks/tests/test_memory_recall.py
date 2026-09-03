@@ -87,23 +87,23 @@ class TestPureLogic(unittest.TestCase):
 
     def test_cache_roundtrip_and_corruption(self):
         with tempfile.TemporaryDirectory() as d:
-            cache = mod.load_cache(d)
-            self.assertEqual(cache, {"model": mod.MODEL, "entries": {}})
+            cache, _reason, _prev = mod.load_cache(d)
+            self.assertEqual(cache, {"model": mod.CACHE_MODEL, "entries": {}})
             cache["entries"]["a.md"] = {"hash": "h", "description": "d", "vector": [1.0]}
             mod.save_cache(d, cache)
-            self.assertEqual(mod.load_cache(d)["entries"]["a.md"]["hash"], "h")
+            self.assertEqual(mod.load_cache(d)[0]["entries"]["a.md"]["hash"], "h")
             # 破損 → 空で再出発
             Path(d, mod.CACHE_NAME).write_text("{broken json")
-            self.assertEqual(mod.load_cache(d)["entries"], {})
+            self.assertEqual(mod.load_cache(d)[0]["entries"], {})
             # モデル不一致 → 空で再出発
             Path(d, mod.CACHE_NAME).write_text(
                 '{"model": "old-model", "entries": {"a.md": {}}}')
-            self.assertEqual(mod.load_cache(d)["entries"], {})
+            self.assertEqual(mod.load_cache(d)[0]["entries"], {})
             # 有効なJSONだがdictでない → 空で再出発
             Path(d, mod.CACHE_NAME).write_text("[1, 2, 3]")
-            self.assertEqual(mod.load_cache(d)["entries"], {})
+            self.assertEqual(mod.load_cache(d)[0]["entries"], {})
             Path(d, mod.CACHE_NAME).write_text("null")
-            self.assertEqual(mod.load_cache(d)["entries"], {})
+            self.assertEqual(mod.load_cache(d)[0]["entries"], {})
 
 
 class TestSecretsAndIndex(unittest.TestCase):
@@ -128,7 +128,7 @@ class TestSecretsAndIndex(unittest.TestCase):
             Path(d, "b.md").write_text("---\ndescription: B\n---\n中身B")
             fake = fake_embed_factory()
             with patch.object(mod, "embed_texts", fake):
-                cache = mod.load_cache(d)
+                cache, _reason, _prev = mod.load_cache(d)
                 done = mod.update_index(d, cache, {}, time.monotonic() + 60)
                 self.assertTrue(done)
                 self.assertEqual(sorted(cache["entries"]), ["a.md", "b.md"])
@@ -143,7 +143,7 @@ class TestSecretsAndIndex(unittest.TestCase):
             Path(d, "a.md").write_text("x")
             fake = fake_embed_factory()
             with patch.object(mod, "embed_texts", fake):
-                cache = mod.load_cache(d)
+                cache, _reason, _prev = mod.load_cache(d)
                 mod.update_index(d, cache, {}, time.monotonic() + 60)
                 Path(d, "a.md").unlink()
                 mod.update_index(d, cache, {}, time.monotonic() + 60)
@@ -155,7 +155,7 @@ class TestSecretsAndIndex(unittest.TestCase):
                 Path(d, f"f{i:02}.md").write_text(f"中身{i}")
             fake = fake_embed_factory()
             with patch.object(mod, "embed_texts", fake):
-                cache = mod.load_cache(d)
+                cache, _reason, _prev = mod.load_cache(d)
                 # 締切を過去にする → 1バッチも処理せず持ち越し
                 done = mod.update_index(d, cache, {}, time.monotonic() - 1)
                 self.assertFalse(done)
@@ -174,11 +174,11 @@ class TestSecretsAndIndex(unittest.TestCase):
                 return [[1.0, 0.0] for _ in texts]
 
             with patch.object(mod, "embed_texts", flaky_embed):
-                cache = mod.load_cache(d)
+                cache, _reason, _prev = mod.load_cache(d)
                 with self.assertRaises(RuntimeError):
                     mod.update_index(d, cache, {}, time.monotonic() + 60)
             # 1バッチ目(10件)はディスクに保存されているはず
-            reloaded = mod.load_cache(d)
+            reloaded, _reason, _prev = mod.load_cache(d)
             self.assertEqual(len(reloaded["entries"]), 10)
 
 
@@ -355,6 +355,64 @@ class TestLogging(unittest.TestCase):
             mod.log({"kind": "api", "message": "steal"})
         self.assertTrue(os.path.exists(self.log_path + ".1"))
         self.assertFalse(os.path.exists(lock))  # 使い終わったロックは消えている
+
+
+class TestLoadCacheReason(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, obj):
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            json.dump(obj, f)
+
+    def test_absent(self):
+        cache, reason, prev = mod.load_cache(self.dir)
+        self.assertEqual(reason, "absent")
+        self.assertIsNone(prev)
+        self.assertEqual(cache, {"model": mod.CACHE_MODEL, "entries": {}})
+
+    def test_unreadable_when_broken_json(self):
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            f.write("{ this is not json")
+        _, reason, prev = mod.load_cache(self.dir)
+        self.assertEqual(reason, "unreadable")
+        self.assertIsNone(prev)
+
+    def test_unreadable_when_shape_is_wrong(self):
+        self.write({"model": mod.CACHE_MODEL, "entries": "not a dict"})
+        _, reason, _ = mod.load_cache(self.dir)
+        self.assertEqual(reason, "unreadable")
+
+    def test_model_mismatch_reports_previous(self):
+        # 印を付ける前でも後でも不一致になる値を使う。
+        # 実在のモデル名を書くと、このタスクの CACHE_MODEL と一致して "ok" になる。
+        self.write({"model": "old-model", "entries": {}})
+        _, reason, prev = mod.load_cache(self.dir)
+        self.assertEqual(reason, "model_mismatch")
+        self.assertEqual(prev, "old-model")
+
+    def test_ok(self):
+        self.write({"model": mod.CACHE_MODEL, "entries": {"a.md": {"hash": "h"}}})
+        cache, reason, prev = mod.load_cache(self.dir)
+        self.assertEqual(reason, "ok")
+        self.assertIsNone(prev)
+        self.assertIn("a.md", cache["entries"])
+
+    def test_does_not_write(self):
+        path = os.path.join(self.dir, mod.CACHE_NAME)
+        self.write({"model": "old", "entries": {}})
+        before = open(path).read()
+        mod.load_cache(self.dir)
+        self.assertEqual(open(path).read(), before)
+
+    def test_url_value_and_cache_value_are_separate_constants(self):
+        # URL の組み立てに使う値へ印が混ざらないこと。印の付与はタスク7。
+        self.assertNotIn("#", mod.MODEL)
+        self.assertTrue(mod.CACHE_MODEL.startswith(mod.MODEL))
 
 
 if __name__ == "__main__":

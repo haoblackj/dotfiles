@@ -15,6 +15,9 @@ import time
 import urllib.request
 
 MODEL = "@cf/baai/bge-m3"
+# キャッシュの model へ書き、照合に使う値。URL には使わない。
+# ベクトルの作り方を変えたら印を足して作り直しを起こす（タスク7で "#wavg1" を付ける）。
+CACHE_MODEL = MODEL
 THRESHOLD = 0.55
 TOP_K = 3
 MIN_PROMPT_CHARS = 15
@@ -156,17 +159,24 @@ def list_memory_files(memory_dir):
 
 
 def load_cache(memory_dir):
+    """(cache, reason, previous_model) を返す。書き込みの副作用は持たない。
+
+    reason: "ok" | "absent" | "unreadable" | "model_mismatch"
+    """
+    empty = {"model": CACHE_MODEL, "entries": {}}
     path = os.path.join(memory_dir, CACHE_NAME)
+    if not os.path.exists(path):
+        return empty, "absent", None
     try:
         with open(path) as f:
             cache = json.load(f)
-        if (not isinstance(cache, dict)
-                or cache.get("model") != MODEL
-                or not isinstance(cache.get("entries"), dict)):
-            raise ValueError("model mismatch or bad shape")
-        return cache
     except (OSError, ValueError):
-        return {"model": MODEL, "entries": {}}
+        return empty, "unreadable", None
+    if not isinstance(cache, dict) or not isinstance(cache.get("entries"), dict):
+        return empty, "unreadable", None
+    if cache.get("model") != CACHE_MODEL:
+        return empty, "model_mismatch", cache.get("model")
+    return cache, "ok", None
 
 
 def save_cache(memory_dir, cache):
@@ -298,7 +308,7 @@ def main():
     except (OSError, KeyError) as e:
         log({"stage": "startup", "kind": "auth", "message": f"secrets unavailable: {e}"})
         return
-    cache = load_cache(memory_dir)
+    cache, _reason, _prev = load_cache(memory_dir)
     try:
         if not update_index(memory_dir, cache, cfg, deadline):
             log({"kind": "partial"})
