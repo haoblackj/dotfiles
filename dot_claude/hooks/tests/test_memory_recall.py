@@ -259,12 +259,17 @@ class TestScoringAndMain(unittest.TestCase):
             def broken_embed(texts, cfg, timeout=None):
                 raise RuntimeError("boom")
 
-            with patch.object(mod, "embed_texts", broken_embed):
-                out = self._run_main(
-                    {"prompt": "これは十分な長さのある発言です"},
-                    {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
-                )
+            # log を差し替えずに走らせると本番の ~/.claude/logs/memory-recall.log へ
+            # RuntimeError: boom が追記される。実際に混入事故を起こしたので差し替える。
+            logged = []
+            with patch.object(mod, "log", logged.append):
+                with patch.object(mod, "embed_texts", broken_embed):
+                    out = self._run_main(
+                        {"prompt": "これは十分な長さのある発言です"},
+                        {"MEMORY_RECALL_DIR": d, "MEMORY_RECALL_SECRETS": str(secrets)},
+                    )
             self.assertEqual(out, "")
+            self.assertTrue(any("boom" in m for m in logged))
 
     def test_main_logs_bad_stdin(self):
         logged = []
