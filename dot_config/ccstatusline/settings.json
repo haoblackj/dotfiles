@@ -22,65 +22,11 @@
         "color": "hex:ee64ac"
       },
       {
-        "id": "icon-session",
-        "type": "custom-text",
-        "customText": "🕔",
-        "merge": true,
-        "color": "hex:fab795"
-      },
-      {
-        "id": "e9b6e336-76a8-4842-a5f9-8a7925fb8789",
-        "type": "session-usage",
-        "rawValue": true,
-        "color": "hex:fab795"
-      },
-      {
-        "id": "icon-reset",
-        "type": "custom-text",
-        "customText": "⏳",
-        "merge": true,
-        "color": "hex:666666"
-      },
-      {
-        "id": "4fe1e6cb-2438-42d7-adf6-8a12756f4ed7",
-        "type": "reset-timer",
-        "rawValue": true,
-        "color": "hex:666666"
-      },
-      {
-        "id": "icon-weekly",
-        "type": "custom-text",
-        "customText": "📅",
-        "merge": true,
-        "color": "hex:29d398"
-      },
-      {
-        "id": "d8b8d539-f7f7-466b-a03f-b7cd32775838",
-        "type": "weekly-usage",
-        "rawValue": true,
-        "color": "hex:29d398"
-      },
-      {
-        "id": "icon-weekly-reset",
-        "type": "custom-text",
-        "customText": "⌛",
-        "merge": true,
-        "color": "hex:666666"
-      },
-      {
-        "id": "05799064-d6af-4595-a3ca-c13b537c35b9",
-        "type": "weekly-reset-timer",
-        "rawValue": true,
-        "color": "hex:666666"
-      },
-      {
-        "id": "weekly-reset-elapsed-pct",
-        "type": "weekly-reset-timer",
-        "rawValue": true,
-        "color": "hex:666666",
-        "metadata": {
-          "display": "slider"
-        }
+        "id": "usage-battery",
+        "type": "custom-command",
+        "commandPath": "/home/yagu001/.config/ccstatusline/usage-battery.sh",
+        "timeout": 1000,
+        "preserveColors": true
       }
     ],
     [
