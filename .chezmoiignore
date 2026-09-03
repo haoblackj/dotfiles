@@ -11,6 +11,12 @@
 # chezmoi管理下に置くとherdrの更新をchezmoi applyで巻き戻すリスクがあるため対象外。
 /.claude/hooks/herdr-agent-state.sh
 
+# フックの単体テストは chezmoi のソース側を本籍地とし、ターゲットへは配置しない。
+# 配置先のコピーは $HERE/executable_<名前> というソース側の命名規則を参照するため
+# 実行しても exit 127 で落ち、動いている体裁のまま何も検証しない状態になっていた。
+# ソース側（dot_claude/hooks/executable_*.test.sh）で走らせる。
+/.claude/hooks/*.test.sh
+
 {{- if eq (env "REMOTE_CONTAINERS") "true" }}
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi aplly の対象から外す
 /.gitconfig
