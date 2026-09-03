@@ -2,7 +2,7 @@
 # ccstatusline の custom-command widget 用。
 # statusLine が渡す JSON の rate_limits から、5時間枠と週間枠の状態を1行に詰める。
 #
-#   形 = 残量   5セルを ▮/▯ で塗る。塗り数は int(残量 / 20)。
+#   形 = 残量   5セルを █/░ で塗る。塗り数は int(残量 / 20)。
 #   色 = ペース 枠の経過率から使用率を引いたポイント差の4段階。
 #
 # 枠の開始時刻は「リセット時刻 - 枠の長さ」で求める。ccstatusline 内部の
@@ -11,7 +11,7 @@
 # rate_limits はサブスク契約者かつ最初のAPI応答後にしか入らない。欠けている
 # 間は何も出さない。キャッシュに残った古い値を出すより誤解が少ない。
 #
-# 出力例:  ▮▮▮▮▯84% 3h54m  ▮▯▯▯▯18% 6d21h
+# 出力例:  ████░84% 3h54m  █░░░░18% 6d21h
 # 色は自前のANSIで付けるため、widget側に preserveColors: true が要る。
 
 set -uo pipefail
@@ -43,7 +43,7 @@ function bar(remain,   filled, i, out) {
     if (filled > 5) filled = 5
     if (filled < 0) filled = 0
     out = ""
-    for (i = 0; i < 5; i++) out = out (i < filled ? "▮" : "▯")
+    for (i = 0; i < 5; i++) out = out (i < filled ? "█" : "░")
     return out
 }
 
