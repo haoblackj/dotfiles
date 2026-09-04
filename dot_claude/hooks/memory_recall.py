@@ -230,6 +230,17 @@ class EmbedError(Exception):
         self.detail = detail
 
 
+def collapse_ws(s):
+    """改行を含む空白を半角空白1つへ畳む。
+
+    健診は1行1レコードの `KEY=値` / `接頭辞:値` で報告する。message に改行が
+    残ると `CAUSE:` の1レコードが複数行へ割れて形式が壊れる。本文が JSON でない
+    とき（プロキシが返す HTML の 5xx 等）に実際に起きる。障害の最中こそ
+    報告が要るので、記録を作る側で畳んでおく。
+    """
+    return " ".join(str(s).split())
+
+
 def classify_http_error(e):
     """HTTPError の本文を読んで (kind, detail) を返す。
 
@@ -249,6 +260,7 @@ def classify_http_error(e):
             message = errors[0].get("message") or message
     except (ValueError, AttributeError):
         pass
+    message = collapse_ws(message)
     detail = {"http": e.code, "code": code, "message": message}
     if e.code in (401, 403):
         return "auth", detail
@@ -413,7 +425,15 @@ def update_index(memory_dir, cache, cfg, deadline):
             hit_deadline = True
             break
         try:
-            process_batch(batch, cfg, deadline, collected)
+            # 返り値を捨てない。document / batch の分割で再帰へ入ったあと
+            # 締め切りを越えると、process_batch は何も記録せず False で戻る。
+            # ここで拾わないと hit_deadline が立たず partial も残らないので、
+            # 索引から消えたファイルだけができ、健診は「原因の記録なし」しか
+            # 書けない。ただの時間切れが正体不明の故障と区別できなくなる。
+            ok = process_batch(batch, cfg, deadline, collected)
+            if not ok and time.monotonic() > deadline:
+                hit_deadline = True
+                break
         except EmbedError as e:
             # auth だけがここへ来る。鍵が直るまで何度試しても失敗するので打ち切る。
             # auth は target を持たない（spec のログ形式）

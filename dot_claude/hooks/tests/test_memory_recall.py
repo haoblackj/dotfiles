@@ -504,6 +504,23 @@ class TestClassify(unittest.TestCase):
         kind, _ = self.classify(503, '{"errors":[{"message":"upstream"}]}')
         self.assertEqual(kind, "api")
 
+    def test_message_has_no_newlines(self):
+        """JSON でない本文の改行を message へ持ち込まない。
+
+        健診は message を `CAUSE:` の1行へ埋め込む。改行が残ると1レコードが
+        複数行へ割れ、`KEY=値` / `接頭辞:値` の約束が壊れる。障害の最中こそ
+        報告が要るので、ここで畳んでおく。
+        """
+        kind, detail = self.classify(
+            502, "<html>\n<head><title>502 Bad Gateway</title></head>\n"
+                 "<body>\r\n<h1>502</h1>\t</body>\n</html>\n")
+        self.assertEqual(kind, "api")
+        self.assertNotIn("\n", detail["message"])
+        self.assertNotIn("\r", detail["message"])
+        self.assertNotIn("\t", detail["message"])
+        # 中身は落とさない。畳むだけで捨ててはいない。
+        self.assertIn("502 Bad Gateway", detail["message"])
+
 
 class TestMainOrder(unittest.TestCase):
     def setUp(self):
@@ -799,6 +816,35 @@ class TestUpdateIndexFileLevelCommit(unittest.TestCase):
         with patch.object(mod, "BATCH_SIZE", 1), \
              patch.object(mod, "embed_texts", fake_embed_factory()):
             mod.update_index(self.dir, self.fresh_cache(), {}, time.monotonic() - 1)
+        with open(self.log_path) as f:
+            kinds = [json.loads(x)["kind"] for x in f if x.strip()]
+        self.assertIn("partial", kinds)
+
+    def test_deadline_inside_the_split_recursion_is_still_logged(self):
+        """分割の再帰の中で締め切りを越えた回も partial を残す。
+
+        process_batch は入口で締め切りを見つけると何も記録せず False を返す。
+        update_index が返り値を捨てていた頃は、最後の束がこの経路へ入ると
+        hit_deadline が立たず partial も出ず、索引から消えたファイルだけが
+        残った。健診はそれを「原因の記録なし」としか書けず、ただの時間切れが
+        正体不明の故障と見分けられなくなる。
+        """
+        for i in range(4):
+            self.write(f"f{i}.md", f"内容{i}")
+
+        def always_document(texts, cfg, timeout=None):
+            raise mod.EmbedError("document",
+                                 {"message": "Sequence too long: 9000 > 8192"})
+
+        with patch.object(mod, "embed_texts", always_document), \
+             patch.object(mod, "time") as fake_time:
+            # 1: update_index の束チェック（締め切り前）
+            # 2: process_batch 入口（締め切り前）
+            # 3: 分割してよいかの判定（締め切り前）
+            # 4,5: 割った先の入口（締め切り後 → 何も記録せず False）
+            # 6: update_index が返り値を見たあとの判定（締め切り後）
+            fake_time.monotonic.side_effect = [0, 0, 0, 100, 100, 100, 100, 100]
+            mod.update_index(self.dir, self.fresh_cache(), {}, 10)
         with open(self.log_path) as f:
             kinds = [json.loads(x)["kind"] for x in f if x.strip()]
         self.assertIn("partial", kinds)
