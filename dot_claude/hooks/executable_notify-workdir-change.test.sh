@@ -188,6 +188,34 @@ out=$(run_hook sess-fresh "" Bash "$WORK/fresh")
 expect_contains "コミット無しでもトップレベルを出す" "$out" "$WORK/fresh"
 expect_not_contains "コミット無しを管理外にしない"   "$out" "管理外"
 
+# --- write レーン ---
+W=sess-write
+
+# 11. 絶対パスの file_path は cwd を無視して解決する。
+out=$(run_hook "$W" "" Write "$WORK/r2" "$WORK/r1/a.txt")
+expect_contains "書き込み先のパスを出す"     "$out" "書き込み先 $WORK/r1/a.txt"
+expect_contains "書き込み先のリポジトリを出す" "$out" "$WORK/r1（ブランチ main）の中です"
+
+# 10. 相対パスの file_path は cwd を前置して解決する。
+out=$(run_hook "$W" "" Write "$WORK/r2" "b.txt")
+expect_contains "相対パスを cwd で解決する" "$out" "書き込み先 $WORK/r2/b.txt"
+expect_contains "解決先のリポジトリを出す"   "$out" "$WORK/r2（ブランチ main）の中です"
+
+# 15. 親ディレクトリが存在しないときは存在する祖先まで遡る。
+out=$(run_hook "$W" "" Write "$WORK/r1" "$WORK/r1/no/such/dir/c.txt")
+expect_contains "存在しない親でも祖先で解決する" "$out" "$WORK/r1（ブランチ main）の中です"
+
+# 12. shell レーンと write レーンが互いを上書きしない。
+L=sess-lanes
+out=$(run_hook "$L" "" Bash "$WORK/r1");                 expect_contains "レーン分離: shell 初回" "$out" "$WORK/r1"
+out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/d.txt"); expect_contains "レーン分離: write 初回" "$out" "$WORK/r2"
+out=$(run_hook "$L" "" Bash "$WORK/r1");                 expect_silent   "レーン分離: shell 2回目は無音" "$out"
+out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/e.txt"); expect_silent   "レーン分離: write 2回目は無音" "$out"
+
+# Edit も write レーンとして扱う。
+out=$(run_hook "$L" "" Edit "$WORK/r1" "$WORK/r2/f.txt")
+expect_silent "Edit は write レーンを共有する" "$out"
+
 # --- 集計 -------------------------------------------------------------------
 
 printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"

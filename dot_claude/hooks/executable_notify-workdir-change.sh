@@ -36,7 +36,28 @@ esac
 cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
 [ -n "$cwd" ] || exit 0
 
-base="$cwd"
+# 基準ディレクトリと、write レーンで文面に出す対象パスを決める。
+target=""
+if [ "$lane" -eq 1 ]; then
+  base="$cwd"
+else
+  target=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
+  [ -n "$target" ] || exit 0
+  # 相対パスの解決は防御的な余剰。実運用では常に絶対パスで渡る。
+  case "$target" in
+    /*) ;;
+    *)  target="$cwd/$target" ;;
+  esac
+  base=$(dirname "$target")
+fi
+[ -n "$base" ] || exit 0
+
+# Write は存在しないファイルを作れるので、親が無いことがある。存在する祖先まで遡る。
+while [ ! -d "$base" ]; do
+  parent=$(dirname "$base")
+  [ "$parent" = "$base" ] && break
+  base="$parent"
+done
 [ -d "$base" ] || exit 0
 
 session_id=$(printf '%s' "$input" | jq -r '.session_id // empty')
@@ -96,7 +117,11 @@ mv "$tmp" "$state_file" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; exit 0; }
 # 文面の空白は spec §6 の例に合わせる。パスの前には空白を置き、閉じ括弧の後には置かない。
 # 「…は /path（ブランチ main）です。」であって「…（ブランチ main） です。」ではない。
 cur_desc=$(describe "$current")
-subject="Bash の作業ディレクトリは ${cur_desc}です"
+if [ "$lane" -eq 1 ]; then
+  subject="Bash の作業ディレクトリは ${cur_desc}です"
+else
+  subject="書き込み先 ${target} は ${cur_desc}の中です"
+fi
 
 if [ -z "$previous" ]; then
   message="このセッションの${subject}。"
