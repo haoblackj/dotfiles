@@ -74,6 +74,28 @@ expect_not_contains() {
   esac
 }
 
+# フックを1回呼び、終了コードだけを返す。標準出力・標準エラーは捨てる（Important 3）。
+# run_hook と同じ引数だが、こちらは $(...) に包まず直接呼ぶこと。command substitution の
+# 中は別プロセスになるので、その中で $? を見ても呼び出し元には伝わらない。
+run_hook_rc() {
+  local session="$1" agent="$2" tool="$3" cwd="$4" fp="${5-}" payload
+  payload=$(jq -nc --arg s "$session" --arg a "$agent" --arg t "$tool" --arg c "$cwd" --arg f "$fp" '
+    {session_id: $s, hook_event_name: "PreToolUse", tool_name: $t, cwd: $c}
+    + (if $a == "" then {} else {agent_id: $a} end)
+    + (if $f == "" then {tool_input: {}} else {tool_input: {file_path: $f}} end)')
+  printf '%s' "$payload" | bash "$HOOK" >/dev/null 2>/dev/null
+  return $?
+}
+
+expect_exit0() {
+  local what="$1" rc="$2"
+  if [ "$rc" -eq 0 ]; then
+    pass=$((pass + 1)); printf 'ok   - exit0    : %s\n' "$what"
+  else
+    fail=$((fail + 1)); printf 'FAIL - exit0    : %s\n   終了コード: %s\n' "$what" "$rc"
+  fi
+}
+
 # 一時的な git リポジトリを作る。既定でブランチ main、初期コミットあり。
 # make_repo <パス> [--no-commit]
 make_repo() {
@@ -212,9 +234,16 @@ out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/d.txt"); expect_contains "レ�
 out=$(run_hook "$L" "" Bash "$WORK/r1");                 expect_silent   "レーン分離: shell 2回目は無音" "$out"
 out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/e.txt"); expect_silent   "レーン分離: write 2回目は無音" "$out"
 
-# Edit も write レーンとして扱う。
+# Edit は write レーンを共有する。「同じ作業先への Edit で無音」という判定だけでは、
+# Edit を lane 判定から完全に外した実装（tool_name が Bash/Write/Edit のいずれでも
+# ないので早期に exit 0 になる分岐に落ちる）でも同じ結果になり、判別力が無い
+# （Important 2）。別の作業先への Edit で実際に通知が出ることまで確かめて初めて、
+# Edit が write レーンの一員として扱われていることを検証したことになる。
 out=$(run_hook "$L" "" Edit "$WORK/r1" "$WORK/r2/f.txt")
-expect_silent "Edit は write レーンを共有する" "$out"
+expect_silent "同じ作業先への Edit は無音" "$out"
+out=$(run_hook "$L" "" Edit "$WORK/r1" "$WORK/r1/g.txt")
+expect_contains "別の作業先への Edit で通知が出る" "$out" "$WORK/r1（ブランチ main）"
+expect_contains "別の作業先への Edit で直前を出す" "$out" "直前は $WORK/r2（ブランチ main）でした"
 
 # --- git 管理外 ---
 mkdir -p "$WORK/plain/x" "$WORK/plain/y"
@@ -321,6 +350,17 @@ if [ "$leftovers" = "0" ]; then
 else
   fail=$((fail + 1)); printf 'FAIL - 一時ファイルが %s 個残っている\n' "$leftovers"
 fi
+
+# --- Important 3: exit 0 を守っているかの検査 --------------------------------
+# 通知が出る経路・無音の経路・鍵が不正な経路・対象外の tool_name の4経路すべてで
+# 終了コードが0であることを確かめる。PreToolUse の exit 2 はツール呼び出しそのものを
+# ブロックするため、フック自身のヘッダが約束する最重要の性質だが、これまで一件も
+# 検査が無かった。
+EC=sess-exitcode
+run_hook_rc "$EC" "" Bash "$WORK/r1";          expect_exit0 "通知が出る経路"                 "$?"
+run_hook_rc "$EC" "" Bash "$WORK/r1";          expect_exit0 "無音の経路（同じ作業先）"       "$?"
+run_hook_rc "../escape-exitcode" "" Bash "$WORK/r1"; expect_exit0 "鍵が不正な経路（session_id にパストラバーサル）" "$?"
+run_hook_rc "$EC" "" Read "$WORK/r1";          expect_exit0 "対象外の tool_name（Read）"     "$?"
 
 # --- 配線 ---
 # 検証の対象は chezmoi ソース側。ターゲットだけ見ると「配線したが re-add していない」
