@@ -114,23 +114,35 @@ if [ "$lane" -eq 1 ]; then previous="$line1"; else previous="$line2"; fi
 
 [ "$current" = "$previous" ] && exit 0
 
-# 状態を先に更新する。出力側で失敗しても同じ通知を繰り返さないため。
-mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+# 状態の更新を試みる。ここで失敗しても通知は必ず出す。状態ディレクトリが 500 になる
+# などで mkdir / 一時ファイルの書き込み / mv のいずれかがこけても、作業先が変わった
+# という事実は変わらないため、黙るより通知が1回余分に出るほうを選ぶ（Minor 5）。
+state_saved=1
+mkdir -p "$STATE_DIR" 2>/dev/null || state_saved=0
 
 # 状態ファイルを新規に作るときだけ、古いものを掃除する。対象は固定パスの直下の
 # *.state に限る。ここで消すのはフック自身が作った数百バイトの記録で、復元する
 # 意味が無い。Bash ツールから撃つ削除に掛かる「rm ではなく trash-put」の規律とは別。
-if [ ! -f "$state_file" ]; then
+if [ "$state_saved" -eq 1 ] && [ ! -f "$state_file" ]; then
   find "$STATE_DIR" -maxdepth 1 -type f -name '*.state' -mtime +7 -delete 2>/dev/null
 fi
 
 if [ "$lane" -eq 1 ]; then line1="$current"; else line2="$current"; fi
-tmp="$state_file.tmp.$$"
-printf '%s\n%s\n' "$line1" "$line2" > "$tmp" 2>/dev/null || exit 0
-mv "$tmp" "$state_file" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; exit 0; }
+if [ "$state_saved" -eq 1 ]; then
+  tmp="$state_file.tmp.$$"
+  if printf '%s\n%s\n' "$line1" "$line2" > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$state_file" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  fi
+fi
 
-# 文面の空白は spec §6 の例に合わせる。パスの前には空白を置き、閉じ括弧の後には置かない。
-# 「…は /path（ブランチ main）です。」であって「…（ブランチ main） です。」ではない。
+# describe() が組む丸括弧まわりの空白は spec §6 の例に合わせる。パスの前には空白を
+# 置き、閉じ括弧の後には置かない。「…は /path（ブランチ main）です。」であって
+# 「…（ブランチ main） です。」ではない。
+# ただし初回文面（下の「このセッションの${subject}。」）だけは spec §6 の例と空白が
+# 異なる。spec の例は「このセッション**の** Bash の…」と「の」の後に空白があるが、
+# write レーンで同じ空白を入れると「このセッションの 書き込み先 …」となって読みにくい
+# ため、計画（docs/superpowers/plans/2026-09-04-workdir-notice.md）で意図的に空白を
+# 外し、両レーンの語順を揃えている。
 cur_desc=$(describe "$current")
 if [ "${current%%$'\t'*}" = "$NOGIT" ]; then
   if [ "$lane" -eq 1 ]; then
