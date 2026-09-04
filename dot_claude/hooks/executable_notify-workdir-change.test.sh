@@ -142,6 +142,52 @@ payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"s3", hook_event_name:"PreToolU
 out=$(run_hook_socket "$payload")
 expect_contains "ソケット stdin でも通知が出る" "$out" "$WORK/r1"
 
+make_repo "$WORK/r2"
+make_repo "$WORK/fresh" --no-commit
+mkdir -p "$WORK/r1/sub"
+git -C "$WORK/r1" worktree add -q -b feat/wt "$WORK/wt1"
+git -C "$WORK/r1" branch -q other
+S=sess-shell
+
+# 1. shell レーンの初回で通知が出る。
+out=$(run_hook "$S" "" Bash "$WORK/r1")
+expect_contains "初回はトップレベルを出す"   "$out" "$WORK/r1"
+expect_contains "初回はブランチを出す"       "$out" "ブランチ main"
+expect_contains "初回は「このセッションの」で始まる" "$out" "このセッションの"
+expect_not_contains "初回は直前を書かない"   "$out" "直前は"
+
+# 2. 同じ作業先の2回目は無音。
+out=$(run_hook "$S" "" Bash "$WORK/r1")
+expect_silent "同じ作業先の2回目" "$out"
+
+# 6. 同じリポジトリのサブディレクトリでも無音（トップレベルへ畳まれる）。
+out=$(run_hook "$S" "" Bash "$WORK/r1/sub")
+expect_silent "同じリポジトリのサブディレクトリ" "$out"
+
+# 3. 別のリポジトリへ移ると通知が出て、直前が文面に入る。
+out=$(run_hook "$S" "" Bash "$WORK/r2")
+expect_contains "別リポジトリで現在を出す" "$out" "$WORK/r2"
+expect_contains "別リポジトリで直前を出す" "$out" "直前は $WORK/r1（ブランチ main）でした"
+expect_contains "確認を促す一文が入る"     "$out" "意図した作業先か確かめてから続けてください"
+
+# 4. 同一リポジトリの別ワークツリーへ移ると通知が出る。
+out=$(run_hook "$S" "" Bash "$WORK/wt1")
+expect_contains "ワークツリーのパスを出す"   "$out" "$WORK/wt1"
+expect_contains "ワークツリーのブランチを出す" "$out" "ブランチ feat/wt"
+
+# 5. トップレベルが同じでブランチだけ変わると通知が出る。
+out=$(run_hook "$S" "" Bash "$WORK/r1")   # r1 へ戻す（main）
+git -C "$WORK/r1" checkout -q other
+out=$(run_hook "$S" "" Bash "$WORK/r1")
+expect_contains "ブランチだけの変化でも鳴る" "$out" "ブランチ other"
+expect_contains "直前のブランチを出す"       "$out" "直前は $WORK/r1（ブランチ main）でした"
+git -C "$WORK/r1" checkout -q main
+
+# 18. コミットが1つも無いリポジトリを管理外と誤判定しない。
+out=$(run_hook sess-fresh "" Bash "$WORK/fresh")
+expect_contains "コミット無しでもトップレベルを出す" "$out" "$WORK/fresh"
+expect_not_contains "コミット無しを管理外にしない"   "$out" "管理外"
+
 # --- 集計 -------------------------------------------------------------------
 
 printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"
