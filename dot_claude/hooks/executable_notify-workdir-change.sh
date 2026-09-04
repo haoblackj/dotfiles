@@ -117,10 +117,18 @@ mv "$tmp" "$state_file" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; exit 0; }
 # 文面の空白は spec §6 の例に合わせる。パスの前には空白を置き、閉じ括弧の後には置かない。
 # 「…は /path（ブランチ main）です。」であって「…（ブランチ main） です。」ではない。
 cur_desc=$(describe "$current")
-if [ "$lane" -eq 1 ]; then
-  subject="Bash の作業ディレクトリは ${cur_desc}です"
+if [ "${current%%$'\t'*}" = "$NOGIT" ]; then
+  if [ "$lane" -eq 1 ]; then
+    subject="Bash の作業ディレクトリ ${base} は ${cur_desc}です"
+  else
+    subject="書き込み先 ${target} は ${cur_desc}です"
+  fi
 else
-  subject="書き込み先 ${target} は ${cur_desc}の中です"
+  if [ "$lane" -eq 1 ]; then
+    subject="Bash の作業ディレクトリは ${cur_desc}です"
+  else
+    subject="書き込み先 ${target} は ${cur_desc}の中です"
+  fi
 fi
 
 if [ -z "$previous" ]; then

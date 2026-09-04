@@ -216,6 +216,32 @@ out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/e.txt"); expect_silent   "レ�
 out=$(run_hook "$L" "" Edit "$WORK/r1" "$WORK/r2/f.txt")
 expect_silent "Edit は write レーンを共有する" "$out"
 
+# --- git 管理外 ---
+mkdir -p "$WORK/plain/x" "$WORK/plain/y"
+N=sess-nogit
+
+# 7. 管理外で通知が出て、管理外である旨と基準ディレクトリが文面に入る。
+out=$(run_hook "$N" "" Bash "$WORK/r1")   # まずリポジトリを記録
+out=$(run_hook "$N" "" Bash "$WORK/plain/x")
+expect_contains "管理外である旨を出す"     "$out" "git 管理外のディレクトリ"
+expect_contains "管理外では基準ディレクトリを出す" "$out" "作業ディレクトリ $WORK/plain/x は"
+expect_contains "管理外でも直前を出す"     "$out" "直前は $WORK/r1（ブランチ main）でした"
+expect_not_contains "管理外でブランチを書かない" "$out" "ブランチ main）です"
+
+# 8. 管理外の別ディレクトリへ移っても2回目は無音（!nogit へ畳まれている）。
+out=$(run_hook "$N" "" Bash "$WORK/plain/y")
+expect_silent "管理外どうしの移動" "$out"
+
+# 9 と 19. 管理外からリポジトリへ戻ると鳴り、直前はパスを含まない。
+out=$(run_hook "$N" "" Bash "$WORK/r2")
+expect_contains "管理外から戻ると鳴る"           "$out" "$WORK/r2（ブランチ main）"
+expect_contains "直前が管理外ならパスを書かない" "$out" "直前は git 管理外のディレクトリでした"
+expect_not_contains "直前に plain のパスを出さない" "$out" "$WORK/plain"
+
+# write レーンの管理外の文面。
+out=$(run_hook sess-nogit-w "" Write "$WORK/plain/x" "$WORK/plain/x/z.txt")
+expect_contains "管理外への書き込み先を出す" "$out" "書き込み先 $WORK/plain/x/z.txt は git 管理外のディレクトリです"
+
 # --- 集計 -------------------------------------------------------------------
 
 printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"
