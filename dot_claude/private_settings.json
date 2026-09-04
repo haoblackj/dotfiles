@@ -109,6 +109,26 @@
             "command": "bash \"$HOME/.claude/hooks/guard-destructive-git.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/notify-workdir-change.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/notify-workdir-change.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

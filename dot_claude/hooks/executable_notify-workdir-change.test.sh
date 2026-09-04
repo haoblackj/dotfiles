@@ -322,6 +322,36 @@ else
   fail=$((fail + 1)); printf 'FAIL - 一時ファイルが %s 個残っている\n' "$leftovers"
 fi
 
+# --- 配線 ---
+# 検証の対象は chezmoi ソース側。ターゲットだけ見ると「配線したが re-add していない」
+# 状態を合格にしてしまう。既存の executable_settings-wiring.test.sh と同じ理由。
+SRC_SETTINGS="$HOME/.local/share/chezmoi/dot_claude/private_settings.json"
+if [ ! -f "$SRC_SETTINGS" ]; then
+  fail=$((fail + 1)); printf 'FAIL - chezmoi ソース側の settings が無い: %s\n' "$SRC_SETTINGS"
+else
+  wiring=$(python3 - "$SRC_SETTINGS" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+pre = d.get("hooks", {}).get("PreToolUse", [])
+def wired(matcher):
+    for group in pre:
+        if group.get("matcher") != matcher:
+            continue
+        for h in group.get("hooks", []):
+            if "notify-workdir-change.sh" in h.get("command", ""):
+                return True
+    return False
+missing = [m for m in ("Bash", "Write|Edit") if not wired(m)]
+print("ok" if not missing else "missing:" + ",".join(missing))
+PY
+)
+  if [ "$wiring" = "ok" ]; then
+    pass=$((pass + 1)); printf 'ok   - PreToolUse の Bash と Write|Edit に配線されている\n'
+  else
+    fail=$((fail + 1)); printf 'FAIL - 配線が足りない: %s\n' "$wiring"
+  fi
+fi
+
 # --- 集計 -------------------------------------------------------------------
 
 printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"
