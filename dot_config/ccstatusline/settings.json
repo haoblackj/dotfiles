@@ -20,7 +20,9 @@
         "id": "5",
         "type": "git-branch",
         "color": "hex:ee64ac"
-      },
+      }
+    ],
+    [
       {
         "id": "usage-battery",
         "type": "custom-command",
@@ -63,8 +65,7 @@
         "timeout": 1000,
         "color": "hex:fbc3a7"
       }
-    ],
-    []
+    ]
   ],
   "flexMode": "full-until-compact",
   "compactThreshold": 60,
