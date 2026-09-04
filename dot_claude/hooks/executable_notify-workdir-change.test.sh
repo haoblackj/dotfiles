@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# notify-workdir-change.sh のユニットテスト。
+#
+# フック本体の名前は置き場所で変わる。chezmoi のソース側では
+# executable_notify-workdir-change.sh、ターゲット（~/.claude/hooks/）では
+# notify-workdir-change.sh。どちらでも動くよう両方を試す。
+# 既存のテストはこれを怠って配置先で exit 127 になり、何も検証していなかった前例がある。
+#
+# 実運用の状態ファイルには触らない。XDG_STATE_HOME を一時ディレクトリへ向ける。
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK=""
+for cand in "$HERE/notify-workdir-change.sh" "$HERE/executable_notify-workdir-change.sh"; do
+  if [ -f "$cand" ]; then HOOK="$cand"; break; fi
+done
+if [ -z "$HOOK" ]; then
+  echo "フック本体が見つからない: $HERE/notify-workdir-change.sh も executable_notify-workdir-change.sh も無い" >&2
+  exit 1
+fi
+
+pass=0
+fail=0
+
+WORK="$(mktemp -d)"
+cleanup() { rm -rf "$WORK"; }
+trap cleanup EXIT
+export XDG_STATE_HOME="$WORK/state"
+
+# --- ヘルパー ---------------------------------------------------------------
+
+# フックを1回呼び、標準出力をそのまま返す。
+# run_hook <session> <agent> <tool> <cwd> [file_path]
+run_hook() {
+  local session="$1" agent="$2" tool="$3" cwd="$4" fp="${5-}" payload
+  payload=$(jq -nc --arg s "$session" --arg a "$agent" --arg t "$tool" --arg c "$cwd" --arg f "$fp" '
+    {session_id: $s, hook_event_name: "PreToolUse", tool_name: $t, cwd: $c}
+    + (if $a == "" then {} else {agent_id: $a} end)
+    + (if $f == "" then {tool_input: {}} else {tool_input: {file_path: $f}} end)')
+  printf '%s' "$payload" | bash "$HOOK" 2>/dev/null
+}
+
+# フックの出力から additionalContext を取り出す。出力が無ければ空。
+context_of() {
+  local out="$1"
+  [ -z "$out" ] && { printf ''; return; }
+  printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null
+}
+
+expect_silent() {
+  local what="$1" out="$2"
+  if [ -z "$out" ]; then
+    pass=$((pass + 1)); printf 'ok   - silent   : %s\n' "$what"
+  else
+    fail=$((fail + 1)); printf 'FAIL - silent   : %s\n   出力: [%s]\n' "$what" "$out"
+  fi
+}
+
+expect_contains() {
+  local what="$1" out="$2" needle="$3" ctx
+  ctx=$(context_of "$out")
+  case "$ctx" in
+    *"$needle"*) pass=$((pass + 1)); printf 'ok   - contains : %s\n' "$what" ;;
+    *) fail=$((fail + 1)); printf 'FAIL - contains : %s\n   期待に含む: [%s]\n   実際:       [%s]\n' "$what" "$needle" "$ctx" ;;
+  esac
+}
+
+expect_not_contains() {
+  local what="$1" out="$2" needle="$3" ctx
+  ctx=$(context_of "$out")
+  case "$ctx" in
+    *"$needle"*) fail=$((fail + 1)); printf 'FAIL - excludes : %s\n   含んではいけない: [%s]\n   実際:             [%s]\n' "$what" "$needle" "$ctx" ;;
+    *) pass=$((pass + 1)); printf 'ok   - excludes : %s\n' "$what" ;;
+  esac
+}
+
+# 一時的な git リポジトリを作る。既定でブランチ main、初期コミットあり。
+# make_repo <パス> [--no-commit]
+make_repo() {
+  local path="$1"
+  mkdir -p "$path"
+  git -C "$path" init -q
+  git -C "$path" symbolic-ref HEAD refs/heads/main
+  git -C "$path" config user.email t@example.invalid
+  git -C "$path" config user.name test
+  if [ "${2-}" != "--no-commit" ]; then
+    : > "$path/seed"
+    git -C "$path" add seed
+    git -C "$path" commit -qm init
+  fi
+}
+
+# stdin をソケットで与えてフックを呼ぶ。Claude Code は実際にソケットで渡すので、
+# パイプだけの検証では bash の読み方の違いを見逃す。
+run_hook_socket() {
+  local payload="$1"
+  python3 - "$HOOK" "$payload" <<'PY'
+import socket, subprocess, sys
+hook, payload = sys.argv[1], sys.argv[2]
+parent, child = socket.socketpair()
+p = subprocess.Popen(["bash", hook], stdin=child.fileno(),
+                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+child.close()
+parent.sendall(payload.encode())
+parent.shutdown(socket.SHUT_WR)
+out, _ = p.communicate()
+parent.close()
+sys.stdout.write(out.decode())
+PY
+}
+
+# --- テスト -----------------------------------------------------------------
+
+make_repo "$WORK/r1"
+
+# 16. 対象外の tool_name では何もしない。
+out=$(run_hook s1 "" Read "$WORK/r1")
+expect_silent "tool_name が Read なら無音" "$out"
+if [ -d "$XDG_STATE_HOME/claude-workdir-notice" ] && [ -n "$(ls -A "$XDG_STATE_HOME/claude-workdir-notice" 2>/dev/null)" ]; then
+  fail=$((fail + 1)); printf 'FAIL - 対象外の tool_name で状態ファイルが作られた\n'
+else
+  pass=$((pass + 1)); printf 'ok   - 対象外の tool_name で状態ファイルを作らない\n'
+fi
+
+# 20. 出力の形。additionalContext を持ち permissionDecision を持たない。
+out=$(run_hook s2 "" Bash "$WORK/r1")
+ev=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName // ""' 2>/dev/null)
+if [ "$ev" = "PreToolUse" ]; then
+  pass=$((pass + 1)); printf 'ok   - hookEventName が PreToolUse\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - hookEventName が PreToolUse でない: [%s]\n' "$ev"
+fi
+pd=$(printf '%s' "$out" | jq -r 'if (.hookSpecificOutput | has("permissionDecision")) then "ある" else "ない" end' 2>/dev/null)
+if [ "$pd" = "ない" ]; then
+  pass=$((pass + 1)); printf 'ok   - permissionDecision を返さない\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - permissionDecision を返している\n'
+fi
+
+# 21. stdin をソケットで与えても動く。
+payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"s3", hook_event_name:"PreToolUse", tool_name:"Bash", cwd:$c, tool_input:{}}')
+out=$(run_hook_socket "$payload")
+expect_contains "ソケット stdin でも通知が出る" "$out" "$WORK/r1"
+
+# --- 集計 -------------------------------------------------------------------
+
+printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]
