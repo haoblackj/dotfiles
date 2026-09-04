@@ -176,8 +176,7 @@
     "claude-code-setup@claude-plugins-official": true,
     "compact-plus@compact-plus-local": true,
     "reviewable-html-workbench@reviewable-html-workbench-local": true,
-    "codex@openai-codex": true,
-    "roundtable@agent-review-panel": true
+    "codex@openai-codex": true
   },
   "extraKnownMarketplaces": {
     "karpathy-skills": {
@@ -208,12 +207,6 @@
       "source": {
         "source": "github",
         "repo": "openai/codex-plugin-cc"
-      }
-    },
-    "agent-review-panel": {
-      "source": {
-        "source": "github",
-        "repo": "wan-huiyan/agent-review-panel"
       }
     }
   },
