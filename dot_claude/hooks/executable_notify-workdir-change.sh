@@ -62,7 +62,14 @@ done
 
 session_id=$(printf '%s' "$input" | jq -r '.session_id // empty')
 agent_id=$(printf '%s' "$input" | jq -r '.agent_id // empty')
-[ -n "$session_id" ] || exit 0
+
+# パスの構成に使う値は、取り出した直後に形式を検証する。値の由来が信頼できても省かない。
+# 過去に3本のフックが session_id を無検証でパスへ使い、"../victim/target" で状態ディレクトリの
+# 外を上書きできることが実証された。
+[[ "$session_id" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
+if [ -n "$agent_id" ]; then
+  [[ "$agent_id" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
+fi
 
 # 作業先を「トップレベル<TAB>ブランチ」で表す。管理外は "!nogit<TAB>" の1つに畳む。
 # 判定は標準出力の1行目で行い、終了コードを見ない。コミットが1つも無いリポジトリは
@@ -109,6 +116,14 @@ if [ "$lane" -eq 1 ]; then previous="$line1"; else previous="$line2"; fi
 
 # 状態を先に更新する。出力側で失敗しても同じ通知を繰り返さないため。
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+
+# 状態ファイルを新規に作るときだけ、古いものを掃除する。対象は固定パスの直下の
+# *.state に限る。ここで消すのはフック自身が作った数百バイトの記録で、復元する
+# 意味が無い。Bash ツールから撃つ削除に掛かる「rm ではなく trash-put」の規律とは別。
+if [ ! -f "$state_file" ]; then
+  find "$STATE_DIR" -maxdepth 1 -type f -name '*.state' -mtime +7 -delete 2>/dev/null
+fi
+
 if [ "$lane" -eq 1 ]; then line1="$current"; else line2="$current"; fi
 tmp="$state_file.tmp.$$"
 printf '%s\n%s\n' "$line1" "$line2" > "$tmp" 2>/dev/null || exit 0

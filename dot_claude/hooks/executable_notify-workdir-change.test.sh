@@ -242,6 +242,86 @@ expect_not_contains "直前に plain のパスを出さない" "$out" "$WORK/pla
 out=$(run_hook sess-nogit-w "" Write "$WORK/plain/x" "$WORK/plain/x/z.txt")
 expect_contains "管理外への書き込み先を出す" "$out" "書き込み先 $WORK/plain/x/z.txt は git 管理外のディレクトリです"
 
+# --- 鍵の検証と掃除 ---
+SD="$XDG_STATE_HOME/claude-workdir-notice"
+
+# 13. session_id にパストラバーサルを入れると何も書かず何も出さない。
+before=$(find "$SD" -type f 2>/dev/null | wc -l)
+payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"../escape", hook_event_name:"PreToolUse", tool_name:"Bash", cwd:$c, tool_input:{}}')
+out=$(printf '%s' "$payload" | bash "$HOOK" 2>/dev/null)
+expect_silent "session_id にパストラバーサル" "$out"
+after=$(find "$SD" -type f 2>/dev/null | wc -l)
+if [ "$before" = "$after" ]; then
+  pass=$((pass + 1)); printf 'ok   - パストラバーサルでファイルを作らない\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - パストラバーサルでファイルが増えた: %s -> %s\n' "$before" "$after"
+fi
+if [ -e "$XDG_STATE_HOME/escape.state" ]; then
+  fail=$((fail + 1)); printf 'FAIL - 状態ディレクトリの外へ書けた\n'
+else
+  pass=$((pass + 1)); printf 'ok   - 状態ディレクトリの外へ書けない\n'
+fi
+
+# agent_id 側も同じ。ただし agent_id は "<session>-" の後ろに付くので、素朴に "../x" を
+# 与えても先頭の成分（"ok-.."）が存在せず、検証が無くても書き込みが失敗して同じ「無音」に
+# なる。それでは検証の有無を区別できないので、traversal の起点になるディレクトリを先に
+# 作っておく。検証が無ければ $XDG_STATE_HOME/escaped.state がディレクトリの外に生まれる。
+mkdir -p "$SD/ok-esc"
+payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"ok", agent_id:"esc/../../escaped", hook_event_name:"PreToolUse", tool_name:"Bash", cwd:$c, tool_input:{}}')
+out=$(printf '%s' "$payload" | bash "$HOOK" 2>/dev/null)
+expect_silent "agent_id にパストラバーサル" "$out"
+if [ -e "$XDG_STATE_HOME/escaped.state" ]; then
+  fail=$((fail + 1)); printf 'FAIL - agent_id 経由で状態ディレクトリの外へ書けた\n'
+else
+  pass=$((pass + 1)); printf 'ok   - agent_id 経由でも外へ書けない\n'
+fi
+
+# 14. agent_id の有無で別の状態ファイルを使う。
+out=$(run_hook sess-ag ""    Bash "$WORK/r1"); expect_contains "親: 初回は鳴る" "$out" "$WORK/r1"
+out=$(run_hook sess-ag ""    Bash "$WORK/r1"); expect_silent   "親: 2回目は無音" "$out"
+out=$(run_hook sess-ag agent Bash "$WORK/r1"); expect_contains "子: 別ファイルなので初回として鳴る" "$out" "$WORK/r1"
+if [ -f "$SD/sess-ag.state" ] && [ -f "$SD/sess-ag-agent.state" ]; then
+  pass=$((pass + 1)); printf 'ok   - agent_id ありと無しで別ファイル\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - agent_id で状態ファイルが分かれていない\n'
+fi
+
+# 17. 新規作成のときに7日を超えた *.state だけ消える。
+mkdir -p "$SD/keepdir"
+: > "$SD/old.state";    touch -d '8 days ago' "$SD/old.state"
+: > "$SD/recent.state"; touch -d '2 days ago' "$SD/recent.state"
+: > "$SD/other.log";    touch -d '8 days ago' "$SD/other.log"
+out=$(run_hook sess-sweep "" Bash "$WORK/r1")
+if [ ! -e "$SD/old.state" ]; then
+  pass=$((pass + 1)); printf 'ok   - 7日超の .state は消える\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - 7日超の .state が残った\n'
+fi
+for keep in "$SD/recent.state" "$SD/other.log" "$SD/keepdir"; do
+  if [ -e "$keep" ]; then
+    pass=$((pass + 1)); printf 'ok   - 残るべきものが残る: %s\n' "$(basename "$keep")"
+  else
+    fail=$((fail + 1)); printf 'FAIL - 消してはいけないものが消えた: %s\n' "$(basename "$keep")"
+  fi
+done
+
+# 既存の状態ファイルを更新するだけのときは掃除しない。
+: > "$SD/old2.state"; touch -d '8 days ago' "$SD/old2.state"
+out=$(run_hook sess-sweep "" Bash "$WORK/r2")
+if [ -e "$SD/old2.state" ]; then
+  pass=$((pass + 1)); printf 'ok   - 更新のときは掃除しない\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - 更新のときにも掃除した\n'
+fi
+
+# 一時ファイルを残さない。
+leftovers=$(find "$SD" -maxdepth 1 -name '*.tmp.*' 2>/dev/null | wc -l)
+if [ "$leftovers" = "0" ]; then
+  pass=$((pass + 1)); printf 'ok   - 一時ファイルを残さない\n'
+else
+  fail=$((fail + 1)); printf 'FAIL - 一時ファイルが %s 個残っている\n' "$leftovers"
+fi
+
 # --- 集計 -------------------------------------------------------------------
 
 printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"
