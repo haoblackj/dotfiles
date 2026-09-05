@@ -794,15 +794,34 @@ def added_line_at(diff, line):
 # ドット付きの例外名でこれを起こす。
 WORKER_OK = "normal"
 
+# 行にならなかった記録の種別。**3つを区別して数えられる形で返す。**
+# まとめて「行にならなかった」で返すと、演算子フィルタが落とした正当な分と、
+# 道具が測れなかった分と、まだ走っていない分が同じ数に混ざる。門はそれぞれで
+# 別の判断をする（フィルタ分は件数の照合にだけ効き、残る2つは走行を止める）。
+SKIPPED_PENDING = "pending"      # 結果がまだ無い（`[work item, null]`）
+SKIPPED_FILTERED = "filtered"    # `test_outcome` が無い（`cr-filter-operators`）
+SKIPPED_BROKEN = "broken"        # 道具が落ちて識別子を作れない
+
 
 def ids_from_cosmic_ray(dump_json):
-    """`cosmic-ray dump` の出力から識別子の行の列を作る。
+    """`cosmic-ray dump` の出力を読み、`(rows, skipped)` を返す。
 
-    1行は `(識別子, 生き残りか, test_outcome, worker_outcome)`。
+    `rows` の1行は `(識別子, 生き残りか, test_outcome, worker_outcome)`。
+    `skipped` の1件は `(種別, test_outcome, worker_outcome)` で、行にならなかった
+    記録が**1件残らず**ここに載る。
 
     **結果の種別を識別子と一緒に返す。**返さないと Task 7 の門が同じ dump を
     もう一度自前で読むことになり、読み手が2つに育つ。育つと「門は通っているのに
     識別子側の解釈が違う」という食い違いが起きえて、そのとき片方は必ず黙っている。
+
+    **行にならなかった記録も返す。**Ruling 15 は `incompetent` の読み飛ばしを
+    「Task 7 の門が必ず捕まえる」ことで正当化していたが、行にしない以上
+    門の目には入らず、**捕まっていなかった。**`skipped` に載せることで、
+    (1) 変異の適用そのもので落ちた `incompetent` を門が捕まえられるようになり、
+    (2) `init` が作った件数と `len(rows) + len(skipped)` を突き合わせられる。
+    突き合わせが要るのは、`exec` が途中で死んだセッションでも走り終えた分だけで
+    「測れた」ように見えるため。**変異体が減って生き残りが0に見える**という、
+    #16 が塞ごうとしている型そのもの。
 
     `dump_json` は `cosmic-ray dump` の標準出力そのもの。1行が
     `[work item, 結果]` の2要素配列という JSON Lines である。
@@ -820,19 +839,17 @@ def ids_from_cosmic_ray(dump_json):
 
     **道具が測れなかった記録と、出力が壊れている記録を分ける。**
     `worker_outcome` が `normal` でない記録（変異の適用で落ちた `exception` など）
-    は、識別子を作れなくても読み飛ばす。止める形にすると、Python レーンは
-    リポジトリ単位の1セッションなので**その1件でリポジトリの Python 対象すべてが
-    「計測できなかった」へ落ちる。**この形は道具の不具合で現に出る。
-    止めなくてよい根拠は `incompetent` を **Task 7 の門が必ず捕まえる**こと。
-    あの門は1件でもあれば走行を止めるので、ここで二重に止める必要が無い。
-    二重に止めると「道具が測れなかった」と「出力が壊れている」が同じ扱いになり、
-    原因も次の一手も違うものが混ざる。
+    は、識別子を作れなくても行にせず `skipped` へ回す。止める形にすると、
+    Python レーンはリポジトリ単位の1セッションなので**その1件でリポジトリの
+    Python 対象すべてが「計測できなかった」へ落ちる。**この形は道具の不具合で
+    現に出る。二重に止めると「道具が測れなかった」と「出力が壊れている」が
+    同じ扱いになり、原因も次の一手も違うものが混ざる。
 
     `worker_outcome` が `normal` なのに識別子を作れない記録では止まる。
     黙って捨てると、その変異体が生き残っていても基準に載らない。
     #16 が塞ごうとしている型そのもの。
     """
-    out = []
+    out, skipped = [], []
     for raw in dump_json.splitlines():
         raw = raw.strip()
         if not raw:
@@ -845,15 +862,20 @@ def ids_from_cosmic_ray(dump_json):
             raise Unmeasurable("cosmic-ray dump の1行が [work item, 結果] の形でない")
         work = rec[0]
         result = rec[1] if len(rec) > 1 else None
-        outcome = (result or {}).get("test_outcome")
-        if outcome is None:
+        if result is None:
+            skipped.append((SKIPPED_PENDING, None, None))
             continue
+        outcome = result.get("test_outcome")
         worker = result.get("worker_outcome")
+        if outcome is None:
+            skipped.append((SKIPPED_FILTERED, None, worker))
+            continue
         broken = worker != WORKER_OK
 
         def stop(why):
-            """出力が壊れているときだけ止める。道具が落ちた分は読み飛ばす。"""
+            """出力が壊れているときだけ止める。道具が落ちた分は `skipped` へ回す。"""
             if broken:
+                skipped.append((SKIPPED_BROKEN, outcome, worker))
                 return None
             raise Unmeasurable(why)
 
@@ -879,7 +901,7 @@ def ids_from_cosmic_ray(dump_json):
             continue
         out.append((mutant_id(module_path, line, content),
                     outcome == "survived", outcome, worker))
-    return out
+    return out, skipped
 
 
 # 変異体は当てられたのにテストを起動できなかったことを表す `test_outcome`。
@@ -917,12 +939,17 @@ def python_lane_gate(dump_json, init_count, unmutated_rc):
     読み手が2つに育つと、門は通っているのに識別子側の解釈が違うという
     食い違いが起きえて、そのとき片方は必ず黙っている。
 
-    **既知の穴。**`worker_outcome` が `normal` でない `incompetent`
-    （cosmic-ray が変異の適用そのもので例外を出した経路。`diff` は `None`）は
-    `ids_from_cosmic_ray` が行にしないので、この門には届かない。Ruling 15 は
-    その読み飛ばしを「Task 7 の門が必ず捕まえる」ことで正当化しているが、
-    現状は捕まえていない。tests の `test_a_mutant_broken_by_cosmic_ray_itself_
-    reaches_the_gate` が `expectedFailure` で場所を押さえてある。
+    **`incompetent` は行と `skipped` の両方から数える。**cosmic-ray が変異の
+    適用そのもので例外を出した経路（`worker_outcome=exception`、`diff` は
+    `None`）は識別子を作れないので行にならない。行だけを見る門はこの経路を
+    1件も捕まえない。実測でこの形は出る（`except (ValueError, os.error):` の
+    ような組の中のドット付き例外名で `core/ExceptionReplacer` が落ちる）。
+
+    **件数を突き合わせる。**`init` が作った件数と `len(rows) + len(skipped)` が
+    一致すること。一致しなければ、dump に現れていない work item がある。
+    合成ではなく実物の走行で成立することを確かめてある（変異体31件の合成
+    プロジェクトで、フィルタ有無 × `exec` 有無の4通り。行30 + 壊れ1 /
+    行29 + フィルタ2 / 未実行31 / 未実行29 + フィルタ2）。
     """
     if isinstance(init_count, bool) or not isinstance(init_count, int):
         return f"cosmic-ray init が作った変異体の件数が整数でない（{init_count!r}）"
@@ -935,18 +962,29 @@ def python_lane_gate(dump_json, init_count, unmutated_rc):
         return ("変異を当てない状態で test-command が落ちる"
                 f"（終了コード {unmutated_rc}）。"
                 "赤いテストは変異体を残らず kill するので満点になる")
-    rows = ids_from_cosmic_ray(dump_json)
-    broken = [k for k, _survived, outcome, _worker in rows
-              if outcome == INCOMPETENT]
-    if broken:
-        first = broken[0]
-        return (f"テストを起動できなかった変異体が{len(broken)}件ある"
-                f"（test_outcome が {INCOMPETENT}、"
-                f"最初の1件は {first[0]}:{first[1]}）。"
+    rows, skipped = ids_from_cosmic_ray(dump_json)
+    stalled = [k for k, _survived, outcome, _worker in rows
+               if outcome == INCOMPETENT]
+    crashed = [s for s in skipped if s[1] == INCOMPETENT]
+    if stalled or crashed:
+        where = (f"最初の1件は {stalled[0][0]}:{stalled[0][1]}"
+                 if stalled else
+                 f"{len(crashed)}件とも cosmic-ray が変異の適用で落ちた分")
+        return (f"テストを起動できなかった変異体が{len(stalled) + len(crashed)}件ある"
+                f"（test_outcome が {INCOMPETENT}、{where}）。"
                 "生き残りにも kill にも数えられないので成績が上振れる")
+    waiting = [s for s in skipped if s[0] == SKIPPED_PENDING]
+    if waiting:
+        return (f"結果がまだ無い変異体が{len(waiting)}件ある"
+                "（exec が最後まで走っていない）。走り終えた分だけで成績を出すと、"
+                "測っていない変異体が数からも消える")
+    seen = len(rows) + len(skipped)
+    if seen != init_count:
+        return (f"cosmic-ray init が作った変異体は{init_count}件なのに、"
+                f"dump にある記録は{seen}件で食い違う")
     if not rows:
-        return (f"cosmic-ray init は変異体を{init_count}件作ったのに、"
-                "結果のある記録が1件も無い")
+        return (f"cosmic-ray init が作った{init_count}件がすべて"
+                "行にならず、判別力を測れた変異体が1件も無い")
     return None
 
 
@@ -2060,8 +2098,11 @@ def main(argv):
         with open(argv[i + 1], encoding="utf-8") as f:
             text = f.read()
         try:
-            ids = ids_from_cosmic_ray(text)
+            ids, skipped = ids_from_cosmic_ray(text)
+            # **行にならなかった記録も返す。**返さないと、門が捕まえる根拠に
+            # なっている集合を外から一度も見られない。
             payload = {"ids": [[list(k), s, t, w] for k, s, t, w in ids],
+                       "skipped": [list(s) for s in skipped],
                        "grouped": None, "unmeasurable": None}
             got = group_by_target(ids)
             payload["grouped"] = {
@@ -2072,7 +2113,7 @@ def main(argv):
                                  for t, why in got["unmeasurable"]],
             }
         except Unmeasurable as e:
-            payload = {"ids": None, "grouped": None,
+            payload = {"ids": None, "skipped": None, "grouped": None,
                        "unmeasurable": f"{UNMEASURABLE}: {e}"}
         print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
         return 0
