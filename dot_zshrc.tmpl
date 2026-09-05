@@ -76,19 +76,27 @@ unsetopt nomatch
 # chezmoi drift check (once per login session)
 if [[ -z "$_CHEZMOI_CHECKED" ]] && command -v chezmoi &>/dev/null; then
   _CHEZMOI_CHECKED=1
-  local _chezmoi_status
-  # --exclude=scripts: run_once の内容を変えると status に "R"(実行予定) が並ぶが、
-  # これはドリフトではない。除外しないと下の re-add 案内が、ホームに存在しない
-  # スクリプト名を対象に出てしまい、叩いても無言の no-op で消えない。
-  _chezmoi_status=$(chezmoi status --exclude=scripts 2>/dev/null)
-  if [[ -n "$_chezmoi_status" ]]; then
+  local _chezmoi_status _chezmoi_drift _chezmoi_scripts _chezmoi_files
+  # status の 2 列目が "R" の行は run_once スクリプトの実行予定で、ホームのファイルが
+  # ズレたわけではない。混ぜると re-add 案内がホームに存在しないスクリプト名を対象に
+  # 出てしまい、叩いても無言の no-op で消えないため、記号で振り分けて別々に知らせる。
+  # chezmoi の起動は 0.3 秒かかるので status は 1 回だけ呼ぶ。
+  _chezmoi_status=$(chezmoi status 2>/dev/null)
+  _chezmoi_drift=$(echo "$_chezmoi_status"   | awk 'NF && substr($0,2,1) != "R"')
+  _chezmoi_scripts=$(echo "$_chezmoi_status" | awk 'NF && substr($0,2,1) == "R"')
+  if [[ -n "$_chezmoi_drift" ]]; then
     print -P "%F{yellow}⚠  chezmoi: managed files have drifted.%f"
-    print -P "%F{yellow}$(echo "$_chezmoi_status" | awk '{print "   " $0}')%f"
+    print -P "%F{yellow}$(echo "$_chezmoi_drift" | awk '{print "   " $0}')%f"
     print -P "%F{yellow}   - 差分確認:            chezmoi diff%f"
-    local _chezmoi_files
-    _chezmoi_files=$(echo "$_chezmoi_status" | awk '{print $NF}' | tr '\n' ' ')
+    _chezmoi_files=$(echo "$_chezmoi_drift" | awk '{print $NF}' | tr '\n' ' ')
     print -P "%F{yellow}   - ホームの変更を取込む: chezmoi re-add ${_chezmoi_files}%f"
     print -P "%F{yellow}   - ソースをホームに適用: chezmoi apply%f"
+  fi
+  if [[ -n "$_chezmoi_scripts" ]]; then
+    print -P "%F{cyan}ℹ  chezmoi: 実行待ちのスクリプトがあります（ドリフトではありません）。%f"
+    print -P "%F{cyan}$(echo "$_chezmoi_scripts" | awk '{print "   " $0}')%f"
+    print -P "%F{cyan}   - 中身を見る: chezmoi diff%f"
+    print -P "%F{cyan}   - 実行する:   chezmoi apply%f"
   fi
 fi
 # .NET SDK (Maylander の開発で導入、2026-08-19)
