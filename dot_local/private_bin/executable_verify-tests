@@ -223,7 +223,12 @@ def run_shell(repo, sandbox, sh_files, extra_ro=()):
     """
     results = {}
     for rel in sh_files:
-        rc, _, _ = run_cmd_in_sandbox(repo, sandbox, ["bash", os.path.join(repo, rel)])
+        # extra_ro を必ず渡す。受け取るだけで転送しないと、Task 10 の重ね掛けが
+        # 黙って効かないまま走る。引数が構文的には在るので TypeError にもならず、
+        # shell レーンの trust root だけが静かに無効化される。
+        rc, _, _ = run_cmd_in_sandbox(
+            repo, sandbox, ["bash", os.path.join(repo, rel)], extra_ro
+        )
         results[rel] = rc
     return results
 
