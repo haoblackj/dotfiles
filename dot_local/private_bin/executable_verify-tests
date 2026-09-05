@@ -558,6 +558,228 @@ def shell_pairs(repo, tracked):
     return {"pairs": pairs, "python_pairs": py_pairs, "unmeasurable": bad}
 
 
+# 変異体の識別子は `(対象のリポジトリ相対パス, 行番号, 変異後のその行の内容)`。
+# **道具が振る通し番号を使わない。**cosmic-ray の `job_id` は `init` のたびに
+# 生成される UUID でセッションをまたいで一致せず、universalmutator の
+# `check-issues.mutant.99.sh` の番号は生成順なのでルールを1つ足すと全部ずれる。
+# どちらを使っても基準との比較が毎回全件不一致になり、「判別力が落ちた」と
+# 「番号がずれた」が区別できなくなる。
+
+
+def mutant_id(path, line, content):
+    """両レーン共通の変異体の識別子を返す。
+
+    **書式を1箇所で決める。**レーンごとに組み立てると、両方の形が揃っている
+    ことを外から確かめる手立てが無くなり、基準ファイルがレーンを区別せずに
+    読めるという前提が静かに崩れる。
+
+    `content` からは行末の改行だけを落とす。字下げや空白まで正規化すると、
+    別々の変異体が同じ識別子へ潰れて衝突が増える。
+    """
+    if not isinstance(line, int) or isinstance(line, bool) or line < 1:
+        raise Unmeasurable(f"{path}: 行番号が1以上の整数でない（{line!r}）")
+    if not path:
+        raise Unmeasurable("対象のパスが空")
+    # **絶対パスと親をさかのぼるパスを通さない。**通すと基準にその機械や
+    # ワークツリーの場所が焼き付き、別の場所で走らせた瞬間に全識別子が
+    # 食い違って、生き残りが全件「基準に無い」へ落ちる。
+    if os.path.isabs(path):
+        raise Unmeasurable(f"識別子の対象は相対パスで持つ（{path}）")
+    norm = os.path.normpath(path)
+    if norm.startswith(".."):
+        raise Unmeasurable(f"識別子の対象はリポジトリの内側で持つ（{path}）")
+    body = content.rstrip("\r\n")
+    if "\n" in body or "\r" in body:
+        raise Unmeasurable(f"{norm}: 識別子の内容が1行になっていない")
+    return (norm, line, body)
+
+
+HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+
+def added_line_at(diff, line):
+    """統一差分の中で、新しいファイルの `line` 行目にあたる追加行を返す。
+
+    **`+` で始まる行を字面で数えて先頭を採らない。**1件の変異で `+` 行が
+    2本出ることが実際にある（実測で 2,440件中4件。`sys.exit(0)` の変異に
+    ファイル末尾の空行が巻き込まれる形）。先頭を採ると、当たった行が2本目の
+    ときに別の行の内容を識別子にする。どちらを採るかを決めておかないと
+    衝突判定も基準の比較もぶれるので、**ハンクの見出しから行を数えて
+    `start_pos[0]` に一致する追加行だけを採る。**
+
+    表題（`--- a/x` と `+++ b/x`）は最初のハンクより前にあるので、行番号を
+    数え始める前に読み飛ばされる。字面で `+++` を落とす形にはしない。
+    本文が `++` で始まる行を取り違える。
+
+    実測ではハンクの前後で行数が変わったことは一度も無い（2,440件）ので、
+    新旧どちらで数えても同じ行に落ちる。新しい側で数えるのは、識別子が
+    持つのが変異「後」の行だから。
+    """
+    newno = None
+    for raw in diff.splitlines():
+        m = HUNK_RE.match(raw)
+        if m:
+            newno = int(m.group(1))
+            continue
+        if newno is None:
+            continue
+        if not raw:
+            newno += 1
+            continue
+        tag, rest = raw[0], raw[1:]
+        if tag == "-":
+            continue
+        if tag == "\\":
+            # `\ No newline at end of file`。どちらの側の行でもない。
+            continue
+        if tag == "+":
+            if newno == line:
+                return rest
+            newno += 1
+            continue
+        newno += 1
+    return None
+
+
+def ids_from_cosmic_ray(dump_json):
+    """`cosmic-ray dump` の出力から `(識別子, 生き残りか)` の対の列を作る。
+
+    `dump_json` は `cosmic-ray dump` の標準出力そのもの。1行が
+    `[work item, 結果]` の2要素配列という JSON Lines である。
+
+    **`module_path` と `start_pos` は `mutations` 配列の中から読む。**
+    work item のトップレベルには無い（cosmic-ray 8.7.0 で実測）。
+
+    **変異を自前で当て直さない。**変異後の行は `diff` の追加行から取れる。
+    当て直すと、cosmic-ray が実際に実行した変異体と識別子が食い違いうる。
+
+    `test_outcome` が無い記録は対を作らない。`cr-filter-operators` で落とした
+    変異体がこの形になる（`worker_outcome` が `skipped`、`diff` は `null`）。
+    生き残り側へ数えると基準がぶれ、kill 側へ数えると測っていない変異体で
+    点数が上がる。**走行そのものが妥当だったか——`incompetent` が出ていないか、
+    変異体が1件以上あるか——は Task 7 の門が別に見る。**ここは識別子だけを作る。
+
+    結果があるのに識別子を作れない記録では止まる。黙って捨てると、その変異体が
+    生き残っていても基準に載らない。#16 が塞ごうとしている型そのもの。
+    """
+    out = []
+    for raw in dump_json.splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            rec = json.loads(raw)
+        except ValueError as e:
+            raise Unmeasurable(f"cosmic-ray dump を JSON Lines として読めない（{e}）")
+        if not isinstance(rec, list) or not rec:
+            raise Unmeasurable("cosmic-ray dump の1行が [work item, 結果] の形でない")
+        work = rec[0]
+        result = rec[1] if len(rec) > 1 else None
+        outcome = (result or {}).get("test_outcome")
+        if outcome is None:
+            continue
+        muts = work.get("mutations") or []
+        if len(muts) != 1:
+            raise Unmeasurable(
+                f"1つの work item に変異が{len(muts)}件あり、行を1つに定められない")
+        m = muts[0]
+        module_path = m.get("module_path")
+        start = m.get("start_pos") or []
+        if not module_path or not start:
+            raise Unmeasurable(
+                "cosmic-ray dump の mutations に module_path か start_pos が無い")
+        line = start[0]
+        diff = result.get("diff")
+        if not diff:
+            raise Unmeasurable(
+                f"{module_path}:{line}: 結果はあるのに diff が無く、"
+                "変異後の行を取れない")
+        content = added_line_at(diff, line)
+        if content is None:
+            raise Unmeasurable(
+                f"{module_path}:{line}: diff にその行の追加行が無い")
+        out.append((mutant_id(module_path, line, content),
+                    outcome == "survived"))
+    return out
+
+
+def ids_from_universalmutator(target, mutant_path, repo=None):
+    """変異体と対象の差分から識別子を作る。
+
+    **変異体のファイル名を識別子に入れない。**universalmutator が振る
+    `check-issues.mutant.99.sh` の番号は生成順なので、ルールを1つ足すと全部ずれる。
+
+    `target` は識別子に載せるパスそのもの（リポジトリのルートからの相対）。
+    `repo` を渡すとファイルはその下から読む。渡さないときは `target` を
+    そのまま開く。**識別子に載る値は `repo` の有無で変わらない。**
+
+    行数が変わった変異体と、変更が1行でない変異体では止まる。
+    universalmutator は1行だけを書き換える（実測で行数も不変）ので、
+    そうでないなら生成か読み取りが壊れている。片方を黙って選ぶと、
+    選ばなかった側の変更が識別子から消える。
+    """
+    source = os.path.join(repo, target) if repo else target
+    try:
+        original = read_target(source).splitlines()
+        mutant = read_target(mutant_path).splitlines()
+    except OSError as e:
+        raise Unmeasurable(f"{target}: 対象か変異体を読めない（{e}）")
+    if len(original) != len(mutant):
+        raise Unmeasurable(
+            f"{target}: 変異体の行数が対象と違う（{len(original)} → {len(mutant)}）")
+    changed = [(i + 1, mutant[i])
+               for i in range(len(original)) if original[i] != mutant[i]]
+    if len(changed) != 1:
+        raise Unmeasurable(
+            f"{target}: 変異体の変更行が1行でない（{len(changed)}行）")
+    line, content = changed[0]
+    return mutant_id(target, line, content)
+
+
+def group_by_target(pairs):
+    """識別子の対を対象ごとにまとめ、衝突した対象を「計測できなかった」へ落とす。
+
+    返すのは3つの入れ物を持つ dict。
+
+    - `targets` … 測れた対象の一覧。**生き残り0件の対象もここに載る。**
+      載せないと「判別力が満点だった対象」と「基準にまだ記録が無い対象」が
+      区別できない
+    - `survivors` … 対象ごとの生き残りの識別子
+    - `unmeasurable` … （対象、理由）の対
+
+    **同じ識別子が2件以上に当たったら、その対象ごと落とす。**衝突した識別子
+    だけを判定から外して残りで基準を書く形は採らない。その対象の kill 集合が
+    確定しないので、残りの識別子だけで差分を取ると「衝突した1件が実は
+    生き残っていた」を見逃す。「計測できなかった」は分類も `--update-baseline`
+    の単位も対象なので、粒度をそちらへ揃える。
+
+    **生き残りかどうかを衝突の判定に持ち込まない。**両方が生き残りでも、
+    識別子が基準の鍵として一意でないことは変わらない。
+    """
+    counts, survivors = {}, {}
+    for ident, survived in pairs:
+        path, line, content = ident
+        key = (path, line, content)
+        counts.setdefault(path, {})
+        counts[path][key] = counts[path].get(key, 0) + 1
+        survivors.setdefault(path, [])
+        if survived:
+            survivors[path].append(key)
+    targets, kept, bad = [], {}, []
+    for path in sorted(counts):
+        dups = sorted(k for k, n in counts[path].items() if n > 1)
+        if dups:
+            shown = "、".join(f"{line} 行目: {content}"
+                             for _, line, content in dups[:3])
+            bad.append((path,
+                        f"{path}: 同じ識別子が2件以上の変異体に当たった"
+                        f"（{len(dups)}件: {shown}）"))
+            continue
+        targets.append(path)
+        kept[path] = sorted(survivors[path])
+    return {"targets": targets, "survivors": kept, "unmeasurable": bad}
+
+
 def make_sandbox_home():
     """使い捨ての HOME を作り、合成フィクスチャを1つ置く。
 
@@ -1528,6 +1750,72 @@ def main(argv):
             "tests": shell_tests(tracked),
             "pairs": [list(p) for p in got["pairs"]],
             "python_pairs": [list(p) for p in got["python_pairs"]],
+            "unmeasurable": [[t, f"{UNMEASURABLE}: {why}"]
+                             for t, why in got["unmeasurable"]],
+        }, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-mutant-id" in argv:
+        # 識別子の組み立てだけを外から叩く口。作れなかった場合は
+        # 「計測できなかった」の理由を返す（--selftest-read-declaration と同じ形）。
+        i = argv.index("--selftest-mutant-id")
+        path, line, content = ast.literal_eval(argv[i + 1])
+        try:
+            payload = {"id": list(mutant_id(path, line, content)),
+                       "unmeasurable": None}
+        except Unmeasurable as e:
+            payload = {"id": None, "unmeasurable": f"{UNMEASURABLE}: {e}"}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-ids-cosmic-ray" in argv:
+        # `cosmic-ray dump` の出力を書いたファイルを渡す口。**標準入力でも
+        # 引数の中身でもなくファイルで受ける。**実物の dump は2,440行あり、
+        # argv へ載せられない。
+        i = argv.index("--selftest-ids-cosmic-ray")
+        with open(argv[i + 1], encoding="utf-8") as f:
+            text = f.read()
+        try:
+            ids = ids_from_cosmic_ray(text)
+            payload = {"ids": [[list(k), s] for k, s in ids],
+                       "grouped": None, "unmeasurable": None}
+            got = group_by_target(ids)
+            payload["grouped"] = {
+                "targets": got["targets"],
+                "survivors": {t: [list(k) for k in v]
+                              for t, v in got["survivors"].items()},
+                "unmeasurable": [[t, f"{UNMEASURABLE}: {why}"]
+                                 for t, why in got["unmeasurable"]],
+            }
+        except Unmeasurable as e:
+            payload = {"ids": None, "grouped": None,
+                       "unmeasurable": f"{UNMEASURABLE}: {e}"}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-ids-universalmutator" in argv:
+        i = argv.index("--selftest-ids-universalmutator")
+        target, mutant_path, repo = ast.literal_eval(argv[i + 1])
+        try:
+            payload = {"id": list(ids_from_universalmutator(
+                target, mutant_path, repo)), "unmeasurable": None}
+        except Unmeasurable as e:
+            payload = {"id": None, "unmeasurable": f"{UNMEASURABLE}: {e}"}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-group-by-target" in argv:
+        # 対象ごとのまとめだけを、合成した対の列で叩く口。実物の走行を通さずに
+        # 衝突の扱いを撃てるようにする。衝突は実測では起きない形なので、
+        # 走行から作った入力だけでは検査できない。
+        i = argv.index("--selftest-group-by-target")
+        with open(argv[i + 1], encoding="utf-8") as f:
+            pairs = [(tuple(k), bool(s)) for k, s in json.load(f)]
+        got = group_by_target(pairs)
+        print(json.dumps({
+            "targets": got["targets"],
+            "survivors": {t: [list(k) for k in v]
+                          for t, v in got["survivors"].items()},
             "unmeasurable": [[t, f"{UNMEASURABLE}: {why}"]
                              for t, why in got["unmeasurable"]],
         }, sort_keys=True, ensure_ascii=False))
