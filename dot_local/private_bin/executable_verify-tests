@@ -99,6 +99,52 @@ def target_tests(repo, tracked):
     return sorted(py), sorted(sh)
 
 
+# penguinEx の pyproject.toml が持つべき norecursedirs。
+# 既定値から .* だけを外し、残りは引き継いでいる。
+EXPECTED_NORECURSEDIRS = [
+    "*.egg", "_darcs", "build", "CVS", "dist", "node_modules", "venv", "{arch}",
+    "__pycache__", ".git", ".worktrees", "worktrees", ".venv", ".pytest_cache",
+    ".superpowers", ".github",
+]
+
+
+def check_discovery_policy(repo):
+    """設定の内容そのものを検査する。
+
+    期待値を「テストの一覧」ではなく「設定の内容」に持つので腐敗しない。
+    台帳を持つ道を避けたのはこのため。
+    """
+    import tomllib
+    path = os.path.join(repo, "pyproject.toml")
+    if not os.path.exists(path):
+        return ["pyproject.toml がありません"]
+    with open(path, "rb") as f:
+        conf = tomllib.load(f)
+    opts = conf.get("tool", {}).get("pytest", {}).get("ini_options", {})
+    problems = []
+    if "norecursedirs" in opts:
+        got = list(opts["norecursedirs"])
+        if got != EXPECTED_NORECURSEDIRS:
+            missing = [d for d in EXPECTED_NORECURSEDIRS if d not in got]
+            extra = [d for d in got if d not in EXPECTED_NORECURSEDIRS]
+            problems.append(
+                f"norecursedirs が期待値と違います（不足 {missing} / 余分 {extra}）"
+            )
+    elif "testpaths" not in opts:
+        problems.append("norecursedirs も testpaths もありません")
+    return problems
+
+
+def collection_diff(repo, py_targets, collected):
+    """候補と収集結果を両方向で突き合わせる。
+
+    片方向だけだと、ワークツリーの混入や gitignore された場所に置かれた
+    test_*.py のように逆向きでしか見えない事故を見逃す。
+    """
+    want = {os.path.normpath(os.path.join(repo, p)) for p in py_targets}
+    return sorted(want - collected), sorted(collected - want)
+
+
 SANDBOX_PREFIX = "verify-tests-sandbox."
 MARKER = "/tmp/.verify-tests-marker"
 
@@ -272,6 +318,16 @@ def main(argv):
         py, sh = target_tests(repo, tracked)
         print(f"== 対象: Python {len(py)}ファイル / shell {len(sh)}ファイル")
         rc_collect, collected, _ = collected_files(repo, sandbox)
+
+        problems = check_discovery_policy(repo)
+        for p in problems:
+            print(f"== discovery: {p}")
+        missing, unexpected = collection_diff(repo, py, collected)
+        for m in missing:
+            print(f"== 走らなかった: {m}（候補にあるが収集されていない）")
+        for u in unexpected:
+            print(f"== 収集されたが候補に無い: {u}")
+
         rc_run, run_out = run_python(repo, sandbox)
         print(f"== 収集: {len(collected)}ファイル")
         print(f"== Python: rc={rc_run}")
