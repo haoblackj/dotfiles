@@ -318,15 +318,40 @@ def make_worktree_copy(repo, sandbox):
     作れなければ None を返す（tracked_files と同じ形）。
     """
     inside = os.path.join(os.path.expanduser("~"), WORKTREE_COPY_NAME)
-    # pipefail を立てる。立てないと git ls-files が失敗しても後段の tar が
-    # 成功し、空の作業コピーを「作れた」として返す。対象0本の走行は
-    # 「変異体が1件も生き残らなかった」と見分けが付かない。
+    # pipefail を立てる。立てないと git ls-files が失敗しても後段の tar が成功する。
     script = ('set -o pipefail\n'
               'mkdir -p "$1" || exit 1\n'
               'git ls-files -z | tar --null -T - -cf - | tar -xf - -C "$1"\n')
     rc, _, _ = run_cmd_in_sandbox(
         repo, sandbox, ["bash", "-c", script, "bash", inside])
-    return inside if rc == 0 else None
+    if rc != 0:
+        return None
+    # **終了コードだけでは足りない。**pipefail が守るのは `git ls-files` が
+    # 失敗した場合だけで、成功して0行を返した場合は空の入力を受けた tar が
+    # 両段とも rc=0 で終わる（GNU tar は空の `-T` を拒まない。実測で確認）。
+    # 空の作業コピーを「作れた」として返すと、対象0本の走行と
+    # 「変異体が1件も生き残らなかった」が見分けられない。#16 が塞ごうとして
+    # いるのがまさにその型なので、数えるところまでを成立の条件にする。
+    tracked = tracked_files(repo, sandbox)
+    if not tracked:
+        return None
+    return inside if _count_copied(sandbox) == len(tracked) else None
+
+
+def _count_copied(sandbox):
+    """作業コピーのホスト側の実体に在るものを数える。
+
+    シンボリックリンクの張られたディレクトリは辿らずに1つとして数える。
+    辿ると対象の外を歩き、数が追跡ファイルの数と合わなくなる。
+    """
+    host = os.path.join(sandbox, WORKTREE_COPY_NAME)
+    n = 0
+    for root, dirs, names in os.walk(host):
+        n += len(names)
+        links = [d for d in dirs if os.path.islink(os.path.join(root, d))]
+        n += len(links)
+        dirs[:] = [d for d in dirs if d not in links]
+    return n
 
 
 def collected_files(repo, sandbox):
@@ -1012,9 +1037,13 @@ def main(argv):
 
     if "--selftest-mutate-binds" in argv:
         # venv の追加 bind の作り方だけを外から確かめる口。実在するパスを
-        # 渡せば対を、無いパスを渡せば空を返す。本番の venv の在否に依存しない。
+        # 渡せば対を、無いパスを渡せば空を返す。
+        # **引数を省くと既定（MUTATE_VENV）を使う。**省けるようにしてあるのは、
+        # 既定が絶対パスであることを外から見る手段がこれしか無いため。
+        # 渡したパスだけを検査すると、渡す側が絶対パスを作っているだけの
+        # 検査になり、道具が PATH 解決へ寄せ替えられても素通りする。
         i = argv.index("--selftest-mutate-binds")
-        print(json.dumps(mutate_binds(argv[i + 1])))
+        print(json.dumps(mutate_binds(*argv[i + 1:i + 2])))
         return 0
 
     if "--selftest-worktree-copy" in argv:
