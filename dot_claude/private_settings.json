@@ -1,6 +1,7 @@
 {
   "cleanupPeriodDays": 36500,
   "env": {
+    "CLAUDE_CODE_THRIFTY_SONIC": "0",
     "COMPACT_PLUS_FALLBACK_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
     "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
     "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
