@@ -882,6 +882,74 @@ def ids_from_cosmic_ray(dump_json):
     return out
 
 
+# 変異体は当てられたのにテストを起動できなかったことを表す `test_outcome`。
+# 生き残りにも kill にも数えられないので、**1件でも混ざれば成績は測っていない
+# 分だけ良くなる。**閾値は0のまま動かさない。`core/ExceptionReplacer` を
+# 対象から外してあるのは対象の側の話で、この閾値を緩めるためではない。
+INCOMPETENT = "incompetent"
+
+
+def python_lane_gate(dump_json, init_count, unmutated_rc):
+    """Python レーンの走行の結果を信じてよいかを見る。信じられない理由を1つ返す。
+
+    問題が無ければ None。返す文字列は「計測できなかった」に続ける理由で、
+    先頭の分類名は付けない（呼び出し側が `UNMEASURABLE` と組み立てる）。
+
+    **終了コードを見ない。**cosmic-ray は測れていない走行を軒並み0で返す。
+    `test-command` が実在しない実行ファイルのとき、`init` も `baseline` も
+    `exec` も0で終わり、`cr-rate --fail-over 0` は生存率 0.00 を返して0で
+    終わる（実測）。**生き残り0件は「判別力が満点」と同じ字面**なので、
+    終了コードに依存した門は、測っていない走行を最良の成績として通す。
+    見るのは `test_outcome` と、変異体が何件作られたか。
+
+    `unmutated_rc` は変異を当てない状態で `test-command` を走らせた終了コード。
+    **`cosmic-ray baseline` の終了コードを渡してはいけない。**あれは
+    `test-command` が起動できなくても0を返す。渡す側がそれを取り違えても
+    `incompetent` の側で捕まるようにしてある。
+
+    `init_count` は `cosmic-ray init` が作った work item の件数。
+    **実在しないパスを与えたときの終了コード66とは別の話。**あれは `init` が
+    落ちる形で、ここで見たいのは「実在するが変異体が1件も出ない」形
+    （`.py` を含まないディレクトリ、全件が `excluded-modules` に入っている）。
+    `py_target_set` は対象0本を空集合としてそのまま返すので、止めるのは門の側。
+
+    dump は `ids_from_cosmic_ray` に読ませる。**自前で読み直さない。**
+    読み手が2つに育つと、門は通っているのに識別子側の解釈が違うという
+    食い違いが起きえて、そのとき片方は必ず黙っている。
+
+    **既知の穴。**`worker_outcome` が `normal` でない `incompetent`
+    （cosmic-ray が変異の適用そのもので例外を出した経路。`diff` は `None`）は
+    `ids_from_cosmic_ray` が行にしないので、この門には届かない。Ruling 15 は
+    その読み飛ばしを「Task 7 の門が必ず捕まえる」ことで正当化しているが、
+    現状は捕まえていない。tests の `test_a_mutant_broken_by_cosmic_ray_itself_
+    reaches_the_gate` が `expectedFailure` で場所を押さえてある。
+    """
+    if isinstance(init_count, bool) or not isinstance(init_count, int):
+        return f"cosmic-ray init が作った変異体の件数が整数でない（{init_count!r}）"
+    if init_count < 1:
+        return ("cosmic-ray init が変異体を1件も作らなかった"
+                "（対象の `.py` が1本も無いか、全件が除外に入っている）")
+    if isinstance(unmutated_rc, bool) or not isinstance(unmutated_rc, int):
+        return f"変異を当てない走行の終了コードが整数でない（{unmutated_rc!r}）"
+    if unmutated_rc != 0:
+        return ("変異を当てない状態で test-command が落ちる"
+                f"（終了コード {unmutated_rc}）。"
+                "赤いテストは変異体を残らず kill するので満点になる")
+    rows = ids_from_cosmic_ray(dump_json)
+    broken = [k for k, _survived, outcome, _worker in rows
+              if outcome == INCOMPETENT]
+    if broken:
+        first = broken[0]
+        return (f"テストを起動できなかった変異体が{len(broken)}件ある"
+                f"（test_outcome が {INCOMPETENT}、"
+                f"最初の1件は {first[0]}:{first[1]}）。"
+                "生き残りにも kill にも数えられないので成績が上振れる")
+    if not rows:
+        return (f"cosmic-ray init は変異体を{init_count}件作ったのに、"
+                "結果のある記録が1件も無い")
+    return None
+
+
 def ids_from_universalmutator(target, mutant_path, repo=None):
     """変異体と対象の差分から識別子を作る。
 
@@ -2006,6 +2074,24 @@ def main(argv):
         except Unmeasurable as e:
             payload = {"ids": None, "grouped": None,
                        "unmeasurable": f"{UNMEASURABLE}: {e}"}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-python-lane-gate" in argv:
+        # 走行の結果の妥当性だけを外から叩く口。dump は `--selftest-ids-cosmic-ray`
+        # と同じくファイルで受ける（実物は2,440行あり argv へ載らない）。
+        # `init` の件数と変異なしの終了コードは、呼び出し側が任意の値を渡せる形に
+        # する。門が終了コードに依存していないことは、**0 を渡した走行でも
+        # 止まる**ことでしか外から確かめられない。
+        i = argv.index("--selftest-python-lane-gate")
+        with open(argv[i + 1], encoding="utf-8") as f:
+            text = f.read()
+        init_count, unmutated_rc = ast.literal_eval(argv[i + 2])
+        try:
+            payload = {"reason": python_lane_gate(text, init_count, unmutated_rc),
+                       "unmeasurable": None}
+        except Unmeasurable as e:
+            payload = {"reason": None, "unmeasurable": f"{UNMEASURABLE}: {e}"}
         print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
         return 0
 
