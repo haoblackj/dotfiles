@@ -1702,6 +1702,16 @@ def run_shell_lane(repo, sandbox, pairs):
 # ソース側でも `.chezmoiignore` への追記は要らない。
 BASELINE_NAME = ".mutation-baseline.json"
 
+
+def baseline_path(repo):
+    """そのリポジトリの基準ファイルのパス。
+
+    **名前を書き起こさない。**`--mutate` を配線する側はここを呼ぶ。別途
+    文字列を書くと、置き場を変えたときに片方だけが古いまま残る。
+    """
+    return os.path.join(repo, BASELINE_NAME)
+
+
 # 基準ファイルの最上位の鍵。**正の形で列挙する。**「知らない鍵は無害」と
 # すると、書式を変えた道具が古い基準を黙って読み違える経路ができる。
 BASELINE_KEYS = ("targets", "survivors", "excluded", "syntax_filtered", "tools")
@@ -1934,6 +1944,12 @@ def store_baseline(path, current, tools):
     **道具の版が揃わないうちは書かない。**版の無い基準は、次に差分が出たとき
     その理由を判別できない。
 
+    **構文検査の件数が揃わないうちも書かない。**測れた対象に件数が付いて
+    いなければ止める。`counted.get(target, 0)` で埋めると、渡し忘れた走行が
+    全対象0の基準を作り、以後の突き合わせが永久に一致して除外の見張りが死ぬ。
+    版の門と同じ扱いにする。**この道具は `blank_shell_result` で「0 で埋めると
+    測る前に止まったのと1件も無かったのが同じ字面になる」と自ら書いている。**
+
     書き出しは別名へ書いてから置き換える。途中で落ちたときに、人が手で保って
     いる除外リストが切り詰められた状態で残らないようにする。
     """
@@ -1944,15 +1960,22 @@ def store_baseline(path, current, tools):
             f"道具の版が揃わないまま基準を書こうとした（{'、'.join(lacking)}）。"
             "版が無いと、次に差分が出たとき道具が上がったせいか"
             "判別力が落ちたせいかを区別できない")
+    counted = filtered_counts(current)
+    uncounted = sorted(t for t in current["targets"] if t not in counted)
+    if uncounted:
+        raise BaselineBroken(
+            "構文検査が落とした件数の無い対象がある"
+            f"（{'、'.join(uncounted)}）。0 で埋めると、"
+            "渡し忘れた走行が全対象0の基準を作り、"
+            "以後の突き合わせが永久に一致して除外の見張りが死ぬ")
     targets = set(base["targets"])
     survivors = dict(base["survivors"])
     filtered = dict(base["syntax_filtered"])
-    counted = filtered_counts(current)
     for target in current["targets"]:
         targets.add(target)
         survivors[target] = sorted(
             _id_set(current["survivors"].get(target, ()), target))
-        filtered[target] = counted.get(target, 0)
+        filtered[target] = counted[target]
     doc = baseline_document({
         "targets": sorted(targets),
         "survivors": survivors,
@@ -2030,11 +2053,30 @@ def filtered_counts(current):
     区別するために `syntax_filtered` という別の名前で持つ。名前が揃っていない
     のはここだけなので、読み替えをこの1箇所に閉じる。
 
-    `excluded` を持たない走行では空を返す。**そのときは件数の突き合わせが
-    まるごと効かない**ので、呼び出し側は渡し忘れないこと。
+    **`excluded` が無い走行は止める。空を返さない。**空を返すと
+    `store_baseline` が全対象に0を焼き付け、以後は「基準0 対 今回0」で永久に
+    一致し、除外の見張りが丸ごと死ぬ。しかもその基準は正常な基準と字面で
+    区別できない。**「渡し忘れないこと」という但し書きは門ではない。**
+
+    値の型もここで見る。`blank_shell_result` は測れなかった対象に `None` を
+    入れるので、対象ごとの `excluded` をそのまま集めると `len(None)` で落ちる。
     """
-    return {target: len(rows)
-            for target, rows in (current.get("excluded") or {}).items()}
+    if "excluded" not in current:
+        raise BaselineBroken(
+            "走行の結果に `excluded`（構文検査が落とした変異体）が無い。"
+            "0 で埋めると「渡し忘れ」と「1件も落ちなかった」が同じ字面になり、"
+            "基準へ0が焼き付いて除外の見張りが二度と発火しなくなる")
+    rows = current["excluded"]
+    if not isinstance(rows, dict):
+        raise BaselineBroken(
+            f"走行の `excluded` は対象ごとのオブジェクトで持つ（{rows!r}）")
+    out = {}
+    for target, ids in rows.items():
+        if not isinstance(ids, (list, tuple)):
+            raise BaselineBroken(
+                f"{target}: 走行の `excluded` の値が識別子の一覧でない（{ids!r}）")
+        out[target] = len(ids)
+    return out
 
 
 def compare_filtered(baseline, current):
@@ -2066,6 +2108,22 @@ def compare_filtered(baseline, current):
     return out
 
 
+def targets_to_classify(baseline, current):
+    """分類すべき対象の一覧を返す。**呼び出し側の規律に預けない。**
+
+    3つの合併。基準に記録のある対象、今回測れた対象、今回測れなかった対象。
+
+    **基準側を必ず入れる。**`compare` も `compare_filtered` も
+    `current["targets"]` でしか回らないので、ここで合併しないと、基準に在るのに
+    今回の走行から消えた対象を誰も見ない。`classify_target` はその形で
+    `ValueError` を投げる門を持っているが、**渡されなければ発火しない。**
+    呼び出し側が独自に「今回の対象だけ」を組み立てると、基準を静かに刈る経路が
+    そこに開く。
+    """
+    return sorted(set(baseline["targets"]) | set(current["targets"])
+                  | {t for t, _ in current["unmeasurable"]})
+
+
 def classify_target(baseline, current, target):
     """その対象1つに当たる分類を返す。
 
@@ -2081,7 +2139,8 @@ def classify_target(baseline, current, target):
 
     **今回の走行に無い対象を渡されたら止める。**「測れた」でも「測れなかった」
     でもない対象を黙って `NO_FINDING` へ落とすと、基準に在るのに走行から消えた
-    対象が所見なしとして通り、基準を静かに刈る経路ができる。
+    対象が所見なしとして通り、基準を静かに刈る経路ができる。**この門は渡された
+    ときにしか働かない**ので、回す対象は `targets_to_classify` で作る。
     """
     if target in dict(current["unmeasurable"]):
         return UNMEASURABLE
@@ -2760,6 +2819,12 @@ def main(argv):
         print(json.dumps(load_accepted(path), sort_keys=True))
         return 0
 
+    if "--selftest-baseline-path" in argv:
+        # 基準ファイルの置き場だけを外から叩く口。読み書きはしない。
+        i = argv.index("--selftest-baseline-path")
+        print(baseline_path(argv[i + 1]))
+        return 0
+
     if "--selftest-baseline-store" in argv:
         # 基準の入れ物だけを、渡されたパスの上で確かめる口。
         # **本番の `.mutation-baseline.json` には触れない**（`--selftest-accept-store`
@@ -2787,8 +2852,10 @@ def main(argv):
         try:
             base = load_baseline(path)
             if wanted is None:
-                wanted = list(current["targets"]) + [
-                    t for t, _ in current["unmeasurable"]]
+                # **独自に組み立てない。**基準側を合併しない一覧を既定にすると、
+                # これを写した呼び出し側が、基準に在るのに走行から消えた対象を
+                # 見逃す。
+                wanted = targets_to_classify(base, current)
             labels, failed = {}, {}
             for t in wanted:
                 try:
