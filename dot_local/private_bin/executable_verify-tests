@@ -1704,10 +1704,22 @@ BASELINE_NAME = ".mutation-baseline.json"
 
 # 基準ファイルの最上位の鍵。**正の形で列挙する。**「知らない鍵は無害」と
 # すると、書式を変えた道具が古い基準を黙って読み違える経路ができる。
-BASELINE_KEYS = ("targets", "survivors", "excluded", "tools")
+BASELINE_KEYS = ("targets", "survivors", "excluded", "syntax_filtered", "tools")
 
 # 除外の1件が持つ鍵。識別子と理由をちょうど1つずつ。
 EXCLUDED_KEYS = ("id", "reason")
+
+# **除外は2種類あり、器を分けている。**性質が違うので、同じ器に入れると片方の
+# 持ち方がもう片方に合わない。
+#
+# - `excluded` … 非決定な変異体。**人が判断して受けたもの**なので識別子で持つ。
+#   識別子で持たないと、別の行が同じ理由で紛れ込んでも気づけない。
+#   `--update-baseline` は書き換えず、人が手で足し引きする
+# - `syntax_filtered` … 構文検査が落とした変異体。**対象ごとの件数だけを持つ。**
+#   件数で足りるのは、構文検査が決定論的で、入力（対象の中身と規則）が変わらない
+#   まま中身だけが入れ替わる経路が無いため。件数が動いたら入力が動いている。
+#   機械が毎回決めるので `--update-baseline` が書き換える。実測では
+#   `check_claude_hooks.sh` の1,407件のうち836件がここへ落ちる
 
 # 基準へ版を焼く道具。**道具が上がると生き残りの集合は正当に変わる。**
 # 版を残さないと、次に差分が出たときそれが判別力の劣化なのか道具の更新なのかを
@@ -1731,7 +1743,8 @@ def empty_baseline():
     いけない。全対象が「基準が無い」へ落ちて非0にはなるが、そのあと
     `--update-baseline` を打てば人が手で保っている除外リストごと上書きされる。
     """
-    return {"targets": [], "survivors": {}, "excluded": [], "tools": {}}
+    return {"targets": [], "survivors": {}, "excluded": [],
+            "syntax_filtered": {}, "tools": {}}
 
 
 def _baseline_id(value, where):
@@ -1759,14 +1772,16 @@ def _id_set(rows, where):
 
 
 def load_baseline(path):
-    """基準ファイルを読み、`targets` / `survivors` / `excluded` / `tools` で返す。
+    """基準ファイルを読み、`BASELINE_KEYS` の5つの入れ物で返す。
 
     - `targets` … 測れた対象の一覧。**生き残り0件の対象もここに載る。**
       載せないと「判別力が満点だった対象」と「基準にまだ記録が無い対象」が
       区別できない
     - `survivors` … 対象ごとの生き残りの識別子。`targets` の全対象が鍵を持つ
       （0件の対象は空の一覧）
-    - `excluded` … `{"id": 識別子, "reason": 理由}` の一覧
+    - `excluded` … 非決定な変異体。`{"id": 識別子, "reason": 理由}` の一覧
+    - `syntax_filtered` … 構文検査が落とした件数。対象ごとの整数。`targets` の
+      全対象が鍵を持つ（1件も落ちなかった対象は 0）
     - `tools` … 道具の名前から版への対応
 
     **kill された変異体は持たない。**kill 集合を保存すると、生き残りは定義上
@@ -1850,6 +1865,24 @@ def load_baseline(path):
         excluded.append({"id": ident, "reason": reason})
     excluded.sort(key=lambda r: r["id"])
 
+    counts = data["syntax_filtered"]
+    if not isinstance(counts, dict):
+        raise BaselineBroken(f"{path}: syntax_filtered はオブジェクトで持つ")
+    stray = sorted(set(counts) - set(targets))
+    if stray:
+        raise BaselineBroken(
+            f"{path}: targets に無い対象の構文検査による除外がある"
+            f"（{'、'.join(stray)}）")
+    syntax_filtered = {}
+    for t in targets:
+        n = counts.get(t, 0)
+        # **真偽値を整数として通さない。**`True` は 1 と等しいので、素の
+        # `isinstance(n, int)` だけだと件数の代わりに真偽値が座っても気づけない。
+        if isinstance(n, bool) or not isinstance(n, int) or n < 0:
+            raise BaselineBroken(
+                f"{path}: {t} の構文検査による除外の件数が0以上の整数でない（{n!r}）")
+        syntax_filtered[t] = n
+
     tools = data["tools"]
     if not isinstance(tools, dict):
         raise BaselineBroken(f"{path}: tools はオブジェクトで持つ")
@@ -1862,7 +1895,8 @@ def load_baseline(path):
             raise BaselineBroken(f"{path}: {name} の版が空")
 
     return {"targets": sorted(targets), "survivors": survivors,
-            "excluded": excluded, "tools": dict(tools)}
+            "excluded": excluded, "syntax_filtered": syntax_filtered,
+            "tools": dict(tools)}
 
 
 def baseline_document(base):
@@ -1877,6 +1911,8 @@ def baseline_document(base):
                       for t in base["targets"]},
         "excluded": [{"id": list(r["id"]), "reason": r["reason"]}
                      for r in base["excluded"]],
+        "syntax_filtered": {t: base["syntax_filtered"].get(t, 0)
+                            for t in base["targets"]},
         "tools": dict(base["tools"]),
     }
 
@@ -1887,9 +1923,13 @@ def store_baseline(path, current, tools):
     **対象単位で書く。**今回測れなかった対象の記録はそのまま残す。リポジトリ
     単位で丸ごと書く形にすると、対象が1つでも測れない間は基準を一度も作れない。
 
-    **除外リストは書き換えない。**走らせるたびに機械が除外を書き足せる形に
-    すると、非決定でない生き残りまで除外へ流れ込み、判定が静かに空洞化する。
-    人が手で足し引きする。
+    **`excluded`（非決定な変異体）は書き換えない。**走らせるたびに機械が除外を
+    書き足せる形にすると、非決定でない生き残りまで除外へ流れ込み、判定が静かに
+    空洞化する。人が手で足し引きする。
+
+    **`syntax_filtered`（構文検査が落とした件数）は書き換える。**あちらと違って
+    機械が毎回決定論的に決めるもので、人の判断が入らない。書き換えないと、
+    規則を1つ足した瞬間から件数が永久にずれたまま毎回報告に出続ける。
 
     **道具の版が揃わないうちは書かない。**版の無い基準は、次に差分が出たとき
     その理由を判別できない。
@@ -1906,14 +1946,18 @@ def store_baseline(path, current, tools):
             "判別力が落ちたせいかを区別できない")
     targets = set(base["targets"])
     survivors = dict(base["survivors"])
+    filtered = dict(base["syntax_filtered"])
+    counted = filtered_counts(current)
     for target in current["targets"]:
         targets.add(target)
         survivors[target] = sorted(
             _id_set(current["survivors"].get(target, ()), target))
+        filtered[target] = counted.get(target, 0)
     doc = baseline_document({
         "targets": sorted(targets),
         "survivors": survivors,
         "excluded": base["excluded"],
+        "syntax_filtered": filtered,
         "tools": {n: str(tools[n]) for n in BASELINE_TOOLS},
     })
     tmp = path + ".tmp"
@@ -1930,16 +1974,24 @@ def excluded_ids(baseline):
 
 
 def excluded_report(baseline):
-    """除外の件数と、1件ごとの識別子と理由。**毎回の報告に出す。**
+    """除外された件数と理由。**毎回の報告に出す**（受け入れ条件34）。
 
-    件数だけを出す形にしない。増えたことに気づけても、何が増えたのかが
-    読めなければ「除外が広すぎないか」を人が判断できない。
+    2種類とも出す。器は分けてあるが、報告で片方だけを出すと、読む人には
+    「除外はこれだけ」に見える。
+
+    - `count` / `lines` … 非決定な除外。1件ごとの識別子と理由。**件数だけを
+      出す形にしない。**増えたことに気づけても、何が増えたのかが読めなければ
+      「除外が広すぎないか」を人が判断できない
+    - `filtered_total` / `filtered` … 構文検査が落とした件数。こちらは理由が
+      1つ（構文検査を通らなかった）に決まっているので、対象ごとの件数で足りる
     """
     lines = []
     for row in baseline["excluded"]:
         path, line, content = row["id"]
         lines.append(f"{path}:{line}: {content} — {row['reason']}")
-    return {"count": len(baseline["excluded"]), "lines": lines}
+    filtered = dict(baseline["syntax_filtered"])
+    return {"count": len(baseline["excluded"]), "lines": lines,
+            "filtered": filtered, "filtered_total": sum(filtered.values())}
 
 
 def compare(baseline, current):
@@ -1970,22 +2022,47 @@ def compare(baseline, current):
     return out
 
 
-def compare_excluded(baseline, current):
-    """今回の走行が落としたのに、基準の除外リストに載っていない変異体。
+def filtered_counts(current):
+    """今回の走行で構文検査が落とした件数を、対象ごとに数える。
 
-    **除外が広がったことを機械が見張る。**除外が広がれば測れるはずの変異体が
+    **`current` の側の鍵は `excluded`。**`run_shell_lane` が構文検査で落とした
+    変異体の識別子をその名前で返すため（Task 8）。基準の側では非決定な除外と
+    区別するために `syntax_filtered` という別の名前で持つ。名前が揃っていない
+    のはここだけなので、読み替えをこの1箇所に閉じる。
+
+    `excluded` を持たない走行では空を返す。**そのときは件数の突き合わせが
+    まるごと効かない**ので、呼び出し側は渡し忘れないこと。
+    """
+    return {target: len(rows)
+            for target, rows in (current.get("excluded") or {}).items()}
+
+
+def compare_filtered(baseline, current):
+    """構文検査が落とした件数が基準と食い違う対象を `(基準, 今回)` で返す。
+
+    **除外が広すぎないかを機械が見張る。**除外が広がれば測れるはずの変異体が
     黙って消え、それは撃墜率を上げる方向に働く。生き残りの差分だけを見る形では
     この向きの劣化を1件も捕まえられない。
 
-    `current` の `excluded` は対象ごとの識別子の一覧（`run_shell_lane` が
-    返す形）。持たない走行では空を返す。
+    **識別子ではなく件数で見る。**構文検査は決定論的で、入力（対象の中身と
+    規則）が変わらないまま中身だけが入れ替わる経路が無い。件数が動いたら入力が
+    動いている。836件の識別子を人が保つ必要は無い。
+
+    **増えた側だけを見ない。**減ったのも入力が動いた印で、規則が効かなくなって
+    壊れた変異体がそのまま測定へ流れ込む形もありうる。
+
+    **基準に記録の無い対象は載せない。**`compare` と同じ理由で、あちらは
+    「基準が無い」として `classify_target` が拾う。
     """
-    dropped = excluded_ids(baseline)
+    known = set(baseline["targets"])
+    now = filtered_counts(current)
     out = {}
-    for target, rows in sorted((current.get("excluded") or {}).items()):
-        new = sorted(_id_set(rows, target) - dropped)
-        if new:
-            out[target] = new
+    for target in current["targets"]:
+        if target not in known:
+            continue
+        was = baseline["syntax_filtered"].get(target, 0)
+        if now.get(target, 0) != was:
+            out[target] = (was, now.get(target, 0))
     return out
 
 
@@ -2722,8 +2799,8 @@ def main(argv):
                 "baseline": baseline_document(base),
                 "compare": {t: [list(k) for k in v]
                             for t, v in compare(base, current).items()},
-                "excluded_new": {t: [list(k) for k in v]
-                                 for t, v in compare_excluded(base, current).items()},
+                "filtered_drift": {t: list(v) for t, v
+                                   in compare_filtered(base, current).items()},
                 "excluded_report": excluded_report(base),
                 "classify": labels,
                 "classify_error": failed,
@@ -2731,10 +2808,10 @@ def main(argv):
                 "error": None,
             }
         except BaselineBroken as e:
-            payload = {"baseline": None, "compare": None, "excluded_new": None,
-                       "excluded_report": None, "classify": None,
-                       "classify_error": None, "tool_drift": None,
-                       "error": str(e)}
+            payload = {"baseline": None, "compare": None,
+                       "filtered_drift": None, "excluded_report": None,
+                       "classify": None, "classify_error": None,
+                       "tool_drift": None, "error": str(e)}
         print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
         return 0
 
