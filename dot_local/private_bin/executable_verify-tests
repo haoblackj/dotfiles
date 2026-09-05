@@ -181,6 +181,31 @@ def deployed_tool_bind():
     return [(DEPLOYED_TOOL, DEPLOYED_TOOL)] if os.path.isfile(DEPLOYED_TOOL) else []
 
 
+# 変異の走行に使う venv。Task 1 が固定したパスで、cosmic-ray 8.7.0 /
+# universalmutator 1.14.1 / pytest 9.1.1 / Python 3.14.7 が入っている。
+# PATH 解決に頼らない。`python` が不在の環境で変異体が全部 INCOMPETENT へ落ち、
+# 「1件も生き残らなかった」が満点として読める形になる。
+MUTATE_VENV = os.path.expanduser("~/.local/share/verify-tests-venv")
+
+
+def mutate_binds(venv_path=MUTATE_VENV):
+    """変異の走行にだけ効く追加の読み取り専用 bind。
+
+    `build_bwrap` が `--bind <sandbox> $HOME` で HOME を丸ごと差し替えるので、
+    HOME 配下に置いた venv はそのままではサンドボックスの中から消える。ここで
+    明示的に足さないと、内側から cosmic-ray も universalmutator も起動できない。
+
+    RO_BINDS へ足さない（deployed_tool_bind と同じ流儀）。あれは全走行に効くので
+    差分判定の内側にも venv が現れることになり、`--print-binds` が返す一覧の意味も
+    「テストが本番を読むために要る場所」から外れる。
+
+    venv が無いときは空を返す。「venv が無いので実行できなかった」の報告は
+    呼び出し側の仕事にする。ここで存在しないパスを返すと、bwrap が bind 元の
+    不在で落ち、原因の読めない失敗になる。
+    """
+    return [(venv_path, venv_path)] if os.path.isdir(venv_path) else []
+
+
 def make_sandbox_home():
     """使い捨ての HOME を作り、合成フィクスチャを1つ置く。
 
@@ -263,6 +288,45 @@ def tracked_files(repo, sandbox):
     if rc != 0:
         return None
     return [ln for ln in out.splitlines() if ln.strip()]
+
+
+# サンドボックスの HOME の中に作る作業コピーの名前。
+WORKTREE_COPY_NAME = "verify-tests-worktree"
+
+
+def make_worktree_copy(repo, sandbox):
+    """追跡ファイルだけの書き込み可能な作業コピーをサンドボックスの中に作る。
+
+    **変異は対象ファイルを実際に書き換える。**読み取り専用 bind の上では走らず、
+    かといってソースツリーの上で走らせると、道具が途中で落ちたときに変異した
+    ファイルがそのまま残る（cosmic-ray exec を外から止めると最後に当てた変異が
+    対象ファイルへ残ることを実測で確認済み）。chezmoi 側でそれが起きると
+    auto-apply が本番へ運ぶ（issue #22）。
+
+    返すのは**サンドボックスの内側から見たパス**。ホスト側の実体は
+    `os.path.join(sandbox, WORKTREE_COPY_NAME)` で、`--bind <sandbox> $HOME` に
+    よって内側では `$HOME/<名前>` として見える。走らせる側が必要とするのは
+    内側のパスなので、そちらを返す。
+
+    `git ls-files` は読み取り専用 bind 側（対象リポジトリそのもの）で走らせる。
+    tar で流すので実行ビットは保たれる（実測）。
+
+    道具が書くもの（cosmic-ray の sqlite、universalmutator の変異体ディレクトリと
+    killed.txt / notkilled.txt）も同じサンドボックスの HOME へ置ける。後片付けは
+    呼び出し側が sandbox ごと消せば済む。
+
+    作れなければ None を返す（tracked_files と同じ形）。
+    """
+    inside = os.path.join(os.path.expanduser("~"), WORKTREE_COPY_NAME)
+    # pipefail を立てる。立てないと git ls-files が失敗しても後段の tar が
+    # 成功し、空の作業コピーを「作れた」として返す。対象0本の走行は
+    # 「変異体が1件も生き残らなかった」と見分けが付かない。
+    script = ('set -o pipefail\n'
+              'mkdir -p "$1" || exit 1\n'
+              'git ls-files -z | tar --null -T - -cf - | tar -xf - -C "$1"\n')
+    rc, _, _ = run_cmd_in_sandbox(
+        repo, sandbox, ["bash", "-c", script, "bash", inside])
+    return inside if rc == 0 else None
 
 
 def collected_files(repo, sandbox):
@@ -946,6 +1010,67 @@ def main(argv):
         print(json.dumps(load_accepted(path), sort_keys=True))
         return 0
 
+    if "--selftest-mutate-binds" in argv:
+        # venv の追加 bind の作り方だけを外から確かめる口。実在するパスを
+        # 渡せば対を、無いパスを渡せば空を返す。本番の venv の在否に依存しない。
+        i = argv.index("--selftest-mutate-binds")
+        print(json.dumps(mutate_binds(argv[i + 1])))
+        return 0
+
+    if "--selftest-worktree-copy" in argv:
+        # 作業コピーが追跡ファイルだけから作られることを外から確かめる口。
+        # ホスト側の実体を歩いて、中身と権限をそのまま返す。
+        i = argv.index("--selftest-worktree-copy")
+        tree = os.path.abspath(argv[i + 1])
+        sandbox = make_sandbox_home()
+        try:
+            copy = make_worktree_copy(tree, sandbox)
+            host = os.path.join(sandbox, WORKTREE_COPY_NAME)
+            files, modes = [], {}
+            for root, _, names in os.walk(host):
+                for n in names:
+                    p = os.path.join(root, n)
+                    rel = os.path.relpath(p, host)
+                    files.append(rel)
+                    modes[rel] = oct(os.stat(p).st_mode & 0o777)
+            print(json.dumps({
+                "copy": copy, "files": sorted(files), "modes": modes,
+                "tracked": sorted(tracked_files(tree, sandbox) or []),
+            }, sort_keys=True))
+            return 0
+        finally:
+            shutil.rmtree(sandbox, ignore_errors=True)
+
+    if "--selftest-worktree-run" in argv:
+        # 作業コピーの中で1つのコマンドを走らせ、書き込みがどこへ落ちたかを返す口。
+        # 変異体そのものを呼び出し側が書けるようにする。何を「変異体らしい書き込み」
+        # とするかを道具の側へ焼き込むと、検査が実装の自己申告になる。
+        i = argv.index("--selftest-worktree-run")
+        tree, script = ast.literal_eval(argv[i + 1])
+        tree = os.path.abspath(tree)
+        sandbox = make_sandbox_home()
+        try:
+            copy = make_worktree_copy(tree, sandbox)
+            if copy is None:
+                print(json.dumps({"rc": None, "out": "作業コピーを作れなかった",
+                                  "home_files": []}, sort_keys=True))
+                return 0
+            rc, out, err = run_cmd_in_sandbox(
+                tree, sandbox,
+                ["bash", "-c", 'cd "$1" || exit 1\n' + script, "bash", copy],
+                mutate_binds(),
+            )
+            home_files = []
+            for root, _, names in os.walk(sandbox):
+                for n in names:
+                    home_files.append(
+                        os.path.relpath(os.path.join(root, n), sandbox))
+            print(json.dumps({"rc": rc, "out": out + err,
+                              "home_files": sorted(home_files)}, sort_keys=True))
+            return 0
+        finally:
+            shutil.rmtree(sandbox, ignore_errors=True)
+
     if "--print-binds" in argv:
         for p in RO_BINDS:
             print(p)
@@ -1001,8 +1126,15 @@ def main(argv):
             # FileNotFoundError で落ち、道具の挙動については何も分からない（実測）。
             # 見せるのはこの口だけにする。R1 / R2 / R3 へ広げると、差分判定の走行の
             # 内側からも道具を起動できるようになる。
+            #
+            # 変異用の venv も同じ理由でこの口にだけ見せる。HOME を差し替える以上、
+            # 足さなければ自テストからは venv が存在しない機械と区別が付かず、
+            # 「サンドボックスの中から cosmic-ray と universalmutator が起動できる」
+            # を確かめる手段がこの道具の中に一つも無くなる。R1 / R2 / R3 へは
+            # 広げないので、差分判定の走行は従来どおり venv を見ない。
             rc, out = run_python(repo, sandbox, passthrough,
-                                 deployed_tool_bind(), selftest=True)
+                                 deployed_tool_bind() + mutate_binds(),
+                                 selftest=True)
             print(out)
             return rc          # 検査の口ではないので分類に落とさない
         finally:
