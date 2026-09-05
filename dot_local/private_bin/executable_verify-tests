@@ -1962,6 +1962,9 @@ def store_baseline(path, current, tools):
     版の門と同じ扱いにする。**この道具は `blank_shell_result` で「0 で埋めると
     測る前に止まったのと1件も無かったのが同じ字面になる」と自ら書いている。**
 
+    **生き残りの記録が揃わないうちも書かない。**同じ理由で `survivors_for` を
+    通す。空で埋めると、行の落ちた対象へ満点が焼き付く。
+
     書き出しは別名へ書いてから置き換える。途中で落ちたときに、人が手で保って
     いる除外リストが切り詰められた状態で残らないようにする。
     """
@@ -1973,13 +1976,13 @@ def store_baseline(path, current, tools):
             "版が無いと、次に差分が出たとき道具が上がったせいか"
             "判別力が落ちたせいかを区別できない")
     counted = filtered_counts_for(current)
+    alive = survivors_for(current)
     targets = set(base["targets"])
     survivors = dict(base["survivors"])
     filtered = dict(base["syntax_filtered"])
     for target in current["targets"]:
         targets.add(target)
-        survivors[target] = sorted(
-            _id_set(current["survivors"].get(target, ()), target))
+        survivors[target] = alive[target]
         filtered[target] = counted[target]
     doc = baseline_document({
         "targets": sorted(targets),
@@ -2035,18 +2038,61 @@ def compare(baseline, current):
     生存率は使わない。等価ミュータント（`astimezone(JST)` を
     `astimezone(None)` に変えた2件のような、結果が変わらない変異）が率の上で
     永久に生存側へ計上され続け、閾値を緩める圧力の幅に本物の劣化が隠れる。
+
+    **既定値で埋めない。**測れた対象の生き残りが1本でも欠けていれば
+    `survivors_for` が止める。`current["survivors"].get(target, ())` と書くと、
+    行の落ちた対象が「1件も生き残らなかった」と同じ字面になり、差分が出ない。
+    基準側は `load_baseline` が `targets` の全対象に一覧を入れるので添字で引ける。
     """
     known = set(baseline["targets"])
     dropped = excluded_ids(baseline)
+    alive = survivors_for(current)
     out = {}
     for target in current["targets"]:
         if target not in known:
             continue
-        was = set(baseline["survivors"].get(target, ()))
-        now = _id_set(current["survivors"].get(target, ()), target)
-        new = sorted(now - was - dropped)
+        was = set(baseline["survivors"][target])
+        new = sorted(set(alive[target]) - was - dropped)
         if new:
             out[target] = new
+    return out
+
+
+def survivors_for(current):
+    """測れた対象**すべて**の、生き残った変異体の識別子。欠けていたら止める。
+
+    **既定値で埋めない。**`current["survivors"].get(target, ())` と書くと、
+    行の落ちた対象が「1件も生き残らなかった」と同じ字面になる。書き込む側は
+    その対象へ満点の記録を焼き付け、比べる側は差分を出さない。基準に満点が
+    載ったあとは、その対象が本当は何を通していても永久に「所見なし」で通る。
+
+    **書き込む側と比べる側が同じ門を通るように、ここ1箇所に置く。**
+    `filtered_counts_for` と同じ理由で、片方だけへ門を置くと同じ入力を読む
+    隣の関数に穴が残る（実際に一度そうなった）。
+    """
+    if "survivors" not in current:
+        raise BaselineBroken(
+            "走行の結果に `survivors`（生き残った変異体）が無い。"
+            "空で埋めると「渡し忘れ」と「1件も生き残らなかった」が同じ字面に"
+            "なり、基準へ満点が焼き付いて二度と発火しなくなる")
+    rows = current["survivors"]
+    if not isinstance(rows, dict):
+        raise BaselineBroken(
+            f"走行の `survivors` は対象ごとのオブジェクトで持つ（{rows!r}）")
+    missing = sorted(t for t in current["targets"] if t not in rows)
+    if missing:
+        raise BaselineBroken(
+            f"生き残りの記録が無い対象がある（{'、'.join(missing)}）。"
+            "空で埋めると、渡し忘れた対象が「1件も生き残らなかった」と同じ"
+            "字面になり、基準に満点が焼き付く")
+    out = {}
+    for t in current["targets"]:
+        # `blank_shell_result` は測れなかった対象に `None` を入れる。読める
+        # 理由で止めないと、`_id_set` の中で型の誤りとして落ちる。
+        if not isinstance(rows[t], (list, tuple)):
+            raise BaselineBroken(
+                f"{t}: 走行の `survivors` の値が識別子の一覧でない（{rows[t]!r}）")
+        out[t] = sorted(_id_set(rows[t], f"{t} の生き残り"))
     return out
 
 
@@ -2219,6 +2265,159 @@ def tool_drift(baseline, tools):
     was = baseline["tools"]
     return [(name, was.get(name), tools.get(name))
             for name in BASELINE_TOOLS if was.get(name) != tools.get(name)]
+
+
+# --- `--update-baseline`（対象単位の書き込み） ---
+
+# 走行1回分の結果が持つ鍵。**正の形で列挙する。**「知らない鍵は無害」と
+# すると、綴りを誤った鍵が黙って落ちて、その中身が既定値として扱われる。
+# `targets` / `survivors` / `unmeasurable` は `group_by_target` が、`excluded` は
+# `run_shell_lane` が、`tools` は `mutation_tool_versions` が埋める。
+RESULT_KEYS = ("targets", "survivors", "excluded", "unmeasurable", "tools")
+
+# 基準を書かなかった理由のうち、走行の側が理由を持たないもの。**基準に在るのに
+# 今回の走行に現れなかった対象。**記録はそのまま残す（刈ると、次の走行で
+# その対象が「基準が無い」に落ちて静かに合格する）。
+UPDATE_ABSENT = "基準に記録があるが、今回の走行に現れなかった"
+
+# 報告の見出し。字面を1箇所で持つ。
+UPDATE_WROTE = "基準を書いた対象"
+UPDATE_KEPT = "基準を書かなかった対象"
+
+
+def check_run_result(results):
+    """`--update-baseline` へ渡す走行の結果の形を見る。**鍵をちょうど数える。**
+
+    足りない鍵を既定値で埋めない。`unmeasurable` が欠けた走行を空として通すと、
+    測れなかった対象が1つも無かったことになり、終了コードが0へ落ちる。
+    """
+    if not isinstance(results, dict):
+        raise BaselineBroken(f"走行の結果がオブジェクトでない（{results!r}）")
+    unknown = sorted(set(results) - set(RESULT_KEYS))
+    if unknown:
+        raise BaselineBroken(
+            f"走行の結果に知らない鍵がある（{'、'.join(unknown)}）")
+    missing = [k for k in RESULT_KEYS if k not in results]
+    if missing:
+        raise BaselineBroken(
+            f"走行の結果に鍵が足りない（{'、'.join(missing)}）。"
+            "既定値で埋めると、渡し忘れた項目が「何も無かった」と同じ字面になる")
+    return results
+
+
+def skipped_reason(results, target):
+    """その対象の基準を書かなかった理由。**源は2つしかない。**
+
+    1. 今回「計測できなかった」に落ちた … 走行が返した理由をそのまま出す
+    2. 基準に記録があるのに今回の走行に現れなかった … `UPDATE_ABSENT`
+
+    **理由を組み立てる場所を1つにする。**書かない対象を数える側（`update_skipped`）
+    と報告に出す側（`update_report`）が別々に理由を決めると、片方だけが源を1つ
+    落としたときに、もう片方の理由が代わりに読めて気づけない。
+    """
+    for name, reason in results["unmeasurable"]:
+        if name == target:
+            return reason
+    return UPDATE_ABSENT
+
+
+def update_skipped(baseline, results):
+    """基準を書かない対象と、その理由の対応。
+
+    **書いた対象の裏返しを取る。**「測れなかった対象」だけを数えると、基準に
+    在るのに今回の走行から消えた対象が報告からも落ちる。そちらは記録を残す
+    （刈らない）ので、残したことを人が読める形にしておく必要がある。
+    """
+    check_run_result(results)
+    written = set(results["targets"])
+    unmeasurable = {t for t, _ in results["unmeasurable"]}
+    both = sorted(written & unmeasurable)
+    if both:
+        # 測れた対象と測れなかった対象の両方に居る対象は、どちらの記録を基準へ
+        # 書くかを決められない。片方を優先して黙って進むと、測れなかった対象の
+        # 記録が満点として焼き付く経路と、測れた記録を捨てる経路の両方が開く。
+        raise BaselineBroken(
+            f"測れた対象と測れなかった対象の両方に居る対象がある"
+            f"（{'、'.join(both)}）。どちらの記録を基準にするかを決められない")
+    names = sorted((unmeasurable | set(baseline["targets"])) - written)
+    return {t: skipped_reason(results, t) for t in names}
+
+
+def update_baseline(path, results):
+    """`--update-baseline`。**測れた対象の基準だけを書く。**
+
+    返すのは（書いた対象、書かなかった対象）。
+
+    **対象単位で書く。**リポジトリ単位で丸ごと書く形にすると、対象が1つでも
+    測れない間はそのリポジトリの基準を一度も作れない。shell テスト18本のうち
+    11本は chezmoi にあり、issue #18 の書き換えへ基準の無いまま入ることになる。
+
+    **今回測っていない対象の記録を刈らない。**対象単位で書くことの裏返しで、
+    書かなかった対象のエントリは基準に残る。刈ると、次の走行でその対象が
+    「基準が無い」に落ち、`--update-baseline` を打った人がそれを埋めて静かに
+    合格させる経路ができる。保持そのものは `store_baseline` が担う。
+
+    **除外リスト（非決定な変異体）は書き換えない。**`store_baseline` が素通し
+    する。走らせるたびに機械が除外を書き足せる形にすると、非決定でない生き残り
+    まで除外へ流れ込み、判定が静かに空洞化する。人が手で足し引きする。
+
+    **壊れた計測結果を基準として書き込まない。**道具の版・構文検査の件数・
+    生き残りのいずれかが揃わなければ `store_baseline` が止める。
+    """
+    check_run_result(results)
+    base = load_baseline(path)
+    skipped = update_skipped(base, results)
+    stored = store_baseline(path, results, results["tools"])
+    written = sorted(results["targets"])
+    # **「書いた」と報告する対象が実際に基準へ載っていること。**報告だけが
+    # 人の読むものなので、載っていない対象を書いたと言う形は残さない。
+    lacking = [t for t in written if t not in set(stored["targets"])]
+    if lacking:
+        raise BaselineBroken(
+            f"書いたはずの対象が基準に無い（{'、'.join(lacking)}）")
+    return written, sorted(skipped)
+
+
+def update_report(results, written, skipped):
+    """どの対象の基準を書いてどれを書かなかったかの行（受け入れ条件47）。
+
+    **書かなかった対象には理由を添える。**名前だけを並べると、測れなかったのか
+    今回の走行に現れなかったのかが読めず、どちらも「基準が古いまま」に見える。
+    前者は直すべき事故で、後者は正常な状態。
+
+    **0件でも見出しを出す。**黙って省くと、書かなかった対象が無かったのか、
+    報告の側が落としたのかを読む人が区別できない。
+    """
+    check_run_result(results)
+    lines = [f"{UPDATE_WROTE}: {len(written)}件"]
+    lines += [f"  {t}" for t in written]
+    lines.append(f"{UPDATE_KEPT}: {len(skipped)}件")
+    lines += [f"  {t} — {skipped_reason(results, t)}" for t in skipped]
+    return lines
+
+
+def update_verdict(skipped):
+    """`--update-baseline` を付けた走行の、リポジトリ単位の分類と終了コード。
+
+    **書かなかった対象が1つでもあれば非0。**壊れた計測結果を基準として書き
+    込まないので、書けなかったこと自体が持ち越しの事故になる。0 で通すと、
+    `--update-baseline` を打つだけで測れていない対象が緑の顔をする。
+
+    **「判別力が落ちた」と「基準が無い」はここから出ない。**書き込みの走行では
+    どちらも発生しない（新しい生き残りはそのまま基準になり、記録の無い対象は
+    ここで作られる）。
+
+    **「実行できなかった」と「対象外」はここより上に立つ。**`bwrap` や venv が
+    無ければそもそも測れておらず、この関数を呼ぶ手前で決まる（Task 12）。
+    どちらも `--update-baseline` を付けても非0のまま。
+
+    分類の字面は「計測できなかった」を使う。基準に在るのに走行から消えた対象も
+    ここへ畳む。設計の5分類にその形の器が無く、6つ目をここで作るとリポジトリ
+    単位の畳み込みと食い違う。**理由の区別は報告の行が持つ。**
+    """
+    if skipped:
+        return UNMEASURABLE, 1
+    return NO_FINDING, 0
 
 
 # 監視対象。環境変数で使い捨てのパスへ差し替えられる。
@@ -2870,6 +3069,28 @@ def main(argv):
             payload = {"baseline": baseline_document(base), "error": None}
         except BaselineBroken as e:
             payload = {"baseline": None, "error": str(e)}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-baseline-update" in argv:
+        # `--update-baseline` の書き込みだけを、渡されたパスの上で叩く口。
+        # **本番の `.mutation-baseline.json` には触れない。**`(path, results)` を
+        # 渡すと、書いた対象・書かなかった対象・報告の行・リポジトリ単位の分類と
+        # 終了コード・書き直した基準を返す。**`--mutate` への配線は Task 12。**
+        i = argv.index("--selftest-baseline-update")
+        path, results = ast.literal_eval(argv[i + 1])
+        try:
+            written, skipped = update_baseline(path, results)
+            label, code = update_verdict(skipped)
+            payload = {"written": written, "skipped": skipped,
+                       "report": update_report(results, written, skipped),
+                       "classification": label, "exit_code": code,
+                       "baseline": baseline_document(load_baseline(path)),
+                       "error": None}
+        except BaselineBroken as e:
+            payload = {"written": None, "skipped": None, "report": None,
+                       "classification": None, "exit_code": None,
+                       "baseline": None, "error": str(e)}
         print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
         return 0
 
