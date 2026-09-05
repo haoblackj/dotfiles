@@ -4,9 +4,11 @@
 /install.sh
 /docs
 /pyproject.toml
-# Pythonテスト実行で生成されるバイトコードはapply対象外
+# Pythonテスト実行で生成されるバイトコードとキャッシュはapply対象外
 **/__pycache__
 **/__pycache__/**
+**/.pytest_cache
+**/.pytest_cache/**
 
 # herdr integration が自身の更新のたびに上書きするファイル。
 # chezmoi管理下に置くとherdrの更新をchezmoi applyで巻き戻すリスクがあるため対象外。
