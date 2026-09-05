@@ -558,6 +558,135 @@ def shell_pairs(repo, tracked):
     return {"pairs": pairs, "python_pairs": py_pairs, "unmeasurable": bad}
 
 
+# cosmic-ray の設定の置き場。リポジトリごとに1つで、先に当たったほうを使う。
+# penguinEx は `pyproject.toml` を持つのでそこへ、chezmoi は持たないので
+# `.cosmic-ray.toml` を別に置く（chezmoi はソースディレクトリのドット始まりを
+# 配置対象にしないので `.chezmoiignore` への追記は要らない）。
+#
+# **cosmic-ray が読む形そのままで置く。**`load_config` は
+# `toml.loads(...)["cosmic-ray"]` なので（`cosmic_ray/config.py`、実測）、表は
+# `[tool.cosmic-ray]` ではなくトップレベルの `[cosmic-ray]` に置く。道具の側で
+# 読み替えて一時ファイルへ書き出す形は採らない。**門が数える設定と cosmic-ray が
+# 実際に読む設定が同じ1つのファイルであることが、「門は通ったのに走行は別の
+# 対象を測っていた」を原理的に起こさない。**
+MUTATION_CONFIG_NAMES = ("pyproject.toml", ".cosmic-ray.toml")
+MUTATION_CONFIG_TABLE = "cosmic-ray"
+
+
+def mutation_config(repo):
+    """`(設定ファイルのリポジトリ相対パス, `[cosmic-ray]` の表)` を返す。
+
+    どの候補にも表が無ければ Unmeasurable。**黙って既定値で走らない。**
+    設定を欠いたまま走ると `module-path` が無いので対象0本になり、
+    「生き残り0件＝判別力が満点」と見分けが付かなくなる。
+    """
+    import tomllib
+    for name in MUTATION_CONFIG_NAMES:
+        path = os.path.join(repo, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as f:
+                conf = tomllib.load(f)
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            raise Unmeasurable(f"{name}: TOML として読めない（{e}）")
+        if MUTATION_CONFIG_TABLE in conf:
+            return name, conf[MUTATION_CONFIG_TABLE]
+    raise Unmeasurable(
+        f"cosmic-ray の設定（`[{MUTATION_CONFIG_TABLE}]` の表）が "
+        f"{' / '.join(MUTATION_CONFIG_NAMES)} のどれにも無い")
+
+
+def _glob_rel(root, pattern):
+    """`cosmic_ray.modules` と同じ広げ方で、root からの相対パスの集合を作る。
+
+    `find_modules` は `glob.glob(f"{module_path}/**/*.py", recursive=True)`、
+    `filter_paths` は `glob.glob(excluded_path, recursive=True)`
+    （どちらも `cosmic_ray/modules.py`、実測）。**同じ形で書く。**別の広げ方を
+    すると、門が数えた集合と cosmic-ray が実際に変異させた集合がずれ、
+    ずれた分は誰にも見えないまま測られずに終わる。
+    """
+    return {os.path.normpath(p)
+            for p in glob.glob(pattern, root_dir=root, recursive=True)}
+
+
+def py_classification(repo, sandbox):
+    """Python レーンの対象集合を作業コピーの上で数え、4つの入れ物で返す。
+
+    - `config` … 読んだ設定ファイルのリポジトリ相対パス
+    - `targets` … cosmic-ray が拾う `.py`（`module-path` から `excluded-modules` を引いたもの）
+    - `excluded` … `excluded-modules` が実際に落とした `.py`
+    - `tracked_py` … 追跡されている `.py` すべて
+    - `gap` … 追跡 `.py` のうち、拾われも除外もされていないもの
+
+    **作業コピーの上で数える。**`make_worktree_copy` が先に呼ばれていることが
+    前提になる。ソースツリーの上で数えると追跡外の `.py` まで glob に入り、
+    数えた集合と、追跡ファイルだけの作業コピーで実際に測る集合が食い違う。
+    """
+    name, conf = mutation_config(repo)
+    host = os.path.join(sandbox, WORKTREE_COPY_NAME)
+    if not os.path.isdir(host):
+        raise Unmeasurable("作業コピーが無いまま Python レーンの対象を数えようとした")
+    paths = conf.get("module-path")
+    if isinstance(paths, str):
+        paths = [paths]
+    if not paths:
+        raise Unmeasurable(f"{name}: `module-path` が空")
+    picked = set()
+    for rel in paths:
+        # **`.py` の名指しを通さない。**cosmic-ray 自身は単一ファイルも受けるが、
+        # 名指しの一覧は新しく置いた `.py` が足されない限り黙って対象外になる。
+        # 測られていないのに緑で通るので、この設計が塞ごうとしている型の穴が
+        # 対象の決め方そのものに開く（受け入れ条件2）。
+        if rel.endswith(".py"):
+            raise Unmeasurable(
+                f"{name}: `module-path` はディレクトリで並べる。"
+                f"対象にしたいファイルを名指ししない（{rel}）")
+        # **絶対パスと親をさかのぼるパスを通さない。**cosmic-ray は設定に書かれた
+        # パスをそのまま `module_path` に載せるので、絶対で書くと変異体の識別子に
+        # この機械の場所が焼き付き、`mutant_id` が全件を「計測できなかった」へ落とす。
+        if os.path.isabs(rel) or os.path.normpath(rel).startswith(".."):
+            raise Unmeasurable(
+                f"{name}: `module-path` はリポジトリのルートからの相対で書く（{rel}）")
+        if not os.path.isdir(os.path.join(host, rel)):
+            # `find_modules` は実在しない `module-path` で FileNotFoundError を
+            # 投げ、`cosmic-ray init` は終了コード66で落ちる（実測）。ここで
+            # 先に止めるのは、原因の読める理由を付けるため。
+            raise Unmeasurable(
+                f"{name}: `module-path` が作業コピーに無い（{rel}）")
+        picked |= _glob_rel(host, f"{rel}/**/*.py")
+    excluded = set()
+    for pattern in conf.get("excluded-modules", ()):
+        excluded |= _glob_rel(host, pattern)
+    tracked = tracked_files(repo, sandbox)
+    if tracked is None:
+        raise Unmeasurable("git ls-files が失敗した")
+    tracked_py = {p for p in tracked if p.endswith(".py")}
+    targets = picked - excluded
+    return {
+        "config": name,
+        "targets": sorted(targets),
+        "excluded": sorted(excluded),
+        "tracked_py": sorted(tracked_py),
+        "gap": sorted(tracked_py - targets - excluded),
+    }
+
+
+def py_target_set(repo, sandbox):
+    """cosmic-ray が拾う `.py` の集合。"""
+    return set(py_classification(repo, sandbox)["targets"])
+
+
+def completeness_gap(repo, sandbox):
+    """追跡 `.py` のうち、拾われも除外もされていないもの。
+
+    **`module-path` の手書きの一覧そのものに開く穴を塞ぐ。**一覧に無い新しい
+    ディレクトリへ置かれた `.py` は、名指しの一覧と同じように黙って対象外になる。
+    1本でもあれば「計測できなかった」で止める側が呼ぶ（受け入れ条件5）。
+    """
+    return set(py_classification(repo, sandbox)["gap"])
+
+
 # 変異体の識別子は `(対象のリポジトリ相対パス, 行番号, 変異後のその行の内容)`。
 # **道具が振る通し番号を使わない。**cosmic-ray の `job_id` は `init` のたびに
 # 生成される UUID でセッションをまたいで一致せず、universalmutator の
@@ -1713,6 +1842,36 @@ def main(argv):
                         os.path.relpath(os.path.join(root, n), sandbox))
             print(json.dumps({"rc": rc, "out": out + err,
                               "home_files": sorted(home_files)}, sort_keys=True))
+            return 0
+        finally:
+            shutil.rmtree(sandbox, ignore_errors=True)
+
+    if "--selftest-py-targets" in argv:
+        # Python レーンの対象集合を外から見る口。作業コピーを作ってから数える。
+        # **拾った集合だけでなく、除外された集合と追跡 `.py` の全体も返す。**
+        # 拾った集合だけを返すと、「過不足なく拾った」の検査が道具の自己申告に
+        # なる。呼び出し側が3つを突き合わせられる形にする。
+        i = argv.index("--selftest-py-targets")
+        tree = os.path.abspath(argv[i + 1])
+        sandbox = make_sandbox_home()
+        try:
+            payload = {"config": None, "targets": None, "excluded": None,
+                       "tracked_py": None, "gap": None, "unmeasurable": None}
+            try:
+                if make_worktree_copy(tree, sandbox) is None:
+                    raise Unmeasurable("作業コピーを作れなかった")
+                got = py_classification(tree, sandbox)
+                # `py_target_set` と `completeness_gap` を通す。まとめ役の
+                # 戻り値をそのまま写すと、後段が使う2つの口が誰にも叩かれない
+                # まま残り、名前だけ在って中身が腐っていても気づけない。
+                payload.update(
+                    config=got["config"], excluded=got["excluded"],
+                    tracked_py=got["tracked_py"],
+                    targets=sorted(py_target_set(tree, sandbox)),
+                    gap=sorted(completeness_gap(tree, sandbox)))
+            except Unmeasurable as e:
+                payload["unmeasurable"] = f"{UNMEASURABLE}: {e}"
+            print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
             return 0
         finally:
             shutil.rmtree(sandbox, ignore_errors=True)
