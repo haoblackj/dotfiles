@@ -3,6 +3,7 @@
 # docs/superpowers/specs/2026-09-04-test-integrity-design.md を参照。
 set -uo pipefail
 exec python3 - "$@" <<'PYTHON'
+import ast
 import glob
 import os
 import re
@@ -254,10 +255,11 @@ def collected_files(repo, sandbox):
     return rc, files, out + err
 
 
-def run_python(repo, sandbox, extra_args=()):
+def run_python(repo, sandbox, extra_args=(), extra_ro=()):
     rc, out, err = run_cmd_in_sandbox(
         repo, sandbox,
         ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", *extra_args],
+        extra_ro,
     )
     return rc, out + err
 
@@ -345,7 +347,166 @@ def diff_watched(before, after):
     return counted, noted
 
 
+def merge_base(repo):
+    out = subprocess.run(
+        ["git", "-C", repo, "merge-base", "HEAD", "origin/main"],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        return None
+    return out.stdout.strip()
+
+
+def base_worktree(repo, sha):
+    """merge-base の内容を使い捨てのワークツリーへ出す。
+
+    永続 baseline を持たないので、基準は毎回 git history から作り直す。
+    全件10秒弱なので、キャッシュが外れたら保守的に再実行へ倒せる。
+    """
+    path = tempfile.mkdtemp(prefix="verify-tests-base.")
+    out = subprocess.run(
+        ["git", "-C", repo, "worktree", "add", "--detach", "-f", path, sha],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        shutil.rmtree(path, ignore_errors=True)
+        return None
+    return path
+
+
+def drop_base_worktree(repo, path):
+    subprocess.run(["git", "-C", repo, "worktree", "remove", "--force", path],
+                   capture_output=True, text=True)
+    subprocess.run(["git", "-C", repo, "worktree", "prune"],
+                   capture_output=True, text=True)
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def parse_pytest_outcomes(out):
+    """ケース単位の合否を nodeid から取る。
+
+    -q --tb=no -rA の出力の「PASSED <nodeid>」「FAILED <nodeid>」を読む。
+    """
+    res = {}
+    for ln in out.splitlines():
+        m = re.match(r"(PASSED|FAILED|ERROR|SKIPPED)\s+(\S+)", ln.strip())
+        if m:
+            res[m.group(2)] = m.group(1)
+    return res
+
+
+def evaluate(tree, extra_ro=(), collect_only=False):
+    """1つのツリーを1回走らせて、判定に要るものを全部返す。
+
+    R1（merge-base × merge-base のテスト）、R2（candidate × merge-base のテスト）、
+    R3（candidate × candidate のテスト）の3回とも、この関数を通る。
+
+    collect_only=True のときは収集で止める。--discover-only がこれを使う。
+    走らせてしまうと `/morning` が毎朝両リポジトリの全件を回すことになり、
+    「実行せず、discovery の検査と収集の差分だけを見る」という口の定義から外れる。
+    """
+    sandbox = make_sandbox_home()
+    try:
+        if not sandbox_started(tree, sandbox):
+            return {"sandbox_ok": False}
+        tracked = tracked_files(tree, sandbox)
+        if tracked is None:
+            return {"sandbox_ok": True, "ls_files_ok": False}
+        py, sh = target_tests(tree, tracked)
+        rc_collect, collected, _ = collected_files(tree, sandbox)
+        missing, unexpected = collection_diff(tree, py, collected)
+        out = {
+            "sandbox_ok": True, "ls_files_ok": True,
+            "tracked": tracked, "py": py, "sh": sh,
+            "collected": collected, "rc_collect": rc_collect,
+            "missing": missing, "unexpected": unexpected,
+            "discovery": check_discovery_policy(tree),
+            "results": {}, "rc_run": 0, "sh_green": 0, "sh_total": 0,
+        }
+        if collect_only:
+            return out
+        rc_run, run_out = run_python(tree, sandbox, ["--tb=no", "-rA"], extra_ro)
+        results = parse_pytest_outcomes(run_out)
+        sh_rc = run_shell(tree, sandbox, sh, extra_ro)
+        for rel, rc in sh_rc.items():
+            results[rel] = "PASS" if rc == 0 else "FAIL"
+        out.update({
+            "results": results, "rc_run": rc_run,
+            "sh_green": sum(1 for rc in sh_rc.values() if rc == 0),
+            "sh_total": len(sh_rc),
+        })
+        return out
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
+
+
+# 合否の語彙は2系統ある。pytest は PASSED / FAILED / ERROR / SKIPPED、
+# shell レーンは PASS / FAIL。片方だけで照合すると、Python の赤が
+# 既知の赤の格上げからも known-red の集計からも漏れる。
+RED = {"FAIL", "FAILED", "ERROR"}
+GREEN = {"PASS", "PASSED"}
+
+
+def is_red(v):
+    return v in RED
+
+
+def regressions(base, cand):
+    """base で緑、candidate で赤になったものだけを返す。
+
+    red -> red は regression に算入しない。既知の赤と共存するため。
+    base に無い（新しく足された）ものが赤い場合も返す。
+    """
+    out = []
+    for key, val in sorted(cand.items()):
+        if not is_red(val):
+            continue
+        if base.get(key) in GREEN:
+            out.append(key)
+        elif key not in base:
+            out.append(key)
+    return out
+
+
+def harness_failure_reasons(r, full=True):
+    """検査そのものが成立しなかった理由を集める。引数は evaluate の戻り値。
+
+    full=False のときは「走らせること自体ができなかった」3つだけを見る。
+    R1 と R2 はこちらで呼ぶ。**導入の初回、merge-base には pyproject.toml も
+    verify-tests も無い。**R1 にも構造の検査を当てると「pyproject.toml が
+    ありません」が必ず立ち、判定が実行の門へ届かないまま FAIL を返す。
+    pre-push は --strict を呼ぶので push も止まり、origin/main を進める手段が
+    --no-verify だけになる。仕組みが自分で自分を塞ぐ。
+
+    pytest の終了コードは0と1以外をすべてここへ落とす。
+    2が収集エラー、3が内部エラー、4が使い方の誤り、5が収集0件。
+    """
+    if not r.get("sandbox_ok"):
+        return ["bwrap の起動に失敗した"]
+    if not r.get("ls_files_ok"):
+        return ["git ls-files が失敗した"]
+    reasons = []
+    for name, rc in (("収集", r.get("rc_collect", 0)), ("本走行", r.get("rc_run", 0))):
+        if rc not in (0, 1):
+            reasons.append(f"{name}が終了コード {rc} を返した")
+    if not full:
+        return reasons
+    for p in r.get("discovery", []):
+        reasons.append(f"discovery policy: {p}")
+    for m in r.get("missing", []):
+        reasons.append(f"走らなかった: {m}")
+    for u in r.get("unexpected", []):
+        reasons.append(f"収集されたが候補に無い: {u}")
+    return reasons
+
+
 def main(argv):
+    if "--selftest-regressions" in argv:
+        i = argv.index("--selftest-regressions")
+        base, cand = ast.literal_eval(argv[i + 1])
+        print(regressions(base, cand))
+        return 0
+
     if "--selftest-normalize" in argv:
         i = argv.index("--selftest-normalize")
         print(normalize(argv[i + 1]))
@@ -356,7 +517,11 @@ def main(argv):
             print(p)
         return 0
 
-    positional = [a for a in argv if not a.startswith("-")]
+    # `--` より後ろは pytest へそのまま渡す分なので、対象リポジトリの候補から外す。
+    # 外さないと `verify-tests -- tests/foo.py` の `tests/foo.py` が
+    # リポジトリ引数として拾われる。
+    head = argv[: argv.index("--")] if "--" in argv else argv
+    positional = [a for a in head if not a.startswith("-")]
     if not positional:
         print("使い方: verify-tests <リポジトリ> [--strict] [--discover-only] [-- <pytest への引数>]")
         return 1
@@ -372,49 +537,42 @@ def main(argv):
               "`sudo apt install bubblewrap` で導入してください")
         return 1
 
+    strict = "--strict" in argv
+    discover_only = "--discover-only" in argv
+    passthrough = argv[argv.index("--") + 1:] if "--" in argv else None
+    if passthrough is not None and (strict or discover_only):
+        print("実行できなかった: -- は --strict / --discover-only と併用できません")
+        return 1
+
     before = snapshot_watched()
-    sandbox = make_sandbox_home()
+
+    r3 = evaluate(repo, collect_only=discover_only)     # candidate × candidate
+    if discover_only:
+        reasons = harness_failure_reasons(r3)
+        for x in reasons:
+            print(f"== {x}")
+        print(f"== 収集: {len(r3.get('collected', ()))}ファイル")
+        return 1 if (reasons and strict) else 0
+
+    sha = merge_base(repo)
+    base_tree = base_worktree(repo, sha) if sha else None
+    if base_tree is None:
+        print("REVIEW  merge-base を用意できないため判定に必要な情報が揃いません")
+        return 0
     try:
-        if not sandbox_started(repo, sandbox):
-            print("実行できなかった: bwrap の起動に失敗しました")
-            return 1
-        tracked = tracked_files(repo, sandbox)
-        if tracked is None:
-            print("実行できなかった: git ls-files が失敗しました")
-            return 1
-        py, sh = target_tests(repo, tracked)
-        print(f"== 対象: Python {len(py)}ファイル / shell {len(sh)}ファイル")
-        rc_collect, collected, _ = collected_files(repo, sandbox)
-
-        problems = check_discovery_policy(repo)
-        for p in problems:
-            print(f"== discovery: {p}")
-        missing, unexpected = collection_diff(repo, py, collected)
-        for m in missing:
-            print(f"== 走らなかった: {m}（候補にあるが収集されていない）")
-        for u in unexpected:
-            print(f"== 収集されたが候補に無い: {u}")
-
-        rc_run, run_out = run_python(repo, sandbox)
-        print(f"== 収集: {len(collected)}ファイル")
-        print(f"== Python: rc={rc_run}")
-
-        sh_results = run_shell(repo, sandbox, sh)
-        green = sum(1 for rc in sh_results.values() if rc == 0)
-        print(f"== shell: {green}/{len(sh_results)} 緑（ファイル単位・Level 1）")
-        if SHELL_EXCLUDED:
-            print(f"== shell 対象外: {', '.join(sorted(SHELL_EXCLUDED))}"
-                  "（#20 が閉じるまで隔離下の挙動を測れないため）")
-
+        r1 = evaluate(base_tree)                        # base × base
         after = snapshot_watched()
         counted, noted = diff_watched(before, after)
-        for path in counted:
-            print(f"== 本番へ書いた: {path}")
-        for path in noted:
-            print(f"== 変化（判定に算入しない）: {path}")
+        cand_regressions = regressions(r1.get("results", {}), r3.get("results", {}))
+        for k in cand_regressions:
+            print(f"== 新規 regression: {k}")
+        for p in counted:
+            print(f"== 本番へ書いた: {p}")
+        for p in noted:
+            print(f"== 変化（判定に算入しない）: {p}")
         return 0
     finally:
-        shutil.rmtree(sandbox, ignore_errors=True)
+        drop_base_worktree(repo, base_tree)
 
 
 sys.exit(main(sys.argv[1:]))
