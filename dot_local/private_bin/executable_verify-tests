@@ -222,8 +222,15 @@ def mutate_binds(venv_path=MUTATE_VENV):
 # 必ず非0になり、analyze_mutants に kill と計上されて点数を持ち上げる。
 # `-` は語構成文字ではないので `\b` では境界にならない。前後を明示で否定する。
 SHELL_RULES = r"""
-# 行の途中から先のコメントは変異させない。shell のシェバンもここで落ちる。
-# ==> SKIP_MUTATING_REST
+# コメントより後ろは変異させない。universalmutator はこの規則を「当たった位置より
+# 後ろを変異させない」と解釈する（mutator.py の skipPos）。実測では penguinEx の
+# shell 対象でコメント行の変異33件がこれで落ちる。
+#
+# **`#` 単体では書けない。**shell の `#` はコメント専用ではないので、`$#`・
+# `${#arr[@]}`・`${var#接頭辞}` を含む行の変異が丸ごと消える。実測で消えていたのは
+# 「引数が無いとき」「配列が空のとき」の門4箇所・10変異体で、テストがその経路を
+# 踏んでいるかを測るのに最も効く行だった。直前の1文字で除く。
+(?<![\w${])# ==> SKIP_MUTATING_REST
 
 # 数値比較の演算子の入れ替え
 (?<![\w-])-eq(?![\w-]) ==> -ne
@@ -276,6 +283,15 @@ def bundled_python_rules(pattern=BUNDLED_PYTHON_RULES_GLOB):
 
 RULES_FILENAME = "verify-tests.rules"
 
+# 連結のときに同梱 python.rules から落とす規則。
+#
+# `#` 単体の SKIP_MUTATING_REST は、連結すると上の語境界付きの規則を無効にする。
+# skipPos は当たった位置の**最小値**を採るので（mutator.py）、緩い方が必ず勝つ。
+# **Python 向け規則を当てる唯一の対象 scripts/check_claude_hooks.sh の11行目が
+# `if [[ $# -eq 0 ]]` で、落とさないとこの行の変異2件が消えたままになる**（実測）。
+# 落としてもコメントの抑止は失われない。上の規則が両方の言語で同じ働きをする。
+BUNDLED_RULES_DROPPED = ("# ==> SKIP_MUTATING_REST",)
+
 
 def write_rules(tmpdir, include_python):
     """規則ファイルを1つ書き出し、そのパスを返す。
@@ -288,7 +304,9 @@ def write_rules(tmpdir, include_python):
     text = SHELL_RULES
     if include_python:
         with open(bundled_python_rules()) as f:
-            text = text + "\n" + f.read()
+            kept = [ln for ln in f.read().splitlines()
+                    if ln not in BUNDLED_RULES_DROPPED]
+        text = text + "\n" + "\n".join(kept) + "\n"
     path = os.path.join(tmpdir, RULES_FILENAME)
     with open(path, "w") as f:
         f.write(text)
@@ -308,11 +326,16 @@ PY_HEREDOC_RE = re.compile(
 
 
 def python_heredocs(text):
-    """Python を起動しているヒアドキュメントの中身を取り出す。
+    """Python を起動しているヒアドキュメントを `(中身, 終端が在ったか)` で返す。
 
     `needs_python_rules` と `syntax_ok` がこの1つを共有する。判定を2つ持つと、
     Python 向け規則を当てる対象と Python の構文検査を掛ける対象がずれ、
     片方だけが効いている状態に気づけない。
+
+    **終端の有無を返す。**同梱 python.rules の `(^\\s*)(\\S+.*\\n)` は行を丸ごと
+    `pass` へ置き換えるので、終端の `PY` 自身を潰した変異体ができる（実測）。
+    黙って「そこまでが本文」として返すと、`bash -n` も ast.parse も通ってしまう。
+    ヒアドキュメントが末尾でない対象では、本文が後続の shell を飲み込む。
     """
     out = []
     rest = iter(text.splitlines())
@@ -323,14 +346,16 @@ def python_heredocs(text):
         tag = m.group("tag")
         dash = bool(m.group("dash"))   # `<<-` は終端の字下げ（タブ）を許す
         body = []
+        closed = False
         # 同じ iterator を進める。終端の行はここで消費されるので、外側の
         # for は中身を読み直さずヒアドキュメントの次の行から再開する。
         for inner in rest:
             probe = inner.lstrip("\t") if dash else inner
             if probe == tag:
+                closed = True
                 break
             body.append(inner)
-        out.append("\n".join(body))
+        out.append(("\n".join(body), closed))
     return out
 
 
@@ -374,7 +399,11 @@ def syntax_ok(path, is_python_heredoc):
         text = read_target(path)
     except OSError:
         return False
-    for code in python_heredocs(text):
+    for code, closed in python_heredocs(text):
+        # 終端を潰した変異体をここで落とす。潰れたまま通すと、bash も Python も
+        # 構文としては受け付けるのに、意味は原本と別物という変異体が残る。
+        if not closed:
+            return False
         try:
             ast.parse(code)
         except (SyntaxError, ValueError):
