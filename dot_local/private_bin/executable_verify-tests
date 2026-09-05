@@ -163,6 +163,20 @@ def bwrap_available():
     return shutil.which("bwrap") is not None
 
 
+# 配置先の道具そのもの。自テストがこのパスで対象を開く。
+DEPLOYED_TOOL = os.path.expanduser("~/.local/bin/verify-tests")
+
+
+def deployed_tool_bind():
+    """`--` の口へ渡す追加の読み取り専用 bind。
+
+    RO_BINDS へ足さない。あれは全走行に効くので、差分判定の走行の内側にも
+    道具が現れることになる。加えて `--print-binds` が返す一覧の意味が
+    「テストが本番を読むために要る場所」から外れる。
+    """
+    return [(DEPLOYED_TOOL, DEPLOYED_TOOL)] if os.path.isfile(DEPLOYED_TOOL) else []
+
+
 def make_sandbox_home():
     """使い捨ての HOME を作り、合成フィクスチャを1つ置く。
 
@@ -203,16 +217,26 @@ def build_bwrap(repo, sandbox, extra_ro=()):
     return argv
 
 
-def run_cmd_in_sandbox(repo, sandbox, cmd, extra_ro=()):
+def run_cmd_in_sandbox(repo, sandbox, cmd, extra_ro=(), selftest=False):
     """サンドボックスの内側で1つのコマンドを走らせる。
 
     git ls-files もここを通す。外側で走らせると、対象を数えた環境と
     走らせる環境が食い違い、片方にしか無いファイルを見落とす。
+
+    selftest は「この1回は人が明示的に頼んだ走行だ」という印で、`--` の口だけが
+    立てる。R1 / R2 / R3 の走行では必ず落とす。落とさずに素通しすると、
+    自テストが起動する verify-tests がこの印を受け継ぎ、その内側の pytest が
+    また自テストを走らせて際限なく入れ子になる。落としてあるので、入れ子は
+    「明示の1回」から数えて1段で止まる。
     """
     argv = build_bwrap(repo, sandbox, extra_ro) + list(cmd)
     env = dict(os.environ)
     env["VERIFY_TESTS_SANDBOX"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    if selftest:
+        env["VERIFY_TESTS_SELFTEST"] = "1"
+    else:
+        env.pop("VERIFY_TESTS_SELFTEST", None)
     proc = subprocess.run(argv, capture_output=True, text=True, env=env)
     return proc.returncode, proc.stdout, proc.stderr
 
@@ -256,11 +280,17 @@ def collected_files(repo, sandbox):
     return rc, files, out + err
 
 
-def run_python(repo, sandbox, extra_args=(), extra_ro=()):
+def run_python(repo, sandbox, extra_args=(), extra_ro=(), selftest=False):
+    """pytest を1回走らせる。
+
+    `-q` を固定で渡さない。合否の出典を `-v` の進捗行へ移したので、
+    `-q` を残すと `-q -v` で verbosity が相殺され、進捗行が出なくなる
+    （pytest は -q を -1、-v を +1 として足す）。verbosity は呼び出し側が決める。
+    """
     rc, out, err = run_cmd_in_sandbox(
         repo, sandbox,
-        ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", *extra_args],
-        extra_ro,
+        ["python3", "-m", "pytest", "-p", "no:cacheprovider", *extra_args],
+        extra_ro, selftest=selftest,
     )
     return rc, out + err
 
@@ -397,16 +427,39 @@ def drop_base_worktree(repo, path):
     shutil.rmtree(path, ignore_errors=True)
 
 
-def parse_pytest_outcomes(out):
-    """ケース単位の合否を nodeid から取る。
+# -v の進捗行。`<nodeid> <結果>[ (理由)] [ NN%]` の形をしている。
+# 行頭が nodeid（`::` を含む）であることと、行末が進捗の百分率であることの
+# 両方を条件にする。前者だけだと、失敗時に出る捕捉済み標準出力の行が
+# たまたま同じ形をしていると拾ってしまう。
+PROGRESS_RE = re.compile(
+    r"^(?P<nodeid>\S+::\S+)\s+"
+    r"(?P<outcome>PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b"
+    r".*\[\s*\d+%\]$"
+)
 
-    -q --tb=no -rA の出力の「PASSED <nodeid>」「FAILED <nodeid>」を読む。
+
+def parse_pytest_outcomes(out):
+    """ケース単位の合否を、`-v` の進捗行から nodeid ごとに取る。
+
+    **出典を `-rA` の短い要約から `-v` の進捗行へ移してある。**要約行は skip を
+    `SKIPPED [1] path/to/file.py:33: 理由` の形で出し、nodeid ではなくファイルと
+    行番号を持つ（実測）。素直に読むと `[1]` が nodeid の位置に入り、その走行の
+    skip が全部この1つの鍵へ潰れる。結果として skip されたケースが判定から消え、
+    `skipif` を1つ足すだけで赤いテストが黙って緑になる。この道具が防ぐために
+    在る型の失敗そのものなので、要約行は出典にしない。
+
+    `--junit-xml` も採らない。`testcase` の `classname` は
+    `deep.nested.dir.test_x.TestY` のようにディレクトリの区切りとモジュール名の
+    ドットを同じ文字へ潰した形で、`file` 属性は付かない（実測）。nodeid の
+    パスへ確実に戻す手段が無い。
+
+    `-v` の進捗行は nodeid をそのまま持ち、skip も pass も同じ形で1行ずつ出る。
     """
     res = {}
     for ln in out.splitlines():
-        m = re.match(r"(PASSED|FAILED|ERROR|SKIPPED)\s+(\S+)", ln.strip())
+        m = PROGRESS_RE.match(ln.strip())
         if m:
-            res[m.group(2)] = m.group(1)
+            res[m.group("nodeid")] = m.group("outcome")
     return res
 
 
@@ -440,7 +493,7 @@ def evaluate(tree, extra_ro=(), collect_only=False):
         }
         if collect_only:
             return out
-        rc_run, run_out = run_python(tree, sandbox, ["--tb=no", "-rA"], extra_ro)
+        rc_run, run_out = run_python(tree, sandbox, ["--tb=no", "-v"], extra_ro)
         results = parse_pytest_outcomes(run_out)
         sh_rc = run_shell(tree, sandbox, sh, extra_ro)
         for rel, rc in sh_rc.items():
@@ -467,7 +520,7 @@ def is_red(v):
 
 
 def regressions(base, cand):
-    """base で緑、candidate で赤になったものだけを返す。
+    """base で赤くなく、candidate で赤くなったものを返す。
 
     red -> red は regression に算入しない。既知の赤と共存するため。
     base に無い（新しく足された）ものが赤い場合も返す。
@@ -476,10 +529,36 @@ def regressions(base, cand):
     for key, val in sorted(cand.items()):
         if not is_red(val):
             continue
-        if base.get(key) in GREEN:
+        # base で赤くなければ regression。緑からの悪化、base に無い新規、
+        # skip からの悪化のいずれも拾う。**見逃すのは red -> red だけ。**
+        # `base.get(key) in GREEN` で書くと、base が SKIPPED のものが
+        # candidate で落ちても拾えない。自テストが skip を多用するので実害が出る。
+        if not is_red(base.get(key)):
             out.append(key)
-        elif key not in base:
-            out.append(key)
+    return out
+
+
+def disappeared(base, cand):
+    """base で緑だったのに candidate では緑と言えなくなったものを返す。
+
+    regression とは別の分類にする。**候補は「消えた」か「skip になった」で、
+    赤くはない。**赤ければ regressions が拾う。ここが拾うのは、
+    ケースが candidate の走行に現れなくなった場合（削除、deselect、
+    読み込み時 skip）と、SKIPPED / XFAIL のように結果が緑でなくなった場合。
+
+    regressions は candidate 側の鍵だけを回すので、この2つを原理的に見ない。
+    分けずに regression へ混ぜると、正当な削除まで FAIL になる。受け入れ条件34b が
+    「正当な削除は REVIEW」と定めているので、判定は REVIEW へ落とす。
+    緑が消えたことは機械には正誤を決められないが、黙って通してよくもない。
+    """
+    out = []
+    for key, val in sorted(base.items()):
+        if val not in GREEN:
+            continue
+        now = cand.get(key)
+        if now in GREEN or is_red(now):
+            continue
+        out.append(key)
     return out
 
 
@@ -656,7 +735,8 @@ def verdict(payload):
 
     execution_gate は「base レーンと candidate レーンの差分」だけを見る。
     機構の失敗と本番への書き込みは、そこより先に立って FAIL を返す。
-    優先順位は 機構の失敗 → 本番へ書いた → 実行の門 → 昇格の門 → 既知の赤。
+    優先順位は 機構の失敗 → 本番へ書いた → 実行の門 → 昇格の門 → 既知の赤
+    → 緑が消えた。
     """
     if payload.get("harness_failed"):
         return "FAIL"
@@ -667,7 +747,8 @@ def verdict(payload):
         return "FAIL"
     if gate == "REVIEW":
         return "REVIEW"
-    if payload.get("contract_changed") or payload.get("touched_red"):
+    if (payload.get("contract_changed") or payload.get("touched_red")
+            or payload.get("disappeared")):
         return "REVIEW"
     return "PASS"
 
@@ -784,6 +865,20 @@ def main(argv):
         print(regressions(base, cand))
         return 0
 
+    if "--selftest-disappeared" in argv:
+        i = argv.index("--selftest-disappeared")
+        base, cand = ast.literal_eval(argv[i + 1])
+        print(disappeared(base, cand))
+        return 0
+
+    if "--selftest-parse" in argv:
+        # pytest の出力そのものを渡して、鍵と値の対応を確かめる口。
+        # skip が nodeid で入ることは、この道具の存在理由に直結するので、
+        # 実装の中だけで閉じずに外から検査できるようにする。
+        i = argv.index("--selftest-parse")
+        print(json.dumps(parse_pytest_outcomes(argv[i + 1]), sort_keys=True))
+        return 0
+
     if "--selftest-normalize" in argv:
         i = argv.index("--selftest-normalize")
         print(normalize(argv[i + 1]))
@@ -834,7 +929,18 @@ def main(argv):
     if passthrough is not None:
         sandbox = make_sandbox_home()
         try:
-            rc, out = run_python(repo, sandbox, passthrough)
+            # selftest=True。この口は人が明示的に叩く経路なので、道具自身の
+            # テストもここでは走ってよい。R1 / R2 / R3 は selftest を立てないので、
+            # 差分判定の走行では従来どおり skip されて再帰しない。
+            #
+            # 道具そのものも読み取り専用で見せる。HOME を使い捨てのディレクトリへ
+            # 差し替えるので、~/.local/bin/verify-tests はサンドボックスの中に
+            # 存在しない。自テストは対象をこのパスで開くため、見せないと34件すべてが
+            # FileNotFoundError で落ち、道具の挙動については何も分からない（実測）。
+            # 見せるのはこの口だけにする。R1 / R2 / R3 へ広げると、差分判定の走行の
+            # 内側からも道具を起動できるようになる。
+            rc, out = run_python(repo, sandbox, passthrough,
+                                 deployed_tool_bind(), selftest=True)
             print(out)
             return rc          # 検査の口ではないので分類に落とさない
         finally:
@@ -870,6 +976,11 @@ def main(argv):
         base_regressions = regressions(r1.get("results", {}), r2.get("results", {}))
         counted = watched_report(before)
         cand_regressions = regressions(r1.get("results", {}), r3.get("results", {}))
+        # 緑が消えたケース。base レーンと candidate レーンの両方で見る。
+        # base レーンは「candidate の実装のせいで base のテストが skip になった」を、
+        # candidate レーンは「candidate がテストを消した・skip にした」を拾う。
+        base_disappeared = disappeared(r1.get("results", {}), r2.get("results", {}))
+        cand_disappeared = disappeared(r1.get("results", {}), r3.get("results", {}))
         # R1 と R2 は full=False。構造の検査と収集の差分を当てない。
         # 当てると導入の初回に merge-base が必ず落ち、仕組みが自分で自分を塞ぐ。
         reasons = (harness_failure_reasons(r3)
@@ -885,6 +996,7 @@ def main(argv):
             "cand_regressions": cand_regressions,
             "contract_changed": bool(changed_artifacts),
             "touched_red": bool(touched_red_files),
+            "disappeared": bool(base_disappeared or cand_disappeared),
         }
         v = verdict(payload)
         counts = {
@@ -901,12 +1013,18 @@ def main(argv):
         # 綺麗なまま昇格の門だけが立った場合に、出力が `REVIEW` の一語だけになり
         # 「なぜ REVIEW なのか」が読めない。失敗時は次の一手に要る差分だけを返す、
         # という出力契約の趣旨から外れる。
+        # 本番資産への書き込みはここへ入れない。watched_report が既に1件1行で
+        # 印字しており、details にも入れると同じ行が2度出る。watched_report の側を
+        # 残すのは、そちらが --discover-only と merge-base 不成立の経路も覆うため。
         details = (reasons
-                   + [f"本番へ書いた: {p}" for p in counted]
                    + [f"新規 regression: {k}" for k in cand_regressions]
                    + [f"旧契約を破った: {k}" for k in base_regressions]
                    + [f"契約を変更した: {k}" for k in changed_artifacts]
-                   + [f"既知の赤を触った: {k}" for k in touched_red_files])
+                   + [f"既知の赤を触った: {k}" for k in touched_red_files]
+                   + [f"緑が消えた（candidate のテスト）: {k}"
+                      for k in cand_disappeared]
+                   + [f"緑が消えた（base のテストを candidate へ当てた）: {k}"
+                      for k in base_disappeared])
         if v == "REVIEW" and accepted_for_current_tree(repo):
             v = "PASS"
         print(summarize(v, counts, details))
