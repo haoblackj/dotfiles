@@ -3,6 +3,7 @@
 # docs/superpowers/specs/2026-09-04-test-integrity-design.md を参照。
 set -uo pipefail
 exec python3 - "$@" <<'PYTHON'
+import glob
 import os
 import re
 import shutil
@@ -279,6 +280,71 @@ def run_shell(repo, sandbox, sh_files, extra_ro=()):
     return results
 
 
+# 監視対象。環境変数で使い捨てのパスへ差し替えられる。
+DEFAULT_WATCHED = [
+    os.path.expanduser("~/.claude/logs/memory-recall.log*"),
+    os.path.expanduser("~/.claude/projects/*/memory/.embeddings.json*"),
+    os.path.expanduser("~/.claude/projects/*/memory/*.md"),
+    os.path.expanduser("~/.local/share/chezmoi"),
+]
+
+# 判定に算入しないもの。テスト以外の経路で日常的に変わるため。
+# memory_recall.py が UserPromptSubmit フックとして書くので、
+# テストの実行中に別のセッションでプロンプトが走れば変化する。
+DEFAULT_WATCHED_EXCLUDE = [
+    os.path.expanduser("~/.claude/logs/memory-recall.log*"),
+    os.path.expanduser("~/.claude/projects/*/memory/.embeddings.json*"),
+    os.path.expanduser("~/.claude/projects/*/memory/*.md"),
+]
+
+
+def _env_list(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return [p for p in raw.split("\n") if p.strip()]
+
+
+def _expand(patterns):
+    out = set()
+    for pat in patterns:
+        for hit in glob.glob(pat):
+            if os.path.isdir(hit):
+                for root, dirs, files in os.walk(hit):
+                    dirs[:] = [d for d in dirs if d != ".git"]
+                    for f in files:
+                        out.add(os.path.join(root, f))
+            else:
+                out.add(hit)
+    return out
+
+
+def snapshot_watched():
+    snap = {}
+    for path in _expand(_env_list("VERIFY_TESTS_WATCHED", DEFAULT_WATCHED)):
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        snap[path] = (st.st_mtime_ns, st.st_size)
+    return snap
+
+
+def diff_watched(before, after):
+    """変化を「判定に算入するもの」と「但し書き」に分ける。
+
+    除外にあるファイルの変化も報告する。黙って捨てない。
+    """
+    excluded = _expand(_env_list("VERIFY_TESTS_WATCHED_EXCLUDE",
+                                 DEFAULT_WATCHED_EXCLUDE))
+    counted, noted = [], []
+    for path in sorted(set(before) | set(after)):
+        if before.get(path) == after.get(path):
+            continue
+        (noted if path in excluded else counted).append(path)
+    return counted, noted
+
+
 def main(argv):
     if "--selftest-normalize" in argv:
         i = argv.index("--selftest-normalize")
@@ -306,6 +372,7 @@ def main(argv):
               "`sudo apt install bubblewrap` で導入してください")
         return 1
 
+    before = snapshot_watched()
     sandbox = make_sandbox_home()
     try:
         if not sandbox_started(repo, sandbox):
@@ -338,6 +405,13 @@ def main(argv):
         if SHELL_EXCLUDED:
             print(f"== shell 対象外: {', '.join(sorted(SHELL_EXCLUDED))}"
                   "（#20 が閉じるまで隔離下の挙動を測れないため）")
+
+        after = snapshot_watched()
+        counted, noted = diff_watched(before, after)
+        for path in counted:
+            print(f"== 本番へ書いた: {path}")
+        for path in noted:
+            print(f"== 変化（判定に算入しない）: {path}")
         return 0
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
