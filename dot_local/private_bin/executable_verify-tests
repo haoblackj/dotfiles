@@ -456,6 +456,80 @@ MUTATE_SHELL_EXCLUDED = {
     "dot_claude/compact-plus-backend/executable_e2e-integration.test.sh",
 }
 
+# 測っていない対象の一覧（受け入れ条件12）。「測らない理由」を1種類に
+# まとめない（DR-001 の裁定）。恒久的に外れるもの（テストファイルそのもの、
+# 拡張子が無くて同定できないもの、対を組めないもの）と、一時的に外れている
+# もの（そのファイルを検証するテストが無いだけで、テストが書かれれば戻る）を
+# 区別する。読む人が「これは直せるのか」を判断できる形にするため。
+
+# 拡張子なしで同定できない3本。**そのリポジトリに実在するものだけを出す。**
+# `unmeasured` がここを `tracked` と突き合わせて絞り込む。
+#
+# gh-pr-body / gh-pr-body-selfcheck は対とテストが揃っているが、どちらも
+# 拡張子を持たないので MUTATE_SH_PATTERNS（`.test.sh` / `test_*.sh` / `.bats`）
+# に当たらない。命名規約へ拡張子なしを足せば直る、恒久的だが対処可能な欠落。
+#
+# verify-tests はそれに加えてテストが別リポジトリ（penguinEx）にあるため、
+# 命名規約を広げても対を組めない。**この2つを同じ理由文字列にしない。**
+# 片方だけ解く形にする、というブリーフの制約はこの書き分けにも及ぶ。
+UNMEASURED_EXTENSIONLESS = {
+    "dot_local/private_bin/executable_gh-pr-body":
+        "対とテストが揃っているが拡張子が無く同定できない",
+    "dot_local/private_bin/executable_gh-pr-body-selfcheck":
+        "対とテストが揃っているが拡張子が無く同定できない",
+    "dot_local/private_bin/executable_verify-tests":
+        "拡張子が無く、さらにテストが別リポジトリにあるので対を組めない",
+}
+
+# `MUTATE_SHELL_EXCLUDED` の2本も理由が違う。
+#
+# settings-wiring の宣言は
+# `none (対象が private_settings.json という設定ファイルでスクリプトではない)`。
+# 対象が本質的に設定ファイルなので、状況が変わらない限り戻らない恒久的な除外。
+#
+# e2e-integration の宣言は
+# `none (対象が配置先の成果物と本番のトランスクリプト。隔離下では動かない。
+# issue #20 / #21)`。隔離という走行方式の都合で測れないだけなので、issue
+# #20 / #21 が閉じれば対象へ戻る一時的な除外（v1 の SHELL_EXCLUDED と同根）。
+UNMEASURED_SHELL_EXCLUDED_REASONS = {
+    "dot_claude/hooks/executable_settings-wiring.test.sh":
+        "対象が設定ファイル（private_settings.json）でスクリプトではないため、"
+        "恒久的に対を組めない",
+    "dot_claude/compact-plus-backend/executable_e2e-integration.test.sh":
+        "隔離下では本来の挙動を測れないための一時的な除外"
+        "（issue #20 / #21 が閉じれば対象へ戻る）",
+}
+
+
+def unmeasured(repo, tracked):
+    """`--mutate` が測っていない対象を `(パス, 理由)` の一覧で返す。
+
+    **そのリポジトリに実在するものだけを出す。**v1 の
+    `SHELL_EXCLUDED & set(tracked)` と同じ絞り方。penguinEx には5件とも
+    実在しないので、そちらでは空の一覧になるのが正しい。
+
+    **`MUTATE_SHELL_EXCLUDED` を実際に読む。**理由の対応表を独立に持つと、
+    あちらが増減しても一覧が追随しない。対応表に無い項目があれば、その場で
+    止める。黙って理由なしの項目を落とすと、除外されているのに一覧から
+    消えるという、この一覧そのものの存在理由を裏切る事態になる。
+    """
+    tset = set(tracked)
+    out = []
+    for path, reason in UNMEASURED_EXTENSIONLESS.items():
+        if path in tset:
+            out.append((path, reason))
+    for path in MUTATE_SHELL_EXCLUDED:
+        if path not in tset:
+            continue
+        reason = UNMEASURED_SHELL_EXCLUDED_REASONS.get(path)
+        if reason is None:
+            raise RuntimeError(
+                f"{path}: MUTATE_SHELL_EXCLUDED にあるのに"
+                "UNMEASURED_SHELL_EXCLUDED_REASONS に理由が無い")
+        out.append((path, reason))
+    return sorted(out)
+
+
 # 分類の名前。報告の字面と検査の期待値をここ1箇所で持つ。
 UNMEASURABLE = "計測できなかった"
 
@@ -2405,6 +2479,25 @@ def main(argv):
             "unmeasurable": [[t, f"{UNMEASURABLE}: {why}"]
                              for t, why in got["unmeasurable"]],
         }, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-unmeasured" in argv:
+        # 測っていない対象の一覧（受け入れ条件12）を外から叩く口。純関数
+        # `unmeasured` そのものを見るためのもので、`--mutate` という CLI
+        # フラグは通らない（main への配線は Task 12 の範囲）。
+        #
+        # `(repo, tracked)` を渡す。`tracked` に `None` を渡すと
+        # `git ls-files` を隔離の外で走らせて求める（読むだけで書かない）。
+        # 明示の一覧を渡せる形にしたのは、「そのリポジトリに実在するものだけを
+        # 出す」ことを実在のリポジトリの状態に頼らず合成の入力で確かめるため。
+        i = argv.index("--selftest-unmeasured")
+        repo, tracked = ast.literal_eval(argv[i + 1])
+        if tracked is None:
+            out = subprocess.run(["git", "-C", repo, "ls-files"],
+                                 capture_output=True, text=True)
+            tracked = [ln for ln in out.stdout.splitlines() if ln.strip()]
+        print(json.dumps([list(pair) for pair in unmeasured(repo, tracked)],
+                         sort_keys=True, ensure_ascii=False))
         return 0
 
     if "--selftest-mutant-id" in argv:
