@@ -8,6 +8,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1307,6 +1308,300 @@ def run_shell(repo, sandbox, sh_files, extra_ro=()):
     return results
 
 
+# --- shell レーン（--mutate） ---
+
+# テストの起動の仕方。**拡張子ごとの正の一覧で持つ。**「一覧に無ければ bash」の
+# ような既定を置かない。置くと、規約に足された拡張子（#18 の `.bats` への移行や
+# その先の形式）が黙って bash で起動され、テストが1本も走らないまま
+# analyze_mutants が全件を kill と数える。**知らない値は止まる側へ落とす。**
+# 排除による定義（「これとこれ以外は無害」）は、知らない値が増えたときに
+# 黙って無害側へ落ちる。#16 が塞ごうとしているのはその型そのもの。
+SHELL_TEST_RUNNERS = {".sh": "bash", ".bats": "bats"}
+
+# analyze_mutants は testscript の中のこの字面を変異体のパスへ展開し、
+# **字面を含むかどうかで「変異体を対象ファイルへ置き換えるか」を決める**
+# （analyze.py、ソースで確認）。含んでいると置き換えが起きず、全変異体で
+# 原本のテストが走って「1件も kill されなかった」になる。
+ANALYZE_MUTANT_TOKEN = "MUTANT"
+
+# サンドボックスの HOME の中に作る変異体置き場。作業コピーとは分ける。
+# 混ぜると道具が書いたものが作業コピーの中に見え、リポジトリを走査する形の
+# テストが原本と違うものを見る。
+SHELL_MUTANT_ROOT = "verify-tests-mutants"
+
+# analyze_mutants へ渡す1件あたりの上限（秒）。**既定と同じ値を明示で渡す。**
+# 渡さないと道具側の既定に依存し、上流が変えたときに測定の意味が黙って変わる。
+# **超過は kill に数えられる**（SIGTERM のあとの終了コードを見るため）ので、
+# 判別力ではなく機械の負荷で成績が動く。所要の計測後に見直してよい値。
+SHELL_ANALYZE_TIMEOUT = "30"
+
+# analyze_mutants へ「この変異体だけを走らせる」と伝えるファイル。
+SHELL_KEEP_FILE = "verify-tests.keep"
+
+# analyze_mutants が書く結果。**終了コードではなくこの2つを読む。**
+# 変異体が1件も無くても 0 で終わる（analyze.py の `count == 0` の枝）。
+SHELL_KILLED_FILE = "killed.txt"
+SHELL_NOTKILLED_FILE = "notkilled.txt"
+
+
+def shell_test_command(test_rel):
+    """テストのパスから analyze_mutants へ渡す1つのコマンド文字列を作る。
+
+    `analyze_mutants <対象> <テストスクリプト>` の契約は
+    **「テストスクリプトが非0で終了したら kill」**で、スクリプトは `shell=True`
+    で起動される（analyze.py で確認）。渡すのは文字列1つ。
+
+    **起動の仕方は宣言を持つファイル自身の拡張子から決める。**対象の側から
+    決めると、`.bats` への移行でテストだけが変わったときに追随しない。
+    """
+    ext = os.path.splitext(test_rel)[1]
+    runner = SHELL_TEST_RUNNERS.get(ext)
+    if runner is None:
+        raise Unmeasurable(
+            f"{test_rel}: 起動の仕方が決まっていない拡張子"
+            f"（{ext or '拡張子が無い'}）")
+    cmd = f"{runner} {shlex.quote(test_rel)}"
+    if ANALYZE_MUTANT_TOKEN in cmd:
+        raise Unmeasurable(
+            f"{test_rel}: テストの命令に {ANALYZE_MUTANT_TOKEN} の字面を含められない")
+    return cmd
+
+
+def mutant_dir_name(target):
+    """対象ごとの作業ディレクトリ名。**単射な符号化で作る。**
+
+    `/` を `_` などへ潰すと、別々の対象が同じディレクトリを共有しうる。
+    共有すると変異体が混ざったまま件数の照合だけが成立し、
+    「対象 A の成績」に対象 B の変異体が入る。
+    """
+    return target.replace("%", "%25").replace("/", "%2F")
+
+
+def inside_home(*parts):
+    """サンドボックスの内側から見たパスを組み立てる。
+
+    `build_bwrap` が `--bind <sandbox> $HOME` を張るので、ホスト側の
+    `<sandbox>/x` は内側では `$HOME/x` として見える。
+    """
+    return os.path.join(os.path.expanduser("~"), *parts)
+
+
+def mutant_names(target, names):
+    """universalmutator が書いた変異体のファイル名だけを選ぶ。
+
+    命名は `<拡張子を除いた名前>.mutant.<番号><拡張子>`（genmutants.py）。
+    analyze_mutants は同じ置き場を `<名前>.mutant*<拡張子>` の glob で拾う
+    （analyze.py）。**同じ集合になる形で選ぶ。**片方が規則ファイルや
+    killed.txt を数えると、「走らせた件数」と「結果の件数」の照合が合わなくなり、
+    照合そのものが意味を失う。
+    """
+    base, ext = os.path.splitext(os.path.basename(target))
+    return sorted(n for n in names
+                  if n.startswith(base + ".mutant.") and n.endswith(ext))
+
+
+def _tail(text, n=3):
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    return " / ".join(lines[-n:])
+
+
+def _run_in_dir(repo, sandbox, workdir, argv):
+    """サンドボックスの中の `workdir` へ降りて1つのコマンドを走らせる。
+
+    作業コピーの中で走らせるヘルパは Task 2 に無いので、ここで cd を書く。
+    """
+    script = 'cd "$1" || exit 1\nshift\nexec "$@"'
+    return run_cmd_in_sandbox(
+        repo, sandbox, ["bash", "-c", script, "bash", workdir, *argv],
+        mutate_binds())
+
+
+def generate_shell_mutants(repo, sandbox, copy, target, include_python):
+    """1つの対象の変異体を作業コピーの中で作り、`(ホスト側の置き場, 名前)` を返す。
+
+    **`--noFastCheck` を必ず付ける。**付けないと universalmutator の
+    「コメントまたは死んだコード」の判定が shell を理解できず、全行を
+    読み飛ばして変異体0件で正常終了する（実測。合成の対象で 4件 → 0件、
+    実物の check-issues.sh でも spec が同じことを記録している）。
+    **正常終了するので、後段は「全部 kill された」と読む。**
+
+    **規則は `--only` へ1つだけ渡す。**`--only` は規則ファイルを1つしか
+    受け取らない（genmutants.py の `rules = [parsed.only]`）。`--cmd` は
+    `TypeError` で落ち、`.rules` を位置引数で渡すと `.sh` で `KeyError` に
+    なる（どちらも実測）。連結は Task 3 の `write_rules` が済ませている。
+    """
+    ext = os.path.splitext(os.path.basename(target))[1]
+    if not ext:
+        # 拡張子が無いと universalmutator が書く変異体名と analyze_mutants の
+        # glob（`srcBase.replace(srcEnd, ...)`、srcEnd が空文字）が別物になる。
+        raise Unmeasurable(f"{target}: 拡張子の無い対象は変異体を辿れない")
+    name = mutant_dir_name(target)
+    host = os.path.join(sandbox, SHELL_MUTANT_ROOT, name)
+    inside = inside_home(SHELL_MUTANT_ROOT, name)
+    shutil.rmtree(host, ignore_errors=True)
+    os.makedirs(host)
+    # 規則ファイルはホスト側で書く。同じ実体がサンドボックスの HOME なので、
+    # 内側からは `$HOME/<置き場>/<名前>` として見える。
+    rules = os.path.basename(write_rules(host, include_python))
+    rc, out, err = _run_in_dir(
+        repo, sandbox, inside,
+        [os.path.join(MUTATE_VENV, "bin", "mutate"),
+         os.path.join(copy, target), "--only", rules, "--noFastCheck"])
+    if rc != 0:
+        raise Unmeasurable(
+            f"{target}: 変異体の生成が失敗した（rc={rc}）{_tail(err or out)}")
+    return host, mutant_names(target, os.listdir(host))
+
+
+def analyze_shell_mutants(repo, sandbox, copy, target, cmd, host, kept):
+    """`kept` に挙げた変異体だけを analyze_mutants へ掛け、`(kill, 生き残り)` を返す。
+
+    **終了コードで判定しない。**analyze_mutants は変異体が1件も無くても 0 で
+    終わり（analyze.py の `count == 0` の枝）、そのとき killed.txt と
+    notkilled.txt は空のまま作られる。読むのは2つのファイルで、
+    **合計が走らせた件数と一致することまで見る。**一致を見ないと、道具が
+    黙って落とした分が kill にも生き残りにも入らないまま成績から消える。
+
+    `--noShuffle` を渡す。既定では順序が走行ごとに変わり、途中で止まった
+    走行の結果を比べられなくなる。
+    """
+    inside = inside_home(SHELL_MUTANT_ROOT, mutant_dir_name(target))
+    with open(os.path.join(host, SHELL_KEEP_FILE), "w") as f:
+        f.write("\n".join(kept) + "\n")
+    # テストは作業コピーのルートから走らせる。対象を相対パスで開くテストが
+    # 多数なので、変異体置き場の側で走らせると原本も見つからない。
+    rc, out, err = _run_in_dir(
+        repo, sandbox, inside,
+        [os.path.join(MUTATE_VENV, "bin", "analyze_mutants"),
+         os.path.join(copy, target),
+         f"cd {shlex.quote(copy)} && {cmd}",
+         "--fromFile", SHELL_KEEP_FILE,
+         "--noShuffle", "--timeout", SHELL_ANALYZE_TIMEOUT])
+    if rc != 0:
+        raise Unmeasurable(
+            f"{target}: analyze_mutants が失敗した（rc={rc}）{_tail(err or out)}")
+    killed = read_mutant_list(os.path.join(host, SHELL_KILLED_FILE), target)
+    notkilled = read_mutant_list(os.path.join(host, SHELL_NOTKILLED_FILE), target)
+    got = len(killed) + len(notkilled)
+    if got != len(kept):
+        raise Unmeasurable(
+            f"{target}: 走らせた{len(kept)}件に対して結果が{got}件しか無い")
+    unknown = sorted((set(killed) | set(notkilled)) - set(kept))
+    if unknown:
+        raise Unmeasurable(
+            f"{target}: 走らせていない変異体の結果がある（{unknown[0]}）")
+    return killed, notkilled
+
+
+def read_mutant_list(path, target):
+    try:
+        with open(path) as f:
+            return [ln.strip() for ln in f if ln.strip()]
+    except OSError as e:
+        raise Unmeasurable(f"{target}: {os.path.basename(path)} を読めない（{e}）")
+
+
+def blank_shell_result(test_rel):
+    """対象1つ分の入れ物。**測れなかった項目は None のまま返す。**
+
+    0 で埋めると、「変異体を作る前に止まった」と「作ったが1件も無かった」が
+    同じ字面になる。どこで止まったかが読めないと、門を1つ外しても別の門が
+    代わりに拾って同じ結果になる状態に誰も気づけない。
+    """
+    return {"test": test_rel, "command": None, "python_rules": None,
+            "mutants": None, "excluded": None, "analyzed": None,
+            "killed": None, "survivors": None, "unmeasurable": None}
+
+
+def shell_lane_target(repo, sandbox, copy, target, test_rel):
+    """1つの対象を測る。門は上から順に、**通ってよい形を1つずつ数え上げる。**
+
+    1. 作業コピーに対象が在る
+    2. **原本が構文検査を通る**
+    3. テストの起動の仕方が一覧に在る
+    4. 変異を当てない状態でテストが 0 で終わる
+    5. 変異体が1件以上作られた
+    6. 構文検査を通った変異体が1件以上ある
+    7. kill と生き残りの合計が、走らせた件数にちょうど一致する
+
+    どれか1つでも欠けたら「計測できなかった」。**先へ進まない。**
+    2 を先に見るのは、原本が壊れていればそこから作った変異体も全部壊れており、
+    残せば全件が非0で終わって満点、落とせば「測れた変異体が0件」になるため。
+    どちらも判別力とは無関係の結果が成績の顔をして出てくる。
+    """
+    got = blank_shell_result(test_rel)
+    try:
+        host_copy = os.path.join(sandbox, WORKTREE_COPY_NAME)
+        source = os.path.join(host_copy, target)
+        if not os.path.isfile(source):
+            raise Unmeasurable(f"{target}: 作業コピーに対象が無い")
+        is_py = needs_python_rules(source)
+        got["python_rules"] = is_py
+        if not syntax_ok(source, is_py):
+            raise Unmeasurable(f"{target}: 原本が構文検査を通らない")
+        got["command"] = cmd = shell_test_command(test_rel)
+        rc, out, err = _run_in_dir(repo, sandbox, copy, ["bash", "-c", cmd])
+        if rc != 0:
+            raise Unmeasurable(
+                f"{target}: 変異を当てない状態で {test_rel} が落ちる（rc={rc}）"
+                f"{_tail(err or out)}")
+        host, names = generate_shell_mutants(repo, sandbox, copy, target, is_py)
+        got["mutants"] = len(names)
+        if not names:
+            raise Unmeasurable(f"{target}: 変異体を1件も作らなかった")
+        kept, dropped = [], []
+        for n in names:
+            path = os.path.join(host, n)
+            if syntax_ok(path, is_py):
+                kept.append(n)
+            else:
+                dropped.append(
+                    list(ids_from_universalmutator(target, path, host_copy)))
+        got["excluded"] = dropped
+        if not kept:
+            raise Unmeasurable(
+                f"{target}: 構文検査を通った変異体が1件も無い"
+                f"（{len(names)}件のうち{len(dropped)}件を除外）")
+        killed, notkilled = analyze_shell_mutants(
+            repo, sandbox, copy, target, cmd, host, kept)
+        got["analyzed"] = len(kept)
+        got["killed"] = len(killed)
+        got["survivors"] = [
+            list(ids_from_universalmutator(target, os.path.join(host, n),
+                                           host_copy))
+            for n in notkilled]
+    except Unmeasurable as e:
+        got["unmeasurable"] = str(e)
+    return got
+
+
+def run_shell_lane(repo, sandbox, pairs):
+    """shell レーンを対象ごとに回し、対象ごとの成績を返す。
+
+    **対象ごとに1本のテストで判定する。**Python レーンと逆になるが、shell の
+    テストは対象と1対1で書かれていて他の対象を触らないため、全18本を回しても
+    kill の判定はまず変わらず所要だけが18倍になる。
+
+    **ループを `main` の中へ畳まない。**呼び出し関係を見る検査は
+    トップレベルの関数しか区別しないので、`main` に畳むと「変異体ごとに
+    本番資産の前後比較を取っていないか」（受け入れ条件40）の見張りが
+    `main` の一語に潰れ、実際に取っていても素通りする。
+
+    **測れなかった対象も鍵として残す。**落とすと、後段が「対象が消えた」と
+    「もともと無い」を区別できず、基準を静かに刈る経路ができる。
+    """
+    copy = make_worktree_copy(repo, sandbox)
+    out = {}
+    for target, test_rel in pairs:
+        if copy is None:
+            got = blank_shell_result(test_rel)
+            got["unmeasurable"] = f"{target}: 作業コピーを作れなかった"
+        else:
+            got = shell_lane_target(repo, sandbox, copy, target, test_rel)
+        out[target] = got
+    return out
+
+
 # 監視対象。環境変数で使い捨てのパスへ差し替えられる。
 DEFAULT_WATCHED = [
     os.path.expanduser("~/.claude/logs/memory-recall.log*"),
@@ -2198,6 +2493,51 @@ def main(argv):
                              for t, why in got["unmeasurable"]],
         }, sort_keys=True, ensure_ascii=False))
         return 0
+
+    if "--selftest-shell-lane" in argv:
+        # shell レーンを1回まるごと走らせて、対象ごとの成績を返す口。
+        # **対を呼び出し側が指定できる形にする。**宣言から導いた対だけを
+        # 測る形だと、一覧に無い拡張子や作れない対を外から撃てない。
+        # `None` を渡したときだけ宣言から導く。
+        i = argv.index("--selftest-shell-lane")
+        tree, pairs = ast.literal_eval(argv[i + 1])
+        tree = os.path.abspath(tree)
+        sandbox = make_sandbox_home()
+        try:
+            if pairs is None:
+                pairs = shell_pairs(tree, tracked_files(tree, sandbox) or [])["pairs"]
+            got = run_shell_lane(tree, sandbox, [tuple(p) for p in pairs])
+            for row in got.values():
+                if row["unmeasurable"] is not None:
+                    row["unmeasurable"] = f"{UNMEASURABLE}: {row['unmeasurable']}"
+            print(json.dumps(got, sort_keys=True, ensure_ascii=False))
+            return 0
+        finally:
+            shutil.rmtree(sandbox, ignore_errors=True)
+
+    if "--selftest-shell-mutants" in argv:
+        # 変異体の生成だけを外から叩く口。**当てる規則を呼び出し側が選べる。**
+        # レーンは対象の中身から規則を決めるので、同じ対象へ2つの規則集を
+        # 当てて件数を比べることが走行の中では一度もできない（受け入れ条件15）。
+        i = argv.index("--selftest-shell-mutants")
+        tree, target, include_python = ast.literal_eval(argv[i + 1])
+        tree = os.path.abspath(tree)
+        sandbox = make_sandbox_home()
+        try:
+            payload = {"count": None, "names": None, "unmeasurable": None}
+            try:
+                copy = make_worktree_copy(tree, sandbox)
+                if copy is None:
+                    raise Unmeasurable("作業コピーを作れなかった")
+                _, names = generate_shell_mutants(
+                    tree, sandbox, copy, target, bool(include_python))
+                payload.update(count=len(names), names=names)
+            except Unmeasurable as e:
+                payload["unmeasurable"] = f"{UNMEASURABLE}: {e}"
+            print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+            return 0
+        finally:
+            shutil.rmtree(sandbox, ignore_errors=True)
 
     if "--print-binds" in argv:
         for p in RO_BINDS:
