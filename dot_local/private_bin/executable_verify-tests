@@ -794,13 +794,30 @@ def added_line_at(diff, line):
 # ドット付きの例外名でこれを起こす。
 WORKER_OK = "normal"
 
+# フィルタが落とした記録の目印。**cosmic-ray 8.7.0 のフィルタ4つ
+# （`tools/filters/` の operators / git / line / pragma）はすべて
+# `WorkerOutcome.SKIPPED` を書く**（venv の実物で確認）。
+WORKER_FILTERED = "skipped"
+
 # 行にならなかった記録の種別。**3つを区別して数えられる形で返す。**
-# まとめて「行にならなかった」で返すと、演算子フィルタが落とした正当な分と、
+# まとめて「行にならなかった」で返すと、フィルタが落とした正当な分と、
 # 道具が測れなかった分と、まだ走っていない分が同じ数に混ざる。門はそれぞれで
 # 別の判断をする（フィルタ分は件数の照合にだけ効き、残る2つは走行を止める）。
+#
+# **`filtered` は「フィルタの目印がある」ことで決める。「`test_outcome` が無い」
+# ことで決めない。**排除による定義にすると、道具の失敗が無害な側へ化ける。
+# 8.7.0 には `test_outcome` を書かない producer がフィルタ以外に2つある
+# （どちらも venv の実物で確認）。
+#
+# - `mutating.py` の `WorkerOutcome.NO_TEST` … 変異を当てられなかったとき。
+#   **local distributor で到達する**（この設計が使う唯一の distributor）
+# - `distribution/http.py` の `WorkerOutcome.ABNORMAL` … 結果の取得で例外
+#
+# どちらも無害として素通しすると、行が減っても件数の照合は満たすので等式でも
+# 捕まらない。`init` と `exec` の間で対象が動いた走行が満点になる。
 SKIPPED_PENDING = "pending"      # 結果がまだ無い（`[work item, null]`）
-SKIPPED_FILTERED = "filtered"    # `test_outcome` が無い（`cr-filter-operators`）
-SKIPPED_BROKEN = "broken"        # 道具が落ちて識別子を作れない
+SKIPPED_FILTERED = "filtered"    # フィルタが落とした（`worker_outcome` が skipped）
+SKIPPED_BROKEN = "broken"        # 道具がその変異体を測れなかった
 
 
 def ids_from_cosmic_ray(dump_json):
@@ -835,7 +852,8 @@ def ids_from_cosmic_ray(dump_json):
     `test_outcome` が無い記録は行を作らない。`cr-filter-operators` で落とした
     変異体がこの形になる（`worker_outcome` が `skipped`、`diff` は `null`）。
     生き残り側へ数えると基準がぶれ、kill 側へ数えると測っていない変異体で
-    点数が上がる。
+    点数が上がる。**ただしフィルタ扱いにするのは目印がある分だけ**
+    （`WORKER_FILTERED` の注記）。
 
     **道具が測れなかった記録と、出力が壊れている記録を分ける。**
     `worker_outcome` が `normal` でない記録（変異の適用で落ちた `exception` など）
@@ -868,7 +886,12 @@ def ids_from_cosmic_ray(dump_json):
         outcome = result.get("test_outcome")
         worker = result.get("worker_outcome")
         if outcome is None:
-            skipped.append((SKIPPED_FILTERED, None, worker))
+            # **フィルタの目印があるときだけフィルタと呼ぶ。**「`test_outcome` が
+            # 無い」で決めると、変異を当てられなかった記録（`no-test`）や
+            # 結果を取れなかった記録（`abnormal`）が無害な側へ化ける。
+            kind = (SKIPPED_FILTERED if worker == WORKER_FILTERED
+                    else SKIPPED_BROKEN)
+            skipped.append((kind, None, worker))
             continue
         broken = worker != WORKER_OK
 
@@ -904,11 +927,14 @@ def ids_from_cosmic_ray(dump_json):
     return out, skipped
 
 
-# 変異体は当てられたのにテストを起動できなかったことを表す `test_outcome`。
-# 生き残りにも kill にも数えられないので、**1件でも混ざれば成績は測っていない
-# 分だけ良くなる。**閾値は0のまま動かさない。`core/ExceptionReplacer` を
+# 判別力を測れた `test_outcome`。**この2つ以外はすべて「測れなかった」側。**
+#
+# **正の形で列挙する。**「`incompetent` なら測れていない」と書くと、道具が別の
+# 名前で失敗を返すようになった分が黙って測れた側へ入る。門は測れなかった分が
+# 1件でもあれば止めるので、判定を字面の否定に置くと、その字面を知らない失敗が
+# そのまま満点へ通る。**閾値は0のまま動かさない。**`core/ExceptionReplacer` を
 # 対象から外してあるのは対象の側の話で、この閾値を緩めるためではない。
-INCOMPETENT = "incompetent"
+MEASURED_OUTCOMES = ("survived", "killed")
 
 
 def python_lane_gate(dump_json, init_count, unmutated_rc):
@@ -927,7 +953,7 @@ def python_lane_gate(dump_json, init_count, unmutated_rc):
     `unmutated_rc` は変異を当てない状態で `test-command` を走らせた終了コード。
     **`cosmic-ray baseline` の終了コードを渡してはいけない。**あれは
     `test-command` が起動できなくても0を返す。渡す側がそれを取り違えても
-    `incompetent` の側で捕まるようにしてある。
+    「測れなかった記録」の側で捕まるようにしてある。
 
     `init_count` は `cosmic-ray init` が作った work item の件数。
     **実在しないパスを与えたときの終了コード66とは別の話。**あれは `init` が
@@ -939,11 +965,15 @@ def python_lane_gate(dump_json, init_count, unmutated_rc):
     読み手が2つに育つと、門は通っているのに識別子側の解釈が違うという
     食い違いが起きえて、そのとき片方は必ず黙っている。
 
-    **`incompetent` は行と `skipped` の両方から数える。**cosmic-ray が変異の
-    適用そのもので例外を出した経路（`worker_outcome=exception`、`diff` は
-    `None`）は識別子を作れないので行にならない。行だけを見る門はこの経路を
-    1件も捕まえない。実測でこの形は出る（`except (ValueError, os.error):` の
-    ような組の中のドット付き例外名で `core/ExceptionReplacer` が落ちる）。
+    **測れた記録を正の形で定め、それ以外を全部数える。**行と `skipped` の
+    両方を見る。cosmic-ray が変異の適用そのもので例外を出した経路
+    （`worker_outcome=exception`、`diff` は `None`）は識別子を作れないので
+    行にならない。行だけを見る門はこの経路を1件も捕まえない。実測でこの形は
+    出る（`except (ValueError, os.error):` のような**組の中の**ドット付き
+    例外名で `core/ExceptionReplacer` が落ちる）。
+
+    `incompetent` という字面で数えない。字面で数えると、`no-test` や
+    `abnormal` のように `test_outcome` を持たない失敗が素通しになる。
 
     **件数を突き合わせる。**`init` が作った件数と `len(rows) + len(skipped)` が
     一致すること。一致しなければ、dump に現れていない work item がある。
@@ -963,15 +993,20 @@ def python_lane_gate(dump_json, init_count, unmutated_rc):
                 f"（終了コード {unmutated_rc}）。"
                 "赤いテストは変異体を残らず kill するので満点になる")
     rows, skipped = ids_from_cosmic_ray(dump_json)
-    stalled = [k for k, _survived, outcome, _worker in rows
-               if outcome == INCOMPETENT]
-    crashed = [s for s in skipped if s[1] == INCOMPETENT]
+    # 行のうち、測れたと言えないもの。**`worker_outcome` も見る。**片方だけを
+    # 見ると、道具が異常を申告した記録が判別力の数へ入る。
+    stalled = [(k, outcome, worker) for k, _survived, outcome, worker in rows
+               if worker != WORKER_OK or outcome not in MEASURED_OUTCOMES]
+    # 行にならなかったうち、フィルタでも未実行でもないもの。
+    crashed = [(None, outcome, worker) for kind, outcome, worker in skipped
+               if kind == SKIPPED_BROKEN]
     if stalled or crashed:
-        where = (f"最初の1件は {stalled[0][0]}:{stalled[0][1]}"
-                 if stalled else
-                 f"{len(crashed)}件とも cosmic-ray が変異の適用で落ちた分")
-        return (f"テストを起動できなかった変異体が{len(stalled) + len(crashed)}件ある"
-                f"（test_outcome が {INCOMPETENT}、{where}）。"
+        shown = "、".join(sorted({f"{o or 'なし'}/{w or 'なし'}"
+                                 for _, o, w in stalled + crashed}))
+        where = (f"、最初の1件は {stalled[0][0][0]}:{stalled[0][0][1]}"
+                 if stalled else "")
+        return (f"判別力を測れなかった変異体が{len(stalled) + len(crashed)}件ある"
+                f"（test_outcome/worker_outcome は {shown}{where}）。"
                 "生き残りにも kill にも数えられないので成績が上振れる")
     waiting = [s for s in skipped if s[0] == SKIPPED_PENDING]
     if waiting:
