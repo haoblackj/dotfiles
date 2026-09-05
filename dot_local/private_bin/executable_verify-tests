@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# テスト検証層 v1。詳細は penguinEx の
+# docs/superpowers/specs/2026-09-04-test-integrity-design.md を参照。
+set -uo pipefail
+exec python3 - "$@" <<'PYTHON'
+import os
+import re
+import subprocess
+import sys
+
+VERSION = "1"
+
+# 対象リポジトリ。正規化した origin の URL で引く。
+SCOPE = {"haoblackj/penguinEx", "haoblackj/dotfiles"}
+
+# 読み取り専用で渡す場所。Task 3 で確定した4つ。
+# Task 3 で確定した2つ。~/.claude/projects と ~/.local/share/claude-private は
+# 渡さない。本番の projects を読み取り専用で被せると、下の合成フィクスチャの
+# 置き場がその内側に入って作れなくなる。test_memory_recall.py が求めるのは
+# ディレクトリ1つの実在だけで、中身は読まない（実測で確認）。
+RO_BINDS = [
+    os.path.expanduser("~/.claude/hooks"),
+    os.path.expanduser("~/.local/share/chezmoi/dot_claude/private_settings.json"),
+]
+
+PY_PATTERNS = (r"^test_.*\.py$", r"^.*_test\.py$")
+SH_PATTERNS = (r"^.*\.test\.sh$", r"^test_.*\.sh$")
+
+# v1 の対象から外す本は Task 6 で足す。ここでは空にしておく。
+# 先に入れると Task 6 Step 2 の「赤の確認」が最初から緑になり、
+# テストが何も検証していないまま通る。
+SHELL_EXCLUDED = set()
+
+
+def normalize(url):
+    """origin の URL を <所有者>/<リポジトリ名> へ揃える。
+
+    表記が1文字違うだけで「対象外」に落ち、何も検査せずに通るので、
+    ここを省くと issue #15 の型をこの道具自身が作る。
+    """
+    s = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url)
+    s = re.sub(r"^[^@/]*@", "", s)
+    s = re.sub(r"^[^/:]+[:/]", "", s)
+    s = re.sub(r"\.git$", "", s)
+    return s.rstrip("/")
+
+
+def origin_of(repo):
+    out = subprocess.run(
+        ["git", "-C", repo, "remote", "get-url", "origin"],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        return None
+    return out.stdout.strip()
+
+
+def in_scope(repo):
+    url = origin_of(repo)
+    if url is None:
+        return False
+    return normalize(url) in SCOPE
+
+
+def git_common_dir(repo):
+    """ワークツリーの場合はメイン側の .git を返す。
+
+    --path-format=absolute を省くと非ワークツリーで相対パスが返り、
+    bind に使えない。
+    """
+    out = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "--path-format=absolute",
+         "--git-common-dir"],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        return None
+    return out.stdout.strip()
+
+
+def match_any(basename, patterns):
+    return any(re.match(p, basename) for p in patterns)
+
+
+def target_tests(tracked):
+    """追跡ファイルの一覧から Python と shell の対象を選ぶ。
+
+    規則は basename へ当てる。パス全体への部分一致にすると
+    diet/scripts/latest_report.py のような無関係なファイルを拾う。
+    """
+    py, sh = [], []
+    for path in tracked:
+        base = os.path.basename(path)
+        if match_any(base, PY_PATTERNS):
+            py.append(path)
+        elif match_any(base, SH_PATTERNS) and path not in SHELL_EXCLUDED:
+            sh.append(path)
+    return sorted(py), sorted(sh)
+
+
+def main(argv):
+    if "--selftest-normalize" in argv:
+        i = argv.index("--selftest-normalize")
+        print(normalize(argv[i + 1]))
+        return 0
+
+    if "--print-binds" in argv:
+        for p in RO_BINDS:
+            print(p)
+        return 0
+
+    positional = [a for a in argv if not a.startswith("-")]
+    if not positional:
+        print("使い方: verify-tests <リポジトリ> [--strict] [--discover-only] [-- <pytest への引数>]")
+        return 1
+    repo = os.path.abspath(positional[0])
+
+    if not in_scope(repo):
+        print(f"対象外: {repo}（読み取り専用 bind の一覧を持たないので検査しない）")
+        return 0
+
+    print(f"== 対象: {repo}")
+    return 0
+
+
+sys.exit(main(sys.argv[1:]))
+PYTHON
