@@ -635,10 +635,15 @@ def implementation_of(test_path):
     cands = []
     if base.endswith(".test.sh"):
         stem = base[: -len(".test.sh")]
+        cands.append(stem + ".sh")
         if stem.startswith("executable_"):
-            cands.append(stem + ".sh")
+            # 接頭辞を落とした形も候補にする。`bash <path>` で呼ばれるフックは
+            # 実行ビットが要らないので接頭辞を持たない。
+            # executable_guard-unsandboxed-pytest.test.sh の本体は
+            # guard-unsandboxed-pytest.sh で、接頭辞付きだけを見ると対応が付かない。
+            cands.append(stem[len("executable_"):] + ".sh")
         else:
-            cands += [stem + ".sh", "executable_" + stem + ".sh"]
+            cands.append("executable_" + stem + ".sh")
     elif base.startswith("test_") and base.endswith(".py"):
         cands.append(base[len("test_"):])
     elif base.startswith("test_") and base.endswith(".sh"):
