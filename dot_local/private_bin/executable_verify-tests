@@ -5,8 +5,10 @@ set -uo pipefail
 exec python3 - "$@" <<'PYTHON'
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 VERSION = "1"
 
@@ -82,7 +84,7 @@ def match_any(basename, patterns):
     return any(re.match(p, basename) for p in patterns)
 
 
-def target_tests(tracked):
+def target_tests(repo, tracked):
     """追跡ファイルの一覧から Python と shell の対象を選ぶ。
 
     規則は basename へ当てる。パス全体への部分一致にすると
@@ -96,6 +98,122 @@ def target_tests(tracked):
         elif match_any(base, SH_PATTERNS) and path not in SHELL_EXCLUDED:
             sh.append(path)
     return sorted(py), sorted(sh)
+
+
+SANDBOX_PREFIX = "verify-tests-sandbox."
+MARKER = "/tmp/.verify-tests-marker"
+
+# サンドボックスの HOME に作る合成フィクスチャ。
+# test_memory_recall.py が memory ディレクトリの「実在」を見るため、
+# ro-bind では埋まらない（実測）。本番の memory は見せない。
+# 名前は任意ではない。test_memory_recall.py の67行目がこの文字列を
+# 字面で持っている（実測で確認）。別の名前にすると実在チェックが通らない。
+FIXTURE_PROJECT = "-home-yagu001-repo-github-com-haoblackj-penguinEx"
+
+
+def bwrap_available():
+    return shutil.which("bwrap") is not None
+
+
+def make_sandbox_home():
+    """使い捨ての HOME を作り、合成フィクスチャを1つ置く。
+
+    bwrap の --tmpfs /tmp はサンドボックス内の /tmp を差し替えるだけなので、
+    HOME に使う実体はホスト側に置く。
+    """
+    sb = tempfile.mkdtemp(prefix=SANDBOX_PREFIX)
+    os.makedirs(
+        os.path.join(sb, ".claude", "projects", FIXTURE_PROJECT, "memory"),
+        exist_ok=True,
+    )
+    return sb
+
+
+def build_bwrap(repo, sandbox, extra_ro=()):
+    """ホスト全体を読み取り専用にし、HOME だけを書き込み可能に戻す。
+
+    --ro-bind で HOME を被せてはいけない。Read-only file system で
+    HOME 配下への書き込みがすべて失敗する。
+    """
+    home = os.path.expanduser("~")
+    argv = [
+        "bwrap",
+        "--ro-bind", "/", "/",
+        "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
+        "--bind", sandbox, home,
+    ]
+    for p in RO_BINDS:
+        if os.path.exists(p):
+            argv += ["--ro-bind", p, p]
+    argv += ["--ro-bind", repo, repo]
+    common = git_common_dir(repo)
+    if common and os.path.exists(common) and not common.startswith(repo + os.sep):
+        argv += ["--ro-bind", common, common]
+    for src, dst in extra_ro:
+        argv += ["--ro-bind", src, dst]
+    argv += ["--chdir", repo, "--"]
+    return argv
+
+
+def run_cmd_in_sandbox(repo, sandbox, cmd, extra_ro=()):
+    """サンドボックスの内側で1つのコマンドを走らせる。
+
+    git ls-files もここを通す。外側で走らせると、対象を数えた環境と
+    走らせる環境が食い違い、片方にしか無いファイルを見落とす。
+    """
+    argv = build_bwrap(repo, sandbox, extra_ro) + list(cmd)
+    env = dict(os.environ)
+    env["VERIFY_TESTS_SANDBOX"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.run(argv, capture_output=True, text=True, env=env)
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def sandbox_started(repo, sandbox):
+    """bwrap の起動そのものが失敗したかを、終了コード以外で見る。
+
+    bwrap は起動に失敗したとき終了コード1を返し、これは pytest の
+    「テストが落ちた」と同じ値になる。区別を付けないと、隔離が一度も
+    働いていないのに「テストが落ちた」と報告することになる。
+    """
+    rc, out, _ = run_cmd_in_sandbox(
+        repo, sandbox, ["sh", "-c", f"printf ok > {MARKER}; cat {MARKER}"]
+    )
+    return rc == 0 and out.strip() == "ok"
+
+
+def tracked_files(repo, sandbox):
+    rc, out, _ = run_cmd_in_sandbox(repo, sandbox, ["git", "ls-files"])
+    if rc != 0:
+        return None
+    return [ln for ln in out.splitlines() if ln.strip()]
+
+
+def collected_files(repo, sandbox):
+    """--collect-only -q の出力からファイルの集合を取る。
+
+    :: を含む行だけを採る。-q の出力には集計行や警告も混ざるため、
+    外さないと集計行が偽のパスとして差分に出る。
+    木構造の出力は形式が変わりやすいので使わない。
+    """
+    rc, out, err = run_cmd_in_sandbox(
+        repo, sandbox,
+        ["python3", "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
+    )
+    files = set()
+    for ln in out.splitlines():
+        if "::" not in ln:
+            continue
+        files.add(os.path.normpath(os.path.join(repo, ln.split("::", 1)[0])))
+    return rc, files, out + err
+
+
+def run_python(repo, sandbox, extra_args=()):
+    rc, out, err = run_cmd_in_sandbox(
+        repo, sandbox,
+        ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", *extra_args],
+    )
+    return rc, out + err
 
 
 def main(argv):
@@ -120,7 +238,29 @@ def main(argv):
         return 0
 
     print(f"== 対象: {repo}")
-    return 0
+    if not bwrap_available():
+        print("実行できなかった: bwrap が PATH にありません。"
+              "`sudo apt install bubblewrap` で導入してください")
+        return 1
+
+    sandbox = make_sandbox_home()
+    try:
+        if not sandbox_started(repo, sandbox):
+            print("実行できなかった: bwrap の起動に失敗しました")
+            return 1
+        tracked = tracked_files(repo, sandbox)
+        if tracked is None:
+            print("実行できなかった: git ls-files が失敗しました")
+            return 1
+        py, sh = target_tests(repo, tracked)
+        print(f"== 対象: Python {len(py)}ファイル / shell {len(sh)}ファイル")
+        rc_collect, collected, _ = collected_files(repo, sandbox)
+        rc_run, run_out = run_python(repo, sandbox)
+        print(f"== 収集: {len(collected)}ファイル")
+        print(f"== Python: rc={rc_run}")
+        return 0
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
 
 
 sys.exit(main(sys.argv[1:]))
