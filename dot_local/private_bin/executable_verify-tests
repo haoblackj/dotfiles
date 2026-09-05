@@ -558,7 +558,7 @@ def shell_pairs(repo, tracked):
     return {"pairs": pairs, "python_pairs": py_pairs, "unmeasurable": bad}
 
 
-# cosmic-ray の設定の置き場。リポジトリごとに1つで、先に当たったほうを使う。
+# cosmic-ray の設定の置き場。**リポジトリごとにちょうど1つ。**2つ在れば止める。
 # penguinEx は `pyproject.toml` を持つのでそこへ、chezmoi は持たないので
 # `.cosmic-ray.toml` を別に置く（chezmoi はソースディレクトリのドット始まりを
 # 配置対象にしないので `.chezmoiignore` への追記は要らない）。
@@ -579,8 +579,15 @@ def mutation_config(repo):
     どの候補にも表が無ければ Unmeasurable。**黙って既定値で走らない。**
     設定を欠いたまま走ると `module-path` が無いので対象0本になり、
     「生き残り0件＝判別力が満点」と見分けが付かなくなる。
+
+    **2つの候補が両方とも表を持っていても Unmeasurable。**先に当たったほうを
+    採って残りを黙って無視すると、「片方だけ直したのに効かない」型の穴が開く。
+    無視された側を読んだ人には、対象集合も `test-command` も自分が書いたとおりに
+    見える。cosmic-ray 自身は設定ファイルを1つしか受け取らないので、
+    2つ在る状態はどちらが走るかを設定から読めない状態でもある。
     """
     import tomllib
+    hits = []
     for name in MUTATION_CONFIG_NAMES:
         path = os.path.join(repo, name)
         if not os.path.isfile(path):
@@ -591,10 +598,17 @@ def mutation_config(repo):
         except (OSError, tomllib.TOMLDecodeError) as e:
             raise Unmeasurable(f"{name}: TOML として読めない（{e}）")
         if MUTATION_CONFIG_TABLE in conf:
-            return name, conf[MUTATION_CONFIG_TABLE]
-    raise Unmeasurable(
-        f"cosmic-ray の設定（`[{MUTATION_CONFIG_TABLE}]` の表）が "
-        f"{' / '.join(MUTATION_CONFIG_NAMES)} のどれにも無い")
+            hits.append((name, conf[MUTATION_CONFIG_TABLE]))
+    if len(hits) > 1:
+        raise Unmeasurable(
+            f"cosmic-ray の設定（`[{MUTATION_CONFIG_TABLE}]` の表）が"
+            f"2つ以上ある（{' / '.join(n for n, _ in hits)}）。"
+            "どちらが走るかを設定から読めないので、1つに寄せる")
+    if not hits:
+        raise Unmeasurable(
+            f"cosmic-ray の設定（`[{MUTATION_CONFIG_TABLE}]` の表）が "
+            f"{' / '.join(MUTATION_CONFIG_NAMES)} のどれにも無い")
+    return hits[0]
 
 
 def _glob_rel(root, pattern):

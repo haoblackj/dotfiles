@@ -7,6 +7,17 @@
 # penguinEx は同じ内容を `pyproject.toml` に持つ。こちらが別ファイルなのは、
 # このリポジトリが `pyproject.toml` を持たないため。**ドット始まりなので chezmoi は
 # 配置対象にせず、`.chezmoiignore` への追記は要らない。**
+#
+# **このファイルを検査しているテストは、このリポジトリの中に無い。**
+# penguinEx の `tests/test_verify_tests.py` の `TestPythonLaneTargets` が
+# 両リポジトリを回して検査する（`module-path` がディレクトリであること、除外の各行に
+# 理由があること、`test-command` が宣言済みの `.py` 対象の shell テストだけを走らせて
+# いること、venv の絶対パスが道具の `MUTATE_VENV` と一致すること）。
+# **突き合わせ役を1箇所に置くのは意図した設計で、こちら側へ複製しない。**
+# 宣言と設定の突き合わせは両リポジトリの中身を同時に見ないと書けないため。
+# したがって、**このファイルを編集したら penguinEx 側で
+# `verify-tests <penguinEx> -- tests/test_verify_tests.py` を走らせること。**
+# ここだけを見て「chezmoi 側は自分のテストで守られている」と読まない。
 [cosmic-ray]
 # **Python ソースの置き場をディレクトリで並べる。**対象にしたいファイルを名指しで
 # 並べる形は採らない。名指しの一覧は、新しく置いた `.py` が一覧へ足されない限り
