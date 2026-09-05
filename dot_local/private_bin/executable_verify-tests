@@ -500,6 +500,56 @@ def harness_failure_reasons(r, full=True):
     return reasons
 
 
+# 検証者そのもの。chezmoi を対象にするとき、これは candidate の中にある。
+VERIFIER_SOURCE = "dot_local/private_bin/executable_verify-tests"
+
+
+def trusted_artifacts(tracked):
+    """次の base になりうるもの。テスト・検証者・discovery policy。
+
+    検証者を含めるのは、実行の門では守れないため。実際に走るのは
+    PATH 上の ~/.local/bin/verify-tests なので、ツリーの中のソースを
+    ro-bind で被せても実行される実体は変わらない。昇格の門で受ける。
+    """
+    out = []
+    for path in tracked:
+        base = os.path.basename(path)
+        if match_any(base, PY_PATTERNS) or match_any(base, SH_PATTERNS):
+            out.append(path)
+        elif base in ("pyproject.toml", "conftest.py", ".pre-commit-config.yaml"):
+            out.append(path)
+        elif path == VERIFIER_SOURCE:
+            out.append(path)
+    return sorted(out)
+
+
+def trusted_overlay(base_tree, cand_tree, base_tracked):
+    """base のテスト群を candidate のツリーの上へ読み取り専用で重ねる。
+
+    --root も一時実行ツリーも overlay FS も要らない。bind mount が
+    そのまま overlay の役割を果たし、実ファイルは変わらない（実測）。
+
+    単位はファイル1つずつ。ディレクトリごと重ねると candidate の実装が
+    base のもので隠れ、trust root が base を base で判定するだけになる。
+
+    相対構造は bind 先のパスが保つ。重ねる先が candidate の中の同じパスなので、
+    $HERE も $(dirname)/.. も同一ディレクトリからの import も、
+    すべて candidate のツリーの中で解決される。
+    """
+    pairs = []
+    for rel in trusted_artifacts(base_tracked):
+        src = os.path.normpath(os.path.join(base_tree, rel))
+        dst = os.path.normpath(os.path.join(cand_tree, rel))
+        # 両方に実在するものだけを重ねる。candidate が削除またはリネームした
+        # テストは dst が無く、bwrap は存在しないパスへ重ねようとすると
+        # Read-only file system で rc=1 を返す（実測）。この値は pytest の
+        # 「テストが落ちた」と同じなので、素直に渡すと正当な削除が
+        # 機構の失敗へ落ちる。削除を捕まえるのは昇格の門の側。
+        if os.path.isfile(src) and os.path.isfile(dst):
+            pairs.append((src, dst))
+    return pairs
+
+
 def main(argv):
     if "--selftest-regressions" in argv:
         i = argv.index("--selftest-regressions")
@@ -561,6 +611,11 @@ def main(argv):
         return 0
     try:
         r1 = evaluate(base_tree)                        # base × base
+        overlay = trusted_overlay(base_tree, repo, r1.get("tracked", []))
+        r2 = evaluate(repo, extra_ro=overlay)           # candidate × base のテスト
+        base_regressions = regressions(r1.get("results", {}), r2.get("results", {}))
+        for k in base_regressions:
+            print(f"== 旧契約を破った: {k}")
         after = snapshot_watched()
         counted, noted = diff_watched(before, after)
         cand_regressions = regressions(r1.get("results", {}), r3.get("results", {}))
