@@ -1914,14 +1914,26 @@ def baseline_document(base):
 
     識別子はタプルで持っているので、そのままでは JSON にならない。書き出しの
     形を1箇所で決めないと、読む側（`load_baseline`）と書く側で書式が割れる。
+
+    **ここでも既定値で埋めない。**`.get(t, ())` や `.get(t, 0)` と書くと、
+    記録の欠けた対象が「生き残り0件」「除外0件」として基準へ書き込まれる。
+    どちらも「測れて何も無かった」と字面で区別できず、次の走行から永久に
+    一致する。今は呼び出し側が必ず全対象ぶんを揃えているが、揃わなくなった
+    ときに黙って0が書かれる形にはしない。
     """
+    lacking = sorted(
+        t for t in base["targets"]
+        if t not in base["survivors"] or t not in base["syntax_filtered"])
+    if lacking:
+        raise BaselineBroken(
+            f"記録の揃っていない対象を書き出そうとした（{'、'.join(lacking)}）")
     return {
         "targets": list(base["targets"]),
-        "survivors": {t: [list(k) for k in base["survivors"].get(t, ())]
+        "survivors": {t: [list(k) for k in base["survivors"][t]]
                       for t in base["targets"]},
         "excluded": [{"id": list(r["id"]), "reason": r["reason"]}
                      for r in base["excluded"]],
-        "syntax_filtered": {t: base["syntax_filtered"].get(t, 0)
+        "syntax_filtered": {t: base["syntax_filtered"][t]
                             for t in base["targets"]},
         "tools": dict(base["tools"]),
     }
@@ -1960,14 +1972,7 @@ def store_baseline(path, current, tools):
             f"道具の版が揃わないまま基準を書こうとした（{'、'.join(lacking)}）。"
             "版が無いと、次に差分が出たとき道具が上がったせいか"
             "判別力が落ちたせいかを区別できない")
-    counted = filtered_counts(current)
-    uncounted = sorted(t for t in current["targets"] if t not in counted)
-    if uncounted:
-        raise BaselineBroken(
-            "構文検査が落とした件数の無い対象がある"
-            f"（{'、'.join(uncounted)}）。0 で埋めると、"
-            "渡し忘れた走行が全対象0の基準を作り、"
-            "以後の突き合わせが永久に一致して除外の見張りが死ぬ")
+    counted = filtered_counts_for(current)
     targets = set(base["targets"])
     survivors = dict(base["survivors"])
     filtered = dict(base["syntax_filtered"])
@@ -2079,6 +2084,27 @@ def filtered_counts(current):
     return out
 
 
+def filtered_counts_for(current):
+    """測れた対象**すべて**の、構文検査が落とした件数。欠けていたら止める。
+
+    `filtered_counts` は器の有無と型しか見ない。対象1本ぶんの欠落は、既定値で
+    埋めると「渡し忘れ」と「1件も落ちなかった」が同じ0になる。基準がその対象に
+    0を持っていれば「0 対 0」で一致し、見張りが黙る。
+
+    **書き込む側と比べる側が同じ門を通るように、ここ1箇所に置く。**片方だけに
+    門を置くと、同じ入力を読む関数が2つあるのに片方だけが止まる形が残る。
+    実際に `store_baseline` だけを直して `compare_filtered` を残していた。
+    """
+    counted = filtered_counts(current)
+    missing = sorted(t for t in current["targets"] if t not in counted)
+    if missing:
+        raise BaselineBroken(
+            f"構文検査が落とした件数の無い対象がある（{'、'.join(missing)}）。"
+            "0 で埋めると、渡し忘れた対象が「1件も落ちなかった」と同じ字面に"
+            "なり、基準がその対象に0を持っていれば一致して除外の見張りが黙る")
+    return counted
+
+
 def compare_filtered(baseline, current):
     """構文検査が落とした件数が基準と食い違う対象を `(基準, 今回)` で返す。
 
@@ -2095,16 +2121,21 @@ def compare_filtered(baseline, current):
 
     **基準に記録の無い対象は載せない。**`compare` と同じ理由で、あちらは
     「基準が無い」として `classify_target` が拾う。
+
+    **既定値で埋めない。**測れた対象の件数が1本でも欠けていれば
+    `filtered_counts_for` が止める。`now.get(target, 0)` と書くと、基準が0を
+    持つ対象について渡し忘れが「0 対 0」で一致し、見張りが黙る。基準側は
+    `load_baseline` が `targets` の全対象に件数を入れるので添字で引ける。
     """
     known = set(baseline["targets"])
-    now = filtered_counts(current)
+    now = filtered_counts_for(current)
     out = {}
     for target in current["targets"]:
         if target not in known:
             continue
-        was = baseline["syntax_filtered"].get(target, 0)
-        if now.get(target, 0) != was:
-            out[target] = (was, now.get(target, 0))
+        was = baseline["syntax_filtered"][target]
+        if now[target] != was:
+            out[target] = (was, now[target])
     return out
 
 
