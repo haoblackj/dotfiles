@@ -545,6 +545,13 @@ def unmeasured(repo, tracked):
 
 # 分類の名前。報告の字面と検査の期待値をここ1箇所で持つ。
 UNMEASURABLE = "計測できなかった"
+REGRESSED = "判別力が落ちた"
+NO_BASELINE = "基準が無い"
+
+# 設計の5分類のどれにも当たらないこと。**5分類に足す新しい分類ではない。**
+# 対象1つを渡されたら必ず何かを返す `classify_target` に、「この対象については
+# 何も見つからなかった」を表す値が要る。リポジトリ単位の判定へは持ち上がらない。
+NO_FINDING = "所見なし"
 
 
 class Unmeasurable(Exception):
@@ -1689,6 +1696,364 @@ def run_shell_lane(repo, sandbox, pairs):
     return out
 
 
+# --- 基準ファイルの読み書きと比較 ---
+
+# 各リポジトリのルートに置き、git で追跡する。ドット始まりなので chezmoi の
+# ソース側でも `.chezmoiignore` への追記は要らない。
+BASELINE_NAME = ".mutation-baseline.json"
+
+# 基準ファイルの最上位の鍵。**正の形で列挙する。**「知らない鍵は無害」と
+# すると、書式を変えた道具が古い基準を黙って読み違える経路ができる。
+BASELINE_KEYS = ("targets", "survivors", "excluded", "tools")
+
+# 除外の1件が持つ鍵。識別子と理由をちょうど1つずつ。
+EXCLUDED_KEYS = ("id", "reason")
+
+# 基準へ版を焼く道具。**道具が上がると生き残りの集合は正当に変わる。**
+# 版を残さないと、次に差分が出たときそれが判別力の劣化なのか道具の更新なのかを
+# 後から判別できず、実害のある変化と道具の変化が区別できなくなる。
+BASELINE_TOOLS = ("cosmic-ray", "universalmutator")
+
+
+class BaselineBroken(Exception):
+    """基準ファイルが在るのに期待の形で読めない。
+
+    **`Unmeasurable` と分けている。**あれは「変異体の判別力を測れなかった」で、
+    こちらは「測る前に基準の入れ物が壊れている」。同じ器に入れると、測定の
+    失敗として報告され、壊れた基準ファイルという別種の事故が埋もれる。
+    """
+
+
+def empty_baseline():
+    """まだ1件も記録の無い基準。
+
+    **ファイルが無いときだけこれを返す。**在るのに読めないときに返しては
+    いけない。全対象が「基準が無い」へ落ちて非0にはなるが、そのあと
+    `--update-baseline` を打てば人が手で保っている除外リストごと上書きされる。
+    """
+    return {"targets": [], "survivors": {}, "excluded": [], "tools": {}}
+
+
+def _baseline_id(value, where):
+    """基準の中の識別子を `mutant_id` の書式で読み直す。
+
+    **ここで書式を検査し直さない。**`mutant_id` に通す。基準側だけで別の
+    検査を持つと、道具が作る識別子と基準が受ける識別子で規則が2本になり、
+    片方の誤りをもう片方が隠す。
+    """
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        raise BaselineBroken(
+            f"{where}: 識別子は（パス、行番号、行の内容）の3つ組で持つ（{value!r}）")
+    path, line, content = value
+    if not isinstance(path, str) or not isinstance(content, str):
+        raise BaselineBroken(
+            f"{where}: 識別子のパスと行の内容は文字列で持つ（{value!r}）")
+    try:
+        return mutant_id(path, line, content)
+    except Unmeasurable as e:
+        raise BaselineBroken(f"{where}: {e}")
+
+
+def _id_set(rows, where):
+    return {_baseline_id(r, where) for r in rows}
+
+
+def load_baseline(path):
+    """基準ファイルを読み、`targets` / `survivors` / `excluded` / `tools` で返す。
+
+    - `targets` … 測れた対象の一覧。**生き残り0件の対象もここに載る。**
+      載せないと「判別力が満点だった対象」と「基準にまだ記録が無い対象」が
+      区別できない
+    - `survivors` … 対象ごとの生き残りの識別子。`targets` の全対象が鍵を持つ
+      （0件の対象は空の一覧）
+    - `excluded` … `{"id": 識別子, "reason": 理由}` の一覧
+    - `tools` … 道具の名前から版への対応
+
+    **kill された変異体は持たない。**kill 集合を保存すると、生き残りは定義上
+    すべて「基準に無い」ことになり毎回全件が発火する。
+
+    ファイルが無ければ空の基準。**在るのに読めなければ止める。**空として
+    読み流すと、壊れた基準が「基準が無い」の顔をして通り、次の書き込みで
+    人が保っている除外リストが消える。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        return empty_baseline()
+    except OSError as e:
+        raise BaselineBroken(f"{path}: 基準ファイルを読めない（{e}）")
+    try:
+        data = json.loads(raw)
+    except ValueError as e:
+        raise BaselineBroken(f"{path}: 基準ファイルが JSON として読めない（{e}）")
+    if not isinstance(data, dict):
+        raise BaselineBroken(f"{path}: 基準ファイルの最上位がオブジェクトでない")
+    unknown = sorted(set(data) - set(BASELINE_KEYS))
+    if unknown:
+        raise BaselineBroken(
+            f"{path}: 基準ファイルに知らない鍵がある（{'、'.join(unknown)}）")
+    missing = [k for k in BASELINE_KEYS if k not in data]
+    if missing:
+        raise BaselineBroken(
+            f"{path}: 基準ファイルに鍵が足りない（{'、'.join(missing)}）")
+
+    targets = data["targets"]
+    if not isinstance(targets, list):
+        raise BaselineBroken(f"{path}: targets は一覧で持つ")
+    for t in targets:
+        if not isinstance(t, str) or not t.strip():
+            raise BaselineBroken(f"{path}: targets の項目が空でない文字列でない（{t!r}）")
+    if len(set(targets)) != len(targets):
+        dup = sorted({t for t in targets if targets.count(t) > 1})
+        raise BaselineBroken(f"{path}: targets に同じ対象が2度ある（{'、'.join(dup)}）")
+
+    rows = data["survivors"]
+    if not isinstance(rows, dict):
+        raise BaselineBroken(f"{path}: survivors はオブジェクトで持つ")
+    stray = sorted(set(rows) - set(targets))
+    if stray:
+        # 対象の一覧に無い対象の生き残りは、どちらが正しいかを決められない。
+        # 黙って一覧側を信じると生き残りが消え、黙って生き残り側を信じると
+        # 「測れた対象」の数が増える。どちらも静かに判定を変える。
+        raise BaselineBroken(
+            f"{path}: targets に無い対象の生き残りがある（{'、'.join(stray)}）")
+    survivors = {}
+    for t in targets:
+        got = rows.get(t, [])
+        if not isinstance(got, list):
+            raise BaselineBroken(f"{path}: {t} の生き残りが一覧でない")
+        survivors[t] = sorted(_id_set(got, f"{path}: {t} の生き残り"))
+
+    if not isinstance(data["excluded"], list):
+        raise BaselineBroken(f"{path}: excluded は一覧で持つ")
+    excluded, seen = [], set()
+    for row in data["excluded"]:
+        if not isinstance(row, dict):
+            raise BaselineBroken(
+                f"{path}: excluded の項目がオブジェクトでない（{row!r}）")
+        if sorted(row) != sorted(EXCLUDED_KEYS):
+            raise BaselineBroken(
+                f"{path}: excluded の項目は識別子と理由をちょうど1つずつ持つ"
+                f"（{sorted(row)}）")
+        ident = _baseline_id(row["id"], f"{path}: excluded")
+        reason = row["reason"]
+        # **理由が空の除外を通さない。**除外の内訳を機械が見張れるのは、
+        # 1件ごとに何を落としたかが読めるからで、空文字列はそれを満たさない。
+        if not isinstance(reason, str) or not reason.strip():
+            raise BaselineBroken(
+                f"{path}: excluded の理由が空（{list(ident)}）")
+        if ident in seen:
+            raise BaselineBroken(
+                f"{path}: excluded に同じ識別子が2度ある（{list(ident)}）")
+        seen.add(ident)
+        excluded.append({"id": ident, "reason": reason})
+    excluded.sort(key=lambda r: r["id"])
+
+    tools = data["tools"]
+    if not isinstance(tools, dict):
+        raise BaselineBroken(f"{path}: tools はオブジェクトで持つ")
+    unknown = sorted(set(tools) - set(BASELINE_TOOLS))
+    if unknown:
+        raise BaselineBroken(
+            f"{path}: tools に知らない道具がある（{'、'.join(unknown)}）")
+    for name in sorted(tools):
+        if not isinstance(tools[name], str) or not tools[name].strip():
+            raise BaselineBroken(f"{path}: {name} の版が空")
+
+    return {"targets": sorted(targets), "survivors": survivors,
+            "excluded": excluded, "tools": dict(tools)}
+
+
+def baseline_document(base):
+    """基準の入れ物を JSON へ書ける形へ直す。**書くときは必ずここを通す。**
+
+    識別子はタプルで持っているので、そのままでは JSON にならない。書き出しの
+    形を1箇所で決めないと、読む側（`load_baseline`）と書く側で書式が割れる。
+    """
+    return {
+        "targets": list(base["targets"]),
+        "survivors": {t: [list(k) for k in base["survivors"].get(t, ())]
+                      for t in base["targets"]},
+        "excluded": [{"id": list(r["id"]), "reason": r["reason"]}
+                     for r in base["excluded"]],
+        "tools": dict(base["tools"]),
+    }
+
+
+def store_baseline(path, current, tools):
+    """測れた対象の分だけを基準へ書き、書き直した基準を返す。
+
+    **対象単位で書く。**今回測れなかった対象の記録はそのまま残す。リポジトリ
+    単位で丸ごと書く形にすると、対象が1つでも測れない間は基準を一度も作れない。
+
+    **除外リストは書き換えない。**走らせるたびに機械が除外を書き足せる形に
+    すると、非決定でない生き残りまで除外へ流れ込み、判定が静かに空洞化する。
+    人が手で足し引きする。
+
+    **道具の版が揃わないうちは書かない。**版の無い基準は、次に差分が出たとき
+    その理由を判別できない。
+
+    書き出しは別名へ書いてから置き換える。途中で落ちたときに、人が手で保って
+    いる除外リストが切り詰められた状態で残らないようにする。
+    """
+    base = load_baseline(path)
+    lacking = [n for n in BASELINE_TOOLS if not str(tools.get(n, "")).strip()]
+    if lacking:
+        raise BaselineBroken(
+            f"道具の版が揃わないまま基準を書こうとした（{'、'.join(lacking)}）。"
+            "版が無いと、次に差分が出たとき道具が上がったせいか"
+            "判別力が落ちたせいかを区別できない")
+    targets = set(base["targets"])
+    survivors = dict(base["survivors"])
+    for target in current["targets"]:
+        targets.add(target)
+        survivors[target] = sorted(
+            _id_set(current["survivors"].get(target, ()), target))
+    doc = baseline_document({
+        "targets": sorted(targets),
+        "survivors": survivors,
+        "excluded": base["excluded"],
+        "tools": {n: str(tools[n]) for n in BASELINE_TOOLS},
+    })
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(doc, f, ensure_ascii=False, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, path)
+    return load_baseline(path)
+
+
+def excluded_ids(baseline):
+    """判定から外す変異体の識別子の集合。"""
+    return {r["id"] for r in baseline["excluded"]}
+
+
+def excluded_report(baseline):
+    """除外の件数と、1件ごとの識別子と理由。**毎回の報告に出す。**
+
+    件数だけを出す形にしない。増えたことに気づけても、何が増えたのかが
+    読めなければ「除外が広すぎないか」を人が判断できない。
+    """
+    lines = []
+    for row in baseline["excluded"]:
+        path, line, content = row["id"]
+        lines.append(f"{path}:{line}: {content} — {row['reason']}")
+    return {"count": len(baseline["excluded"]), "lines": lines}
+
+
+def compare(baseline, current):
+    """基準に無い生き残りを、対象ごとに返す。
+
+    **基準に記録の無い対象はここに載せない。**載せると、その対象の生き残りが
+    全件「基準に無い」になり、「判別力が落ちた」と「基準が無い」が同じ字面に
+    なる。基準の無い対象は `classify_target` が拾う。
+
+    **新しい生き残りが1件も無い対象は鍵ごと落とす。**空の一覧を残すと
+    `compare(...)` が常に真になり、集合での判定に使えない。
+
+    生存率は使わない。等価ミュータント（`astimezone(JST)` を
+    `astimezone(None)` に変えた2件のような、結果が変わらない変異）が率の上で
+    永久に生存側へ計上され続け、閾値を緩める圧力の幅に本物の劣化が隠れる。
+    """
+    known = set(baseline["targets"])
+    dropped = excluded_ids(baseline)
+    out = {}
+    for target in current["targets"]:
+        if target not in known:
+            continue
+        was = set(baseline["survivors"].get(target, ()))
+        now = _id_set(current["survivors"].get(target, ()), target)
+        new = sorted(now - was - dropped)
+        if new:
+            out[target] = new
+    return out
+
+
+def compare_excluded(baseline, current):
+    """今回の走行が落としたのに、基準の除外リストに載っていない変異体。
+
+    **除外が広がったことを機械が見張る。**除外が広がれば測れるはずの変異体が
+    黙って消え、それは撃墜率を上げる方向に働く。生き残りの差分だけを見る形では
+    この向きの劣化を1件も捕まえられない。
+
+    `current` の `excluded` は対象ごとの識別子の一覧（`run_shell_lane` が
+    返す形）。持たない走行では空を返す。
+    """
+    dropped = excluded_ids(baseline)
+    out = {}
+    for target, rows in sorted((current.get("excluded") or {}).items()):
+        new = sorted(_id_set(rows, target) - dropped)
+        if new:
+            out[target] = new
+    return out
+
+
+def classify_target(baseline, current, target):
+    """その対象1つに当たる分類を返す。
+
+    返しうるのは5分類のうち3つ（`UNMEASURABLE` / `NO_BASELINE` / `REGRESSED`）と、
+    どれにも当たらないことを表す `NO_FINDING`。残る2つ（「対象外」「実行できな
+    かった」）はリポジトリ単位の分類で、対象1つに当たることが無い。
+
+    **「基準が無い」を「判別力が落ちた」より先に見る。**設計の優先順位は
+    「判別力が落ちた」が先だが、あれは複数の対象の分類をリポジトリ単位へ畳む
+    ときの順序。対象1つの中では、基準に記録が無ければ生き残りは全件が
+    「基準に無い」になるので、順序をそのまま持ち込むと新しい対象が必ず
+    「判別力が落ちた」に化ける。対象1つの中でこの2つは排他になる。
+
+    **今回の走行に無い対象を渡されたら止める。**「測れた」でも「測れなかった」
+    でもない対象を黙って `NO_FINDING` へ落とすと、基準に在るのに走行から消えた
+    対象が所見なしとして通り、基準を静かに刈る経路ができる。
+    """
+    if target in dict(current["unmeasurable"]):
+        return UNMEASURABLE
+    if target not in set(current["targets"]):
+        raise ValueError(
+            f"{target}: 今回の走行の対象にも、計測できなかった対象にも無い")
+    if target not in set(baseline["targets"]):
+        return NO_BASELINE
+    if compare(baseline, current).get(target):
+        return REGRESSED
+    return NO_FINDING
+
+
+def mutation_tool_versions(venv_path=MUTATE_VENV):
+    """基準へ焼く道具の版を venv から読む。
+
+    **版が1つでも取れなければ止める。**空の版を焼くと、次の走行が
+    「道具が上がった」を検出できないまま素通しになる。
+    """
+    python = os.path.join(venv_path, "bin", "python")
+    if not os.path.isfile(python):
+        raise Unmeasurable(f"変異の venv が無い（{venv_path}）")
+    code = ("import importlib.metadata as m, json, sys;"
+            "print(json.dumps({n: m.version(n) for n in json.loads(sys.argv[1])}))")
+    out = subprocess.run([python, "-c", code, json.dumps(list(BASELINE_TOOLS))],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        raise Unmeasurable(f"道具の版を読めない（{_tail(out.stderr or out.stdout)}）")
+    try:
+        got = json.loads(out.stdout)
+    except ValueError:
+        raise Unmeasurable(f"道具の版が JSON で返らない（{out.stdout!r}）")
+    lacking = [n for n in BASELINE_TOOLS if not str(got.get(n, "")).strip()]
+    if lacking:
+        raise Unmeasurable(f"道具の版が空（{'、'.join(lacking)}）")
+    return {n: got[n] for n in BASELINE_TOOLS}
+
+
+def tool_drift(baseline, tools):
+    """基準に焼かれた版と今回の版が食い違う道具を `(名前, 基準, 今回)` で返す。
+
+    **毎回の報告へ出す。**道具が上がると生き残りの集合は正当に変わるので、
+    これが出ていない走行で差分が出たときにだけ「判別力が落ちた」と読める。
+    """
+    was = baseline["tools"]
+    return [(name, was.get(name), tools.get(name))
+            for name in BASELINE_TOOLS if was.get(name) != tools.get(name)]
+
+
 # 監視対象。環境変数で使い捨てのパスへ差し替えられる。
 DEFAULT_WATCHED = [
     os.path.expanduser("~/.claude/logs/memory-recall.log*"),
@@ -2316,6 +2681,75 @@ def main(argv):
         for repo, rec in ops:
             store_accepted(path, repo, rec)
         print(json.dumps(load_accepted(path), sort_keys=True))
+        return 0
+
+    if "--selftest-baseline-store" in argv:
+        # 基準の入れ物だけを、渡されたパスの上で確かめる口。
+        # **本番の `.mutation-baseline.json` には触れない**（`--selftest-accept-store`
+        # と同じ形）。`(path, [(current, tools), ...])` を渡すと、その順で書いて
+        # 最後に読み直した基準を返す。初期の中身はテスト側が先に書いておく。
+        i = argv.index("--selftest-baseline-store")
+        path, ops = ast.literal_eval(argv[i + 1])
+        try:
+            base = load_baseline(path)
+            for current, tools in ops:
+                base = store_baseline(path, current, tools)
+            payload = {"baseline": baseline_document(base), "error": None}
+        except BaselineBroken as e:
+            payload = {"baseline": None, "error": str(e)}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-baseline-compare" in argv:
+        # 比較と分類だけを、渡されたパスの基準の上で叩く口。書き込みはしない。
+        # `(path, current, tools, classify_targets)` を渡す。`classify_targets` に
+        # `None` を渡すと今回の走行に出てきた対象すべてを分類する。明示できる形に
+        # したのは、**走行に無い対象を渡したときに止まる**ことを外から撃つため。
+        i = argv.index("--selftest-baseline-compare")
+        path, current, tools, wanted = ast.literal_eval(argv[i + 1])
+        try:
+            base = load_baseline(path)
+            if wanted is None:
+                wanted = list(current["targets"]) + [
+                    t for t, _ in current["unmeasurable"]]
+            labels, failed = {}, {}
+            for t in wanted:
+                try:
+                    labels[t] = classify_target(base, current, t)
+                except ValueError as e:
+                    failed[t] = str(e)
+            payload = {
+                "baseline": baseline_document(base),
+                "compare": {t: [list(k) for k in v]
+                            for t, v in compare(base, current).items()},
+                "excluded_new": {t: [list(k) for k in v]
+                                 for t, v in compare_excluded(base, current).items()},
+                "excluded_report": excluded_report(base),
+                "classify": labels,
+                "classify_error": failed,
+                "tool_drift": [list(row) for row in tool_drift(base, tools or {})],
+                "error": None,
+            }
+        except BaselineBroken as e:
+            payload = {"baseline": None, "compare": None, "excluded_new": None,
+                       "excluded_report": None, "classify": None,
+                       "classify_error": None, "tool_drift": None,
+                       "error": str(e)}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-tool-versions" in argv:
+        # 基準へ焼く版を実物の venv から読む口。**引数を省くと既定を使う**
+        # （`--selftest-mutate-binds` と同じ形）。
+        i = argv.index("--selftest-tool-versions")
+        rest = argv[i + 1:]
+        try:
+            got = (mutation_tool_versions(rest[0]) if rest
+                   else mutation_tool_versions())
+            payload = {"tools": got, "unmeasurable": None}
+        except Unmeasurable as e:
+            payload = {"tools": None, "unmeasurable": f"{UNMEASURABLE}: {e}"}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
         return 0
 
     if "--selftest-mutate-binds" in argv:
