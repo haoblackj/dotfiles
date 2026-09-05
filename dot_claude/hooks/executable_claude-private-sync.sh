@@ -9,6 +9,10 @@ set -u
 ROOT="$HOME/.local/share/claude-private"
 [ -d "$ROOT/.git" ] || exit 0
 
+# migrate_new が実体を取り込んだかどうか。取り込んだ回は自動コミットの対象を
+# 絞らない（移行そのものを落とすと、リンクだけ張られて実体が追跡されない）。
+MIGRATED=0
+
 ensure_symlinks() {
   # all skills present in the private repo
   local sk_src sk_dst sk_name
@@ -55,6 +59,7 @@ migrate_new() {
     rm -rf "$dest/.git"
     rm -rf "${sk%/}"
     ln -s "$dest" "${sk%/}"
+    MIGRATED=1
   done
   # Capture real (non-symlinked) memory dirs holding markdown into the repo.
   local link proj
@@ -69,6 +74,7 @@ migrate_new() {
     cp -a "$link"/. "$dest"/ 2>/dev/null || true
     rm -rf "$link"
     ln -s "$dest" "$link"
+    MIGRATED=1
   done
 }
 
@@ -81,7 +87,24 @@ case "${1:-pull}" in
     git -C "$ROOT" pull --ff-only >/dev/null 2>&1 || true
     migrate_new
     ensure_symlinks
-    git -C "$ROOT" add -A
+    # 自動コミットの対象は memory と json だけ。skills のように「何をしたか」が
+    # 残るべき変更は sync: <日時> に飲み込ませず、人が明示的にコミットする。
+    # 実例: bug-note スキルの追加が sync: に飲まれ、履歴の書き換えが要った
+    # （2026-09-06）。移行が走った回だけは全体を対象にする。
+    if [ "$MIGRATED" = "1" ]; then
+      git -C "$ROOT" add -A
+    else
+      git -C "$ROOT" add -A -- memory '*.json'
+    fi
+
+    # 対象外に変更が残っていたら知らせる。黙って放置すると、次の
+    # git add -A を打つ誰かのコミットへ紛れ込む。
+    left=$(git -C "$ROOT" status --porcelain -- ':!memory' ':!*.json' 2>/dev/null | head -5)
+    if [ -n "$left" ]; then
+      echo "[claude-private-sync] 自動コミットしていない変更があります。内容に合ったメッセージで自分でコミットしてください:" >&2
+      echo "$left" >&2
+    fi
+
     git -C "$ROOT" diff --cached --quiet && exit 0
     msg=""
     for f in "$ROOT"/.pending-commit-message.*; do
