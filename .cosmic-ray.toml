@@ -1,0 +1,73 @@
+# 変異テストの設定（issue #16）。`verify-tests <repo> --mutate` と cosmic-ray が
+# **同じこのファイルを読む。**表が `[tool.cosmic-ray]` ではないのは、cosmic-ray の
+# `load_config` が `toml.loads(...)["cosmic-ray"]` を引くため（実測）。道具の側で
+# 読み替えて一時ファイルへ書き出す形は採らない。門が数える設定と走行が使う設定を
+# 1つに保つことが、「門は通ったのに別の対象を測っていた」を原理的に起こさない。
+#
+# penguinEx は同じ内容を `pyproject.toml` に持つ。こちらが別ファイルなのは、
+# このリポジトリが `pyproject.toml` を持たないため。**ドット始まりなので chezmoi は
+# 配置対象にせず、`.chezmoiignore` への追記は要らない。**
+[cosmic-ray]
+# **Python ソースの置き場をディレクトリで並べる。**対象にしたいファイルを名指しで
+# 並べる形は採らない。名指しの一覧は、新しく置いた `.py` が一覧へ足されない限り
+# 黙って対象外になる。測られていないのに緑で通るので、この設計が塞ごうとしている
+# 型の穴が対象の決め方そのものに開く。
+#
+# **相対で書く。**cosmic-ray は設定のパスをそのまま `module_path` へ載せ、変異体の
+# 識別子がそこから作られる。絶対にすると基準にこの機械の場所が焼き付き、別の場所で
+# 走らせた瞬間に全識別子が食い違う。
+#
+# このリポジトリの追跡 `.py` 3本はすべて `dot_claude/hooks` 配下にある。`**/*.py` で
+# 再帰的に拾うので `dot_claude/hooks/tests` を別に並べる必要は無い。
+module-path = ["dot_claude/hooks"]
+
+# 変異なしの `test-command` は 1.03秒（実測）。30秒はその29倍。**縮めない。**この
+# 道具はタイムアウトを kill に数えるので、正常な走行がタイムアウトへ落ちると判別力が
+# 無いまま点数が上がる。詳細は penguinEx の
+# docs/superpowers/notes/2026-09-05-mutation-timing.md。
+timeout = 30
+
+# **各行に除外の理由を書く。**理由は2種類あり、外れる条件が違う。
+#
+# 「テストそのもの」… テストファイルを変異させても測りたい量にならない。恒久的に外れる。
+# 「検証するテストが無い」… 変異させれば全件が生き残るだけで、判別力については何も
+#   言えない。テストが書かれたら除外から外す。このリポジトリには現在1本も無い。
+#
+# **ディレクトリごとのグロブでまとめない。**`dot_claude/hooks/tests/*.py` のように
+# 書くと、あとから同じディレクトリへ置かれた `.py` まで黙って除外に入る。1本ずつ
+# 名指しすることで、新しい `.py` は必ず対象か完全性の門のどちらかに現れる。
+excluded-modules = [
+    "dot_claude/hooks/tests/test_memory_recall.py",  # テストそのもの
+]
+
+# **`pytest` の1回の実行と、対象が `.py` の宣言済み shell テストだけ。**
+# `executable_stop-fabricated-turn-guard.py` は shell テストからしか検証されて
+# いないので、`pytest` だけでは141件の変異体が全部生き残る。
+#
+# **宣言を持つ shell テストを全部含めない。**含めると、`.sh` を対象とする shell
+# テストが1本でも赤くなったときに Python レーンが丸ごと止まる。止める理由が無い。
+# issue #19 の `statusline-context-window` は起票から解消まで19時間赤いままだった。
+#
+# **`sh -c` で包む。**cosmic-ray の `run_tests` は `shlex.split` して Popen へ渡す
+# だけで shell を通さない（`cosmic_ray/testing.py`、実測）ので、`&&` はそのままでは
+# 動かない。
+#
+# **PATH 解決に頼らない。**`python` が PATH に無いだけで212件全部が `INCOMPETENT` に
+# なった実例がある。venv の絶対パスは `verify-tests` の `MUTATE_VENV` と同じもので、
+# 食い違いは penguinEx の tests/test_verify_tests.py が検査する。
+test-command = "/bin/sh -c '/home/yagu001/.local/share/verify-tests-venv/bin/python -m pytest -x -q -p no:cacheprovider && /bin/bash dot_claude/hooks/executable_stop-fabricated-turn-guard.test.sh'"
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.filters.operators-filter]
+# cosmic-ray 8.7.0 の不具合。ドットを含む例外名（`subprocess.TimeoutExpired` など）へ
+# 当てると parso が `Name` ではなく `PythonNode` を返し、`mutate` が `AttributeError`
+# で落ちて**正当な変異体が `incompetent` を返す。**対象10本に該当が9箇所あるので、
+# 除外しないと「`incompetent` が1件も無いこと」の門が毎回必ず発火する。
+#
+# **除外しているのは閾値ではなく対象で、門の閾値は0のまま。**「既知の原因による
+# `incompetent` は除く」形は採らない（除外の判定を自前で書くことになり、上流が
+# 直ったときにその判定が黙って残る）。上流が直ったかの確かめ方は penguinEx の
+# docs/superpowers/notes/2026-09-05-mutation-timing.md にある。
+exclude-operators = ["core/ExceptionReplacer"]

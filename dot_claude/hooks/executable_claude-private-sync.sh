@@ -87,19 +87,27 @@ case "${1:-pull}" in
     git -C "$ROOT" pull --ff-only >/dev/null 2>&1 || true
     migrate_new
     ensure_symlinks
-    # 自動コミットの対象は memory と json だけ。skills のように「何をしたか」が
-    # 残るべき変更は sync: <日時> に飲み込ませず、人が明示的にコミットする。
-    # 実例: bug-note スキルの追加が sync: に飲まれ、履歴の書き換えが要った
-    # （2026-09-06）。移行が走った回だけは全体を対象にする。
+    # 自動コミットの対象は memory 配下だけ。メモリ本体と埋め込みキャッシュ
+    # (memory/<project>/.embeddings.json) がここに入る。skills のように
+    # 「何をしたか」が残るべき変更は sync: <日時> に飲み込ませず、人が明示的に
+    # コミットする。実例: bug-note スキルの追加が sync: に飲まれ、履歴の
+    # 書き換えが要った（2026-09-06）。
+    #
+    # パススペックに '*.json' を足さないこと。埋め込みは memory 配下なので
+    # 足す必要が無く、足すと skills/mulmoterminal-*/palettes.json などの
+    # 同梱データまで自動コミットの対象へ戻る。
+    #
+    # 移行が走った回だけは全体を対象にする（リンクだけ張られて実体が
+    # 追跡されない状態を避けるため）。
     if [ "$MIGRATED" = "1" ]; then
       git -C "$ROOT" add -A
     else
-      git -C "$ROOT" add -A -- memory '*.json'
+      git -C "$ROOT" add -A -- memory
     fi
 
     # 対象外に変更が残っていたら知らせる。黙って放置すると、次の
     # git add -A を打つ誰かのコミットへ紛れ込む。
-    left=$(git -C "$ROOT" status --porcelain -- ':!memory' ':!*.json' 2>/dev/null | head -5)
+    left=$(git -C "$ROOT" status --porcelain -- ':!memory' 2>/dev/null | head -5)
     if [ -n "$left" ]; then
       echo "[claude-private-sync] 自動コミットしていない変更があります。内容に合ったメッセージで自分でコミットしてください:" >&2
       echo "$left" >&2
