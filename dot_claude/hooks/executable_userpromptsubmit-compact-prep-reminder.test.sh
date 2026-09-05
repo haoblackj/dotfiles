@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/executable_userpromptsubmit-compact-prep-reminder.sh
 # userpromptsubmit-compact-prep-reminder.sh のユニットテスト。
 set -u
 

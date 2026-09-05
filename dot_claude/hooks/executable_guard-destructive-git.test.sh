@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/executable_guard-destructive-git.sh
 # guard-destructive-git.sh のユニットテスト。
 #
 # 危険なコマンドは一切実行しない。フックへ入力 JSON を与え、返る判定だけを見る。

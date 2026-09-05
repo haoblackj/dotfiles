@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/executable_claude-private-sync.sh
 # claude-private-sync.sh push処理のユニットテスト(メッセージdrain機構)。
 set -u
 

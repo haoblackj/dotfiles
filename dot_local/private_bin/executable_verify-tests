@@ -181,6 +181,26 @@ def deployed_tool_bind():
     return [(DEPLOYED_TOOL, DEPLOYED_TOOL)] if os.path.isfile(DEPLOYED_TOOL) else []
 
 
+# chezmoi のソース側。対象リポジトリの1つ（haoblackj/dotfiles）の実体でもある。
+CHEZMOI_SOURCE = os.path.expanduser("~/.local/share/chezmoi")
+
+
+def chezmoi_source_bind(path=CHEZMOI_SOURCE):
+    """`--` の口へ渡す追加の読み取り専用 bind。chezmoi のソース側。
+
+    `build_bwrap` が `--bind <sandbox> $HOME` で HOME を丸ごと差し替えるので、
+    HOME 配下にある chezmoi のソースはサンドボックスの中から消える。足さないと、
+    **shell テストの同定が「両リポジトリで18本を過不足なく拾う」を満たすかを
+    確かめる手段がこの道具の中に一つも無くなる。**18本のうち11本はソース側に
+    しか無く（`.chezmoiignore` が `/.claude/hooks/*.test.sh` の配置を止めている）、
+    見えない状態は「その機械に存在しない」と区別が付かない。
+
+    RO_BINDS へ足さない（deployed_tool_bind / mutate_binds と同じ流儀）。あれは
+    全走行に効くので、差分判定の内側にも dotfiles のソースが現れることになる。
+    """
+    return [(path, path)] if os.path.isdir(path) else []
+
+
 # 変異の走行に使う venv。Task 1 が固定したパスで、cosmic-ray 8.7.0 /
 # universalmutator 1.14.1 / pytest 9.1.1 / Python 3.14.7 が入っている。
 # PATH 解決に頼らない。`python` が不在の環境で変異体が全部 INCOMPETENT へ落ち、
@@ -409,6 +429,107 @@ def syntax_ok(path, is_python_heredoc):
         except (SyntaxError, ValueError):
             return False
     return True
+
+
+# --mutate が shell テストを同定する規約。**v1 の SH_PATTERNS とは別に持つ。**
+# あちらへ足すと v1 の shell レーンの対象まで変わる。
+#
+# `*.bats` を #18 の移行より前から入れておく。移行で `.test.sh` が `.bats` へ
+# 変わったときに規約を直し忘れると、18本が丸ごと網から消え、**判別力が落ちて
+# いないことを確かめるはずの仕組みが、確かめる対象を失ったまま緑で通る。**
+#
+# **この規約はテストの同定にだけ使う。対象の同定には使わない。**テスト名から
+# 対象名を機械的に作る形は18本中12本しか引けない（実測）。対象は本文の宣言から取る。
+MUTATE_SH_PATTERNS = (r"^.*\.test\.sh$", r"^test_.*\.sh$", r"^.*\.bats$")
+
+# --mutate の対象外。**v1 の SHELL_EXCLUDED とは外す理由が違うので別に持つ**
+# （v1 は「隔離下で本来の挙動を測れない」1本だけ）。
+# どちらも宣言は `none` なので、この集合が無くても対にはならない。要るのは
+# 測っていない対象の一覧（受け入れ条件12）へ理由付きで載せるため。
+MUTATE_SHELL_EXCLUDED = {
+    "dot_claude/hooks/executable_settings-wiring.test.sh",
+    "dot_claude/compact-plus-backend/executable_e2e-integration.test.sh",
+}
+
+# 分類の名前。報告の字面と検査の期待値をここ1箇所で持つ。
+UNMEASURABLE = "計測できなかった"
+
+
+class Unmeasurable(Exception):
+    """「計測できなかった」で止めるべき事態。理由を1つ持つ。"""
+
+
+# 宣言はテストの先頭に置く決まりなので、先頭のこの行数までしか見ない。
+# **ファイル全体を走査しない。**走査すると、本文のヒアドキュメントで同じ字面を
+# 引用しているだけのテストが、自分の宣言を持たないまま門を通る。
+DECLARATION_HEAD_LINES = 30
+
+DECLARATION_RE = re.compile(r"^#\s*mutation-target:\s*(.+?)\s*$")
+# `none` には理由を要求する（受け入れ条件11）。
+NONE_WITH_REASON_RE = re.compile(r"^none\s*\(\s*\S.*\)$")
+
+
+def read_declaration(repo, test_rel):
+    """shell テストの `# mutation-target:` を読み、対象のリポジトリ相対パスを返す。
+
+    対象を持たないテスト（`none (<理由>)`）では None を返す。宣言が無い、
+    書式が違う、宣言先が実在しない場合は Unmeasurable を投げる。
+    **黙って読み飛ばさない。**読み飛ばすと、対象が抜けたまま検査済みに見える
+    ——#16 が塞ごうとしている型そのものになる。
+
+    理由を欠いた `none` も通さない。通すと、測らない判断が誰にも読めないまま
+    対象集合から落ちる。
+    """
+    try:
+        text = read_target(os.path.join(repo, test_rel))
+    except OSError as e:
+        raise Unmeasurable(f"{test_rel}: 読めない（{e}）")
+    body = None
+    for line in text.splitlines()[:DECLARATION_HEAD_LINES]:
+        m = DECLARATION_RE.match(line)
+        if m:
+            body = m.group(1)
+            break
+    if body is None:
+        raise Unmeasurable(f"{test_rel}: `# mutation-target:` の宣言が無い")
+    if re.match(r"^none(?![\w./-])", body):
+        if not NONE_WITH_REASON_RE.match(body):
+            raise Unmeasurable(f"{test_rel}: `none` に理由が書かれていない")
+        return None
+    if len(body.split()) != 1:
+        raise Unmeasurable(f"{test_rel}: 宣言先がパス1つではない（{body}）")
+    if os.path.isabs(body) or os.path.normpath(body).startswith(".."):
+        raise Unmeasurable(
+            f"{test_rel}: 宣言先はリポジトリのルートからの相対で書く（{body}）")
+    if not os.path.isfile(os.path.join(repo, body)):
+        raise Unmeasurable(f"{test_rel}: 宣言先が実在しない（{body}）")
+    return body
+
+
+def shell_tests(tracked):
+    """同定の規約に当たる追跡ファイルを返す。"""
+    return sorted(p for p in tracked
+                  if match_any(os.path.basename(p), MUTATE_SH_PATTERNS))
+
+
+def shell_pairs(repo, tracked):
+    """（対象、テストコマンドを導けるテストのパス）の対を返す。
+
+    対象が `.py` のテストは対にしない。あの宣言は shell レーンの対を作るためでは
+    なく、Python レーンの `test-command` に含めるテストを決めるために使う。
+
+    **宣言そのものは18本すべてへ要求する。**対象外の本の宣言を読まない形に
+    すると、外す理由が本文から消えても気づけない。
+    """
+    pairs = []
+    for test_rel in shell_tests(tracked):
+        target = read_declaration(repo, test_rel)
+        if target is None or test_rel in MUTATE_SHELL_EXCLUDED:
+            continue
+        if target.endswith(".py"):
+            continue
+        pairs.append((target, test_rel))
+    return pairs
 
 
 def make_sandbox_home():
@@ -1337,6 +1458,52 @@ def main(argv):
         print(json.dumps(syntax_ok(path, is_py)))
         return 0
 
+    if "--selftest-mutate-patterns" in argv:
+        # 同定の規約と対象外の一覧を、v1 の同名の定数と並べて返す口。
+        # **両方を返す。**`--mutate` 側だけを見せると、v1 の定数がこのプランで
+        # 書き換えられていないことを外から確かめられない。
+        print(json.dumps({
+            "mutate_sh": list(MUTATE_SH_PATTERNS),
+            "v1_sh": list(SH_PATTERNS),
+            "mutate_excluded": sorted(MUTATE_SHELL_EXCLUDED),
+            "v1_excluded": sorted(SHELL_EXCLUDED),
+        }, sort_keys=True))
+        return 0
+
+    if "--selftest-read-declaration" in argv:
+        # 宣言1本の読み取りだけを外から叩く口。読めた場合は宣言先を、
+        # 読めなかった場合は「計測できなかった」の理由を返す。
+        i = argv.index("--selftest-read-declaration")
+        repo = os.path.abspath(argv[i + 1])
+        try:
+            payload = {"target": read_declaration(repo, argv[i + 2]),
+                       "unmeasurable": None}
+        except Unmeasurable as e:
+            payload = {"target": None, "unmeasurable": f"{UNMEASURABLE}: {e}"}
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
+    if "--selftest-shell-pairs" in argv:
+        # 同定と対の両方を1つの口で返す。**追跡ファイルの一覧も返す。**
+        # 拾った集合だけを返すと、「過不足なく拾った」の検査が道具の自己申告に
+        # なる。呼び出し側が元の一覧へ自前の判定を当てて突き合わせられる形にする。
+        #
+        # ここでは git ls-files を隔離の外で走らせる。この口は純関数を叩くための
+        # ものなので、内側で走らせる必要が無い。読むだけで書かない。
+        i = argv.index("--selftest-shell-pairs")
+        repo = os.path.abspath(argv[i + 1])
+        out = subprocess.run(["git", "-C", repo, "ls-files"],
+                             capture_output=True, text=True)
+        tracked = [ln for ln in out.stdout.splitlines() if ln.strip()]
+        payload = {"tracked": tracked, "tests": shell_tests(tracked),
+                   "pairs": None, "unmeasurable": None}
+        try:
+            payload["pairs"] = [list(p) for p in shell_pairs(repo, tracked)]
+        except Unmeasurable as e:
+            payload["unmeasurable"] = f"{UNMEASURABLE}: {e}"
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        return 0
+
     if "--print-binds" in argv:
         for p in RO_BINDS:
             print(p)
@@ -1398,8 +1565,13 @@ def main(argv):
             # 「サンドボックスの中から cosmic-ray と universalmutator が起動できる」
             # を確かめる手段がこの道具の中に一つも無くなる。R1 / R2 / R3 へは
             # 広げないので、差分判定の走行は従来どおり venv を見ない。
+            #
+            # chezmoi のソース側も同じ理由でこの口にだけ見せる。shell テスト
+            # 18本のうち11本はソース側にしか無いので、足さないと「両リポジトリで
+            # 18本を過不足なく拾う」（受け入れ条件10）を確かめる手段が無くなる。
             rc, out = run_python(repo, sandbox, passthrough,
-                                 deployed_tool_bind() + mutate_binds(),
+                                 deployed_tool_bind() + mutate_binds()
+                                 + chezmoi_source_bind(),
                                  selftest=True)
             print(out)
             return rc          # 検査の口ではないので分類に落とさない

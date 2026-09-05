@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/guard-unsandboxed-pytest.sh
 # guard-unsandboxed-pytest.sh の単体テスト。
+#
+# 宣言先に `executable_` が付かないのは、対象が `bash` 経由で呼ばれるので
+# 実行ビットが要らず、ソース側の名前に接頭辞を持たないため。
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK=""

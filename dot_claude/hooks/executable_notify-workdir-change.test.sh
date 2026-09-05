@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/executable_notify-workdir-change.sh
 # notify-workdir-change.sh のユニットテスト。
 #
 # フック本体の名前は置き場所で変わる。chezmoi のソース側では

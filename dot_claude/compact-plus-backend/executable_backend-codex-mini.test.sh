@@ -1,4 +1,5 @@
 #!/bin/bash
+# mutation-target: dot_claude/compact-plus-backend/executable_backend-codex-mini.sh
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 S="$DIR/executable_backend-codex-mini.sh"

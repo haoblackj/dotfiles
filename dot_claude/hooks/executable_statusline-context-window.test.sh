@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/executable_statusline-context-window.sh
 # statusline-context-window.sh のユニットテスト。
 set -u
 

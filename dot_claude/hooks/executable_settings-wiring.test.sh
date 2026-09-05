@@ -1,4 +1,5 @@
 #!/bin/bash
+# mutation-target: none (対象が private_settings.json という設定ファイルでスクリプトではない)
 # compact-plus 両取り統合の settings.json 配線検証(source private_settings.json 対象)。
 set -uo pipefail
 S=~/.local/share/chezmoi/dot_claude/private_settings.json

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# mutation-target: dot_claude/hooks/executable_stop-fabricated-turn-guard.py
 # stop-fabricated-turn-guard.py のユニットテスト。
 # must-catch は 2026-08-30 に実ログ(17817ターン)から採取した捏造6件、
 # must-not-catch は同じ走査で誤爆した実例を使う。
