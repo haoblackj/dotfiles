@@ -197,6 +197,10 @@ def chezmoi_source_bind(path=CHEZMOI_SOURCE):
 
     RO_BINDS へ足さない（deployed_tool_bind / mutate_binds と同じ流儀）。あれは
     全走行に効くので、差分判定の内側にも dotfiles のソースが現れることになる。
+
+    **`--` の口の外へ広げてはいけない。**このパスは DEFAULT_WATCHED、つまり
+    本番資産の前後比較の対象そのものである。R1 / R2 / R3 へ渡すと、監視している
+    場所を走行中のテストへ見せる形になり、前後比較の意味が失われる。
     """
     return [(path, path)] if os.path.isdir(path) else []
 
@@ -513,23 +517,45 @@ def shell_tests(tracked):
 
 
 def shell_pairs(repo, tracked):
-    """（対象、テストコマンドを導けるテストのパス）の対を返す。
+    """宣言を1回走査し、3つの入れ物を持つ dict で返す。
 
-    対象が `.py` のテストは対にしない。あの宣言は shell レーンの対を作るためでは
-    なく、Python レーンの `test-command` に含めるテストを決めるために使う。
+    - `pairs` … shell レーンの対（対象、テストコマンドを導けるテストのパス）
+    - `python_pairs` … 対象が `.py` の対。shell レーンの対ではなく、Python レーンの
+      `test-command` に含めるテストを決めるために使う（受け入れ条件6）。同じ走査
+      から出す。別に走査を書くと、宣言の読み方が2つになってずれる
+    - `unmeasurable` … （テストのパス、理由）の対。宣言が無い・書式が違う・
+      宣言先が実在しないテスト
+
+    **1本の失敗でリポジトリ全体を止めない。**「計測できなかった」は分類も
+    `--update-baseline` の単位も対象なので、粒度をそちらへ揃える（spec の
+    識別子衝突の節）。止める形にすると、#18 が18本を `.bats` へ改名する作業で
+    1本だけ宣言を引き継ぎ忘れたときに、残りの対の安全網まで丸ごと消える。
+    宣言を欠いたテストは対を1つ寄与しないだけで、残りの対象は確定している。
+
+    **測れなかったテストの名前を返り値へ含める。**含めないと、後段が
+    「宣言が消えて対象が落ちた」と「もともとその対象が無い」を区別できず、
+    `--update-baseline` が既存の基準を静かに刈る経路ができる。
 
     **宣言そのものは18本すべてへ要求する。**対象外の本の宣言を読まない形に
     すると、外す理由が本文から消えても気づけない。
+
+    **プランが書いた戻り値の型（`list[tuple[str, str]]`）から広げてある。**
+    上の2つは対の一覧だけでは表せない。
     """
-    pairs = []
+    pairs, py_pairs, bad = [], [], []
     for test_rel in shell_tests(tracked):
-        target = read_declaration(repo, test_rel)
+        try:
+            target = read_declaration(repo, test_rel)
+        except Unmeasurable as e:
+            bad.append((test_rel, str(e)))
+            continue
         if target is None or test_rel in MUTATE_SHELL_EXCLUDED:
             continue
         if target.endswith(".py"):
+            py_pairs.append((target, test_rel))
             continue
         pairs.append((target, test_rel))
-    return pairs
+    return {"pairs": pairs, "python_pairs": py_pairs, "unmeasurable": bad}
 
 
 def make_sandbox_home():
@@ -1484,7 +1510,8 @@ def main(argv):
         return 0
 
     if "--selftest-shell-pairs" in argv:
-        # 同定と対の両方を1つの口で返す。**追跡ファイルの一覧も返す。**
+        # 同定・shell の対・Python レーンへ渡す対・測れなかったテストを
+        # 1つの口で返す。**追跡ファイルの一覧も返す。**
         # 拾った集合だけを返すと、「過不足なく拾った」の検査が道具の自己申告に
         # なる。呼び出し側が元の一覧へ自前の判定を当てて突き合わせられる形にする。
         #
@@ -1495,13 +1522,15 @@ def main(argv):
         out = subprocess.run(["git", "-C", repo, "ls-files"],
                              capture_output=True, text=True)
         tracked = [ln for ln in out.stdout.splitlines() if ln.strip()]
-        payload = {"tracked": tracked, "tests": shell_tests(tracked),
-                   "pairs": None, "unmeasurable": None}
-        try:
-            payload["pairs"] = [list(p) for p in shell_pairs(repo, tracked)]
-        except Unmeasurable as e:
-            payload["unmeasurable"] = f"{UNMEASURABLE}: {e}"
-        print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+        got = shell_pairs(repo, tracked)
+        print(json.dumps({
+            "tracked": tracked,
+            "tests": shell_tests(tracked),
+            "pairs": [list(p) for p in got["pairs"]],
+            "python_pairs": [list(p) for p in got["python_pairs"]],
+            "unmeasurable": [[t, f"{UNMEASURABLE}: {why}"]
+                             for t, why in got["unmeasurable"]],
+        }, sort_keys=True, ensure_ascii=False))
         return 0
 
     if "--print-binds" in argv:
