@@ -2290,6 +2290,14 @@ def check_run_result(results):
 
     足りない鍵を既定値で埋めない。`unmeasurable` が欠けた走行を空として通すと、
     測れなかった対象が1つも無かったことになり、終了コードが0へ落ちる。
+
+    **`unmeasurable` は中身の形まで見る。**鍵の有無だけを数えると、2つ組でない
+    行が `skipped_reason` の分解や `update_skipped` の内包表記まで届いて、
+    `BaselineBroken` の網を抜けた素の traceback になる。`survivors_for` と
+    `filtered_counts` は値の型まで読める理由で止めているので、そちらへ揃える。
+
+    **返り値を持たない。門としてだけ呼ぶ。**値を返すと、返り値を受けた側だけが
+    検査済みで素の `results` を読む側は通っていない、という読み方の余地が残る。
     """
     if not isinstance(results, dict):
         raise BaselineBroken(f"走行の結果がオブジェクトでない（{results!r}）")
@@ -2302,7 +2310,24 @@ def check_run_result(results):
         raise BaselineBroken(
             f"走行の結果に鍵が足りない（{'、'.join(missing)}）。"
             "既定値で埋めると、渡し忘れた項目が「何も無かった」と同じ字面になる")
-    return results
+    rows = results["unmeasurable"]
+    if not isinstance(rows, list):
+        raise BaselineBroken(
+            f"走行の `unmeasurable` は（対象、理由）の一覧で持つ（{rows!r}）")
+    for row in rows:
+        if not isinstance(row, (list, tuple)) or len(row) != 2:
+            raise BaselineBroken(
+                f"走行の `unmeasurable` の項目が（対象、理由）の2つ組でない"
+                f"（{row!r}）")
+        name, reason = row
+        if not isinstance(name, str) or not name.strip():
+            raise BaselineBroken(
+                f"走行の `unmeasurable` の対象が空でない文字列でない（{row!r}）")
+        # **理由の無い「計測できなかった」を通さない。**報告の行が対象の名前
+        # だけになり、直すべき事故なのか正常な状態なのかが読めなくなる。
+        if not isinstance(reason, str) or not reason.strip():
+            raise BaselineBroken(
+                f"走行の `unmeasurable` の理由が空（{name}）")
 
 
 def skipped_reason(results, target):
