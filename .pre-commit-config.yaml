@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: verify-tests
+        name: verify-tests --strict
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+        entry: >-
+          bash -c 'command -v verify-tests >/dev/null 2>&1 ||
+          { echo "verify-tests が PATH にありません（検査を飛ばしました）"; exit 0; };
+          verify-tests "$(git rev-parse --show-toplevel)" --strict'
