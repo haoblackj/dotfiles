@@ -28,10 +28,9 @@ RO_BINDS = [
 PY_PATTERNS = (r"^test_.*\.py$", r"^.*_test\.py$")
 SH_PATTERNS = (r"^.*\.test\.sh$", r"^test_.*\.sh$")
 
-# v1 の対象から外す本は Task 6 で足す。ここでは空にしておく。
-# 先に入れると Task 6 Step 2 の「赤の確認」が最初から緑になり、
-# テストが何も検証していないまま通る。
-SHELL_EXCLUDED = set()
+# v1 の対象から外す本。#20 が閉じるまで隔離下の本来の挙動を測れず、
+# normal / broken のどちらでも rc=1 のままになる。
+SHELL_EXCLUDED = {"dot_claude/compact-plus-backend/executable_e2e-integration.test.sh"}
 
 
 def normalize(url):
@@ -216,6 +215,19 @@ def run_python(repo, sandbox, extra_args=()):
     return rc, out + err
 
 
+def run_shell(repo, sandbox, sh_files, extra_ro=()):
+    """shell はファイル単位の終了コードだけを見る（Level 1）。
+
+    集計行のパースはしない。3形式に割れており、5本は集計行を持たない。
+    ケース単位の identity は #18 で bats へ移してから取る。
+    """
+    results = {}
+    for rel in sh_files:
+        rc, _, _ = run_cmd_in_sandbox(repo, sandbox, ["bash", os.path.join(repo, rel)])
+        results[rel] = rc
+    return results
+
+
 def main(argv):
     if "--selftest-normalize" in argv:
         i = argv.index("--selftest-normalize")
@@ -258,6 +270,13 @@ def main(argv):
         rc_run, run_out = run_python(repo, sandbox)
         print(f"== 収集: {len(collected)}ファイル")
         print(f"== Python: rc={rc_run}")
+
+        sh_results = run_shell(repo, sandbox, sh)
+        green = sum(1 for rc in sh_results.values() if rc == 0)
+        print(f"== shell: {green}/{len(sh_results)} 緑（ファイル単位・Level 1）")
+        if SHELL_EXCLUDED:
+            print(f"== shell 対象外: {', '.join(sorted(SHELL_EXCLUDED))}"
+                  "（#20 が閉じるまで隔離下の挙動を測れないため）")
         return 0
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
