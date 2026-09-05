@@ -3,6 +3,7 @@
 /LICENSE
 /install.sh
 /docs
+/pyproject.toml
 # Pythonテスト実行で生成されるバイトコードはapply対象外
 **/__pycache__
 **/__pycache__/**
