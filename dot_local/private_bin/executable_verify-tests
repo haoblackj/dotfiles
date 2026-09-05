@@ -206,6 +206,182 @@ def mutate_binds(venv_path=MUTATE_VENV):
     return [(venv_path, venv_path)] if os.path.isdir(venv_path) else []
 
 
+# shell 向けの変異規則。**道具に埋め込む。**別ファイルで配ると、道具本体と規則で
+# 配置経路が2つになる（#14/#15 が「道具は1本」と決めている）。
+#
+# 書式は universalmutator の `<正規表現> ==> <置換>`。`" ==> "` を含まず `#` で
+# 始まる行はコメントとして黙って読み飛ばされる（mutator.parseRules、ソースで確認）。
+# **コメントの中に ` ==> ` を書いてはいけない。**規則として解釈される。
+#
+# 同梱の universal.rules は使わない。C 系の演算子向けで、check-issues.sh を
+# 対象にした実測では350件のうち生き残り117件がシェバンの `#!/usr/bin/env` や
+# `rm -f` の破壊、C 風の `break;` の挿入で、スコア0.579はその雑音で決まっていた。
+#
+# **語境界を含めて書く。**概念実証の20行では `-n` の規則が `-ne` の内部に当たり、
+# `-ze` という壊れた変異体が生まれた（実測）。構文が通らない変異体は実行すれば
+# 必ず非0になり、analyze_mutants に kill と計上されて点数を持ち上げる。
+# `-` は語構成文字ではないので `\b` では境界にならない。前後を明示で否定する。
+SHELL_RULES = r"""
+# 行の途中から先のコメントは変異させない。shell のシェバンもここで落ちる。
+# ==> SKIP_MUTATING_REST
+
+# 数値比較の演算子の入れ替え
+(?<![\w-])-eq(?![\w-]) ==> -ne
+(?<![\w-])-ne(?![\w-]) ==> -eq
+(?<![\w-])-lt(?![\w-]) ==> -ge
+(?<![\w-])-ge(?![\w-]) ==> -lt
+(?<![\w-])-gt(?![\w-]) ==> -le
+(?<![\w-])-le(?![\w-]) ==> -gt
+
+# 文字列の空判定の反転
+(?<![\w-])-z(?![\w-]) ==> -n
+(?<![\w-])-n(?![\w-]) ==> -z
+
+# && と || の入れ替え
+&& ==> ||
+\|\| ==> &&
+
+# exit と return の終了コードの入れ替え
+(?<![\w-])exit\s+0(?![\w]) ==> exit 1
+(?<![\w-])exit\s+1(?![\w]) ==> exit 0
+(?<![\w-])return\s+0(?![\w]) ==> return 1
+(?<![\w-])return\s+1(?![\w]) ==> return 0
+
+# 条件の否定の除去
+(?<![\w-])(if\s+)!\s+ ==> \1
+(?<![\w-])(while\s+)!\s+ ==> \1
+(\[\[\s+)!\s+ ==> \1
+(\[\s+)!\s+ ==> \1
+
+# 数値リテラルの置き換え。リダイレクト（2>&1）と識別子の中の数字（python3）は
+# 除く。どちらも変異させても意味が無く、生き残りを雑音で埋める。
+(?<![\w.$/&<>-])\d+(?![\w.<>]) ==> 0
+(?<![\w.$/&<>-])\d+(?![\w.<>]) ==> 1
+"""
+
+# 同梱の Python 向け規則。venv の中の実体を引く。Python のマイナー版で
+# ディレクトリ名が変わるので glob で解決する。
+BUNDLED_PYTHON_RULES_GLOB = os.path.join(
+    MUTATE_VENV, "lib", "python*", "site-packages",
+    "universalmutator", "static", "python.rules")
+
+
+def bundled_python_rules(pattern=BUNDLED_PYTHON_RULES_GLOB):
+    hits = sorted(glob.glob(pattern))
+    if not hits:
+        raise FileNotFoundError(
+            f"同梱の python.rules が見つかりません: {pattern}")
+    return hits[0]
+
+
+RULES_FILENAME = "verify-tests.rules"
+
+
+def write_rules(tmpdir, include_python):
+    """規則ファイルを1つ書き出し、そのパスを返す。
+
+    **連結する。**`--only` は規則ファイルを1つしか受け取らない
+    （genmutants.py の `rules = [parsed.only]`、実測で確認）。`--only` を使わない
+    形はすべて universal.rules を巻き込むので、「当てる規則を増やすだけ」は
+    現状の CLI では成立しない。
+    """
+    text = SHELL_RULES
+    if include_python:
+        with open(bundled_python_rules()) as f:
+            text = text + "\n" + f.read()
+    path = os.path.join(tmpdir, RULES_FILENAME)
+    with open(path, "w") as f:
+        f.write(text)
+    return path
+
+
+# ヒアドキュメントで Python を起動している行。`python3 - "$@" <<'PY'` の形。
+#
+# **`python3` の字面を探す形にはしない。**guard-unsandboxed-pytest.sh は
+# `python3` を検出用の正規表現の中に持つだけで、ヒアドキュメントの中身は
+# JSON である（実測）。字面で選ぶと純 shell の対象へ Python 向け規則が当たる。
+# 同じ行の中で python の起動とヒアドキュメントの開始が繋がっていることを見る。
+PY_HEREDOC_RE = re.compile(
+    r"(?<![\w./-])python[0-9.]*(?![\w.])"
+    r"[^<>\n]*<<(?P<dash>-?)\s*(?P<q>['\"]?)(?P<tag>\w+)(?P=q)"
+)
+
+
+def python_heredocs(text):
+    """Python を起動しているヒアドキュメントの中身を取り出す。
+
+    `needs_python_rules` と `syntax_ok` がこの1つを共有する。判定を2つ持つと、
+    Python 向け規則を当てる対象と Python の構文検査を掛ける対象がずれ、
+    片方だけが効いている状態に気づけない。
+    """
+    out = []
+    rest = iter(text.splitlines())
+    for line in rest:
+        m = PY_HEREDOC_RE.search(line)
+        if not m:
+            continue
+        tag = m.group("tag")
+        dash = bool(m.group("dash"))   # `<<-` は終端の字下げ（タブ）を許す
+        body = []
+        # 同じ iterator を進める。終端の行はここで消費されるので、外側の
+        # for は中身を読み直さずヒアドキュメントの次の行から再開する。
+        for inner in rest:
+            probe = inner.lstrip("\t") if dash else inner
+            if probe == tag:
+                break
+            body.append(inner)
+        out.append("\n".join(body))
+    return out
+
+
+def read_target(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def needs_python_rules(path):
+    """その対象へ Python 向け規則も当てるかを、中身から機械的に決める。
+
+    **対象ごとの手書きの一覧を持たない。**持つと対象が増減したときに規則の
+    選び方が追随せず、shell 向け規則だけが当たって変異体が数件しか出ない状態が
+    「変異体が1件以上」の門を通る。scripts/check_claude_hooks.sh は331行のうち
+    316行が Python で、shell 向け規則の該当は `-eq` の1件だけだった（実測）。
+    """
+    try:
+        return bool(python_heredocs(read_target(path)))
+    except OSError:
+        return False
+
+
+def syntax_ok(path, is_python_heredoc):
+    """変異体が構文として成立しているか。生成後・実行前の前段。
+
+    通らない変異体を残すと、対象が動かないのでテストは必ず落ち、
+    analyze_mutants は kill と数える。テストに判別力があったからではないのに
+    点数が上がる。#16 が塞ごうとしている型そのもの。同梱規則の350件のうち
+    72件が `bash -n` を通らなかった（実測）。
+
+    **`bash -n` だけでは足りない。**クォート付きヒアドキュメント（`<<'PY'`）の
+    中身を bash は構文解析しないので、Python として壊れた変異体がそのまま
+    通過する（実測）。Python 向け規則を当てる対象では中身も ast.parse に掛ける。
+    """
+    proc = subprocess.run(["bash", "-n", path], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return False
+    if not is_python_heredoc:
+        return True
+    try:
+        text = read_target(path)
+    except OSError:
+        return False
+    for code in python_heredocs(text):
+        try:
+            ast.parse(code)
+        except (SyntaxError, ValueError):
+            return False
+    return True
+
+
 def make_sandbox_home():
     """使い捨ての HOME を作り、合成フィクスチャを1つ置く。
 
@@ -1099,6 +1275,38 @@ def main(argv):
             return 0
         finally:
             shutil.rmtree(sandbox, ignore_errors=True)
+
+    if "--selftest-write-rules" in argv:
+        # 規則ファイルの中身と、一時ディレクトリに何を書いたかを返す口。
+        # 中身を外から見せるのは、語境界と連結が守れているかを規則そのものへ
+        # 当てて確かめるため。実装の中だけで閉じると、規則を差し替えても素通りする。
+        i = argv.index("--selftest-write-rules")
+        include = argv[i + 1] == "1"
+        d = tempfile.mkdtemp(prefix="verify-tests-rules.")
+        try:
+            path = write_rules(d, include)
+            print(json.dumps({
+                "name": os.path.basename(path),
+                "files": sorted(os.listdir(d)),
+                "text": read_target(path),
+            }, sort_keys=True))
+            return 0
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    if "--selftest-needs-python-rules" in argv:
+        i = argv.index("--selftest-needs-python-rules")
+        print(json.dumps(needs_python_rules(argv[i + 1])))
+        return 0
+
+    if "--selftest-syntax-ok" in argv:
+        # `bash -n` だけの経路と ast.parse を足した経路を、同じ入力で
+        # 外から撃ち分けられるようにする。差がどちらの段によるものかを
+        # 呼び出し側が確かめられる形にしておく。
+        i = argv.index("--selftest-syntax-ok")
+        path, is_py = ast.literal_eval(argv[i + 1])
+        print(json.dumps(syntax_ok(path, is_py)))
+        return 0
 
     if "--print-binds" in argv:
         for p in RO_BINDS:
