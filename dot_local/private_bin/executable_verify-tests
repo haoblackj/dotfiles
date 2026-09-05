@@ -586,7 +586,10 @@ def mutant_id(path, line, content):
     if os.path.isabs(path):
         raise Unmeasurable(f"識別子の対象は相対パスで持つ（{path}）")
     norm = os.path.normpath(path)
-    if norm.startswith(".."):
+    # **前方一致で `..` を弾かない。**`..hidden.sh` のような正当な名前が
+    # 巻き添えになり、その対象が丸ごと「計測できなかった」へ落ちる。
+    # 親をさかのぼるのは `..` そのものと `../` で始まる形だけ。
+    if norm == ".." or norm.startswith(".." + os.sep):
         raise Unmeasurable(f"識別子の対象はリポジトリの内側で持つ（{path}）")
     body = content.rstrip("\r\n")
     if "\n" in body or "\r" in body:
@@ -641,8 +644,22 @@ def added_line_at(diff, line):
     return None
 
 
+# 変異を当てる段で例外が出たときの結果の形。cosmic-ray は
+# `WorkResult(test_outcome=INCOMPETENT, worker_outcome=EXCEPTION)` を返し、
+# **`diff` は既定の `None` のまま**になる（`cosmic_ray/mutating.py` の except 節と
+# `work_item.py` の WorkResult の既定値で確認）。8.7.0 の `core/ExceptionReplacer` が
+# ドット付きの例外名でこれを起こす。
+WORKER_OK = "normal"
+
+
 def ids_from_cosmic_ray(dump_json):
-    """`cosmic-ray dump` の出力から `(識別子, 生き残りか)` の対の列を作る。
+    """`cosmic-ray dump` の出力から識別子の行の列を作る。
+
+    1行は `(識別子, 生き残りか, test_outcome, worker_outcome)`。
+
+    **結果の種別を識別子と一緒に返す。**返さないと Task 7 の門が同じ dump を
+    もう一度自前で読むことになり、読み手が2つに育つ。育つと「門は通っているのに
+    識別子側の解釈が違う」という食い違いが起きえて、そのとき片方は必ず黙っている。
 
     `dump_json` は `cosmic-ray dump` の標準出力そのもの。1行が
     `[work item, 結果]` の2要素配列という JSON Lines である。
@@ -653,14 +670,24 @@ def ids_from_cosmic_ray(dump_json):
     **変異を自前で当て直さない。**変異後の行は `diff` の追加行から取れる。
     当て直すと、cosmic-ray が実際に実行した変異体と識別子が食い違いうる。
 
-    `test_outcome` が無い記録は対を作らない。`cr-filter-operators` で落とした
+    `test_outcome` が無い記録は行を作らない。`cr-filter-operators` で落とした
     変異体がこの形になる（`worker_outcome` が `skipped`、`diff` は `null`）。
     生き残り側へ数えると基準がぶれ、kill 側へ数えると測っていない変異体で
-    点数が上がる。**走行そのものが妥当だったか——`incompetent` が出ていないか、
-    変異体が1件以上あるか——は Task 7 の門が別に見る。**ここは識別子だけを作る。
+    点数が上がる。
 
-    結果があるのに識別子を作れない記録では止まる。黙って捨てると、その変異体が
-    生き残っていても基準に載らない。#16 が塞ごうとしている型そのもの。
+    **道具が測れなかった記録と、出力が壊れている記録を分ける。**
+    `worker_outcome` が `normal` でない記録（変異の適用で落ちた `exception` など）
+    は、識別子を作れなくても読み飛ばす。止める形にすると、Python レーンは
+    リポジトリ単位の1セッションなので**その1件でリポジトリの Python 対象すべてが
+    「計測できなかった」へ落ちる。**この形は道具の不具合で現に出る。
+    止めなくてよい根拠は `incompetent` を **Task 7 の門が必ず捕まえる**こと。
+    あの門は1件でもあれば走行を止めるので、ここで二重に止める必要が無い。
+    二重に止めると「道具が測れなかった」と「出力が壊れている」が同じ扱いになり、
+    原因も次の一手も違うものが混ざる。
+
+    `worker_outcome` が `normal` なのに識別子を作れない記録では止まる。
+    黙って捨てると、その変異体が生き残っていても基準に載らない。
+    #16 が塞ごうとしている型そのもの。
     """
     out = []
     for raw in dump_json.splitlines():
@@ -678,28 +705,37 @@ def ids_from_cosmic_ray(dump_json):
         outcome = (result or {}).get("test_outcome")
         if outcome is None:
             continue
+        worker = result.get("worker_outcome")
+        broken = worker != WORKER_OK
+
+        def stop(why):
+            """出力が壊れているときだけ止める。道具が落ちた分は読み飛ばす。"""
+            if broken:
+                return None
+            raise Unmeasurable(why)
+
         muts = work.get("mutations") or []
         if len(muts) != 1:
-            raise Unmeasurable(
-                f"1つの work item に変異が{len(muts)}件あり、行を1つに定められない")
+            stop(f"1つの work item に変異が{len(muts)}件あり、行を1つに定められない")
+            continue
         m = muts[0]
         module_path = m.get("module_path")
         start = m.get("start_pos") or []
         if not module_path or not start:
-            raise Unmeasurable(
-                "cosmic-ray dump の mutations に module_path か start_pos が無い")
+            stop("cosmic-ray dump の mutations に module_path か start_pos が無い")
+            continue
         line = start[0]
         diff = result.get("diff")
         if not diff:
-            raise Unmeasurable(
-                f"{module_path}:{line}: 結果はあるのに diff が無く、"
-                "変異後の行を取れない")
+            stop(f"{module_path}:{line}: 結果はあるのに diff が無く、"
+                 "変異後の行を取れない")
+            continue
         content = added_line_at(diff, line)
         if content is None:
-            raise Unmeasurable(
-                f"{module_path}:{line}: diff にその行の追加行が無い")
+            stop(f"{module_path}:{line}: diff にその行の追加行が無い")
+            continue
         out.append((mutant_id(module_path, line, content),
-                    outcome == "survived"))
+                    outcome == "survived", outcome, worker))
     return out
 
 
@@ -757,7 +793,11 @@ def group_by_target(pairs):
     識別子が基準の鍵として一意でないことは変わらない。
     """
     counts, survivors = {}, {}
-    for ident, survived in pairs:
+    for row in pairs:
+        # **行の先頭2つだけを読む。**Python レーンは結果の種別まで持った
+        # 長い行を渡す（`ids_from_cosmic_ray`）。shell レーンは対で渡す。
+        # 幅を固定すると、片方のレーンがここを通れなくなる。
+        ident, survived = row[0], row[1]
         path, line, content = ident
         key = (path, line, content)
         counts.setdefault(path, {})
@@ -769,8 +809,11 @@ def group_by_target(pairs):
     for path in sorted(counts):
         dups = sorted(k for k, n in counts[path].items() if n > 1)
         if dups:
+            # **全件を出す。**打ち切ると、残りの識別子の実体を人が見られない。
+            # 受け入れ条件28が求めているのは「衝突した識別子が報告に出る」こと
+            # であって、何件あったかではない。
             shown = "、".join(f"{line} 行目: {content}"
-                             for _, line, content in dups[:3])
+                             for _, line, content in dups)
             bad.append((path,
                         f"{path}: 同じ識別子が2件以上の変異体に当たった"
                         f"（{len(dups)}件: {shown}）"))
@@ -1777,7 +1820,7 @@ def main(argv):
             text = f.read()
         try:
             ids = ids_from_cosmic_ray(text)
-            payload = {"ids": [[list(k), s] for k, s in ids],
+            payload = {"ids": [[list(k), s, t, w] for k, s, t, w in ids],
                        "grouped": None, "unmeasurable": None}
             got = group_by_target(ids)
             payload["grouped"] = {
