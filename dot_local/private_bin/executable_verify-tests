@@ -5,6 +5,7 @@ set -uo pipefail
 exec python3 - "$@" <<'PYTHON'
 import ast
 import glob
+import json
 import os
 import re
 import shutil
@@ -652,6 +653,106 @@ def verdict(payload):
     return "PASS"
 
 
+RESULT_PATH = os.path.expanduser("~/.cache/verify-tests/last-result.json")
+
+
+def write_result(repo, verdict_value, counts):
+    """判定結果を専用のファイルへ書く。
+
+    Stop フックの入力には「直前に検証が成功した」を表す欄が無く、
+    PostToolUse(Bash) の結果には数値の終了コードが記録されていない（実測）。
+    使える経路は結果ファイル1つになる。
+    突合しないと古い PASS で門を通せるので、作業ツリーの指紋を添える。
+    """
+    head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    tree = current_tree(repo)   # index ではなく作業ツリーの指紋
+    os.makedirs(os.path.dirname(RESULT_PATH), exist_ok=True)
+    with open(RESULT_PATH, "w") as f:
+        json.dump({
+            "repo": repo, "head": head, "tree": tree,
+            "verifier_version": VERSION, "verdict": verdict_value,
+            "counts": counts,
+        }, f)
+
+
+def summarize(verdict_value, counts, details):
+    """PASS のときは1行。FAIL と REVIEW のときだけ差分を返す。
+
+    保証レベルも1行に含める。shell がファイル単位であることを
+    読み手が知らないまま「緑だから安全」と受け取らないようにする。
+    """
+    if verdict_value == "PASS":
+        names = ", ".join(os.path.basename(x) for x in counts["excluded"])
+        ex = f" / 対象外 {names}" if counts["excluded"] else ""
+        return (f"PASS  python={counts['py_cases']} "
+                f"shell={counts['sh_green']}/{counts['sh_total']} green "
+                f"+ {counts['known_red']} known-red unchanged "
+                f"(shell はファイル単位 / Level 1{ex})")
+    lines = [verdict_value]
+    lines += [f"  {d}" for d in details]
+    return "\n".join(lines)
+
+
+ACCEPT_PATH = os.path.expanduser("~/.cache/verify-tests/accepted.json")
+
+
+def current_tree(repo):
+    """作業ツリーの指紋。
+
+    `git write-tree` は index を見るので、未 stage の編集では値が変わらない
+    （実測）。一方 promotion_gate と touched_known_red は `git diff <base>` を
+    使うので作業ツリーを見る。承認だけ index に紐づけると、一度承認したあとに
+    未 stage の編集をいくらでも重ねられ、毎回 REVIEW が PASS へ昇格する。
+    判定と同じ側（作業ツリー）へ揃える。
+    """
+    import hashlib
+    h = hashlib.sha256()
+    for cmd in (["rev-parse", "HEAD"], ["diff", "HEAD"]):
+        h.update(subprocess.run(["git", "-C", repo] + cmd,
+                                capture_output=True, text=True).stdout.encode())
+        h.update(b"\x00")
+    # 追跡外ファイルは名前だけでなく中身まで入れる。git status --porcelain は
+    # 名前しか出さず、git diff HEAD は追跡外を含まないので、名前だけだと
+    # 追跡外テストの中身を書き換えても指紋が変わらない（実測で確認）。
+    # pytest は追跡外のテストも収集するので、中身は検証結果を左右する入力。
+    others = subprocess.run(
+        ["git", "-C", repo, "ls-files", "--others", "--exclude-standard", "-z"],
+        capture_output=True, text=True).stdout.split("\0")
+    for rel in sorted(x for x in others if x):
+        h.update(rel.encode() + b"\x00")
+        try:
+            with open(os.path.join(repo, rel), "rb") as f:
+                h.update(f.read())
+        except OSError:
+            h.update(b"<unreadable>")
+        h.update(b"\x00")
+    return h.hexdigest()
+
+
+def accept_review(repo, reason):
+    """今のツリー1つに紐づく承認を書く。
+
+    台帳にならない。承認は特定のツリーにしか効かず、将来の変更へ持ち越せない。
+    ファイルを1バイトでも編集すればツリーが変わって外れる。
+    """
+    os.makedirs(os.path.dirname(ACCEPT_PATH), exist_ok=True)
+    with open(ACCEPT_PATH, "w") as f:
+        json.dump({"repo": repo, "tree": current_tree(repo),
+                   "verifier_version": VERSION, "reason": reason}, f)
+
+
+def accepted_for_current_tree(repo):
+    try:
+        with open(ACCEPT_PATH) as f:
+            rec = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return (rec.get("repo") == repo
+            and rec.get("tree") == current_tree(repo)
+            and rec.get("verifier_version") == VERSION)
+
+
 def main(argv):
     if "--selftest-verdict" in argv:
         i = argv.index("--selftest-verdict")
@@ -680,7 +781,8 @@ def main(argv):
     head = argv[: argv.index("--")] if "--" in argv else argv
     positional = [a for a in head if not a.startswith("-")]
     if not positional:
-        print("使い方: verify-tests <リポジトリ> [--strict] [--discover-only] [-- <pytest への引数>]")
+        print("使い方: verify-tests <リポジトリ> [--strict] [--discover-only]"
+              " [--accept-review <理由>] [-- <pytest への引数>]")
         return 1
     repo = os.path.abspath(positional[0])
 
@@ -688,7 +790,16 @@ def main(argv):
         print(f"対象外: {repo}（読み取り専用 bind の一覧を持たないので検査しない）")
         return 0
 
-    print(f"== 対象: {repo}")
+    if "--accept-review" in argv:
+        # 理由は記録に残すだけで、判定には使わない。承認したことと、
+        # 何を承認したかが後から読めればよい。
+        i = argv.index("--accept-review")
+        if i + 1 >= len(argv):
+            print("実行できなかった: --accept-review には理由が要ります")
+            return 1
+        accept_review(repo, argv[i + 1])
+        return 0
+
     if not bwrap_available():
         print("実行できなかった: bwrap が PATH にありません。"
               "`sudo apt install bubblewrap` で導入してください")
@@ -700,6 +811,15 @@ def main(argv):
     if passthrough is not None and (strict or discover_only):
         print("実行できなかった: -- は --strict / --discover-only と併用できません")
         return 1
+
+    if passthrough is not None:
+        sandbox = make_sandbox_home()
+        try:
+            rc, out = run_python(repo, sandbox, passthrough)
+            print(out)
+            return rc          # 検査の口ではないので分類に落とさない
+        finally:
+            shutil.rmtree(sandbox, ignore_errors=True)
 
     before = snapshot_watched()
 
@@ -724,30 +844,47 @@ def main(argv):
         after = snapshot_watched()
         counted, noted = diff_watched(before, after)
         cand_regressions = regressions(r1.get("results", {}), r3.get("results", {}))
-        for p in noted:
-            print(f"== 変化（判定に算入しない）: {p}")
         # R1 と R2 は full=False。構造の検査と収集の差分を当てない。
         # 当てると導入の初回に merge-base が必ず落ち、仕組みが自分で自分を塞ぐ。
         reasons = (harness_failure_reasons(r3)
                    + harness_failure_reasons(r1, full=False)
                    + harness_failure_reasons(r2, full=False))
+        changed_artifacts = promotion_gate(repo, sha, r1.get("tracked", []))
+        touched_red_files = touched_known_red(
+            repo, sha, r1.get("results", {}), r3.get("results", {}))
         payload = {
             "harness_failed": bool(reasons),
             "wrote_production": bool(counted),
             "base_regressions": base_regressions,
             "cand_regressions": cand_regressions,
-            "contract_changed": bool(promotion_gate(repo, sha, r1.get("tracked", []))),
-            "touched_red": bool(touched_known_red(
-                repo, sha, r1.get("results", {}), r3.get("results", {}))),
+            "contract_changed": bool(changed_artifacts),
+            "touched_red": bool(touched_red_files),
         }
         v = verdict(payload)
-        print(v)
-        for x in (reasons
-                  + [f"本番へ書いた: {p}" for p in counted]
-                  + [f"新規 regression: {k}" for k in cand_regressions]
-                  + [f"旧契約を破った: {k}" for k in base_regressions]):
-            print(f"  {x}")
-        return 0
+        counts = {
+            "py_cases": sum(1 for k in r3.get("results", {}) if "::" in k),
+            "sh_green": r3.get("sh_green", 0),
+            "sh_total": r3.get("sh_total", 0),
+            "known_red": sum(1 for x in r1.get("results", {}).values() if is_red(x)),
+            "excluded": sorted(SHELL_EXCLUDED),
+        }
+        # REVIEW の理由も details へ入れる。入れないと、実行の門が両レーンとも
+        # 綺麗なまま昇格の門だけが立った場合に、出力が `REVIEW` の一語だけになり
+        # 「なぜ REVIEW なのか」が読めない。失敗時は次の一手に要る差分だけを返す、
+        # という出力契約の趣旨から外れる。
+        details = (reasons
+                   + [f"本番へ書いた: {p}" for p in counted]
+                   + [f"新規 regression: {k}" for k in cand_regressions]
+                   + [f"旧契約を破った: {k}" for k in base_regressions]
+                   + [f"契約を変更した: {k}" for k in changed_artifacts]
+                   + [f"既知の赤を触った: {k}" for k in touched_red_files])
+        if v == "REVIEW" and accepted_for_current_tree(repo):
+            v = "PASS"
+        print(summarize(v, counts, details))
+        for p in noted:
+            print(f"  変化（判定に算入しない）: {p}")
+        write_result(repo, v, counts)
+        return 1 if (strict and v != "PASS") else 0
     finally:
         drop_base_worktree(repo, base_tree)
 
