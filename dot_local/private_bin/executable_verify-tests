@@ -13,7 +13,11 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = "1"
+# 受理記録に焼き込む版。判定の中身が変わったら上げる。上げると過去の受理が
+# 外れる。受理は「この版が REVIEW と言ったものを人が承認した」記録なので、
+# 判定の前提が変われば承認も引き継げない。
+# 2: 進捗行のパーサと受理記録の入れ物を直した（issue #28 / #29）。
+VERSION = "2"
 
 # 対象リポジトリ。正規化した origin の URL で引く。
 SCOPE = {"haoblackj/penguinEx", "haoblackj/dotfiles"}
@@ -431,8 +435,25 @@ def drop_base_worktree(repo, path):
 # 行頭が nodeid（`::` を含む）であることと、行末が進捗の百分率であることの
 # 両方を条件にする。前者だけだと、失敗時に出る捕捉済み標準出力の行が
 # たまたま同じ形をしていると拾ってしまう。
-PROGRESS_RE = re.compile(
-    r"^(?P<nodeid>\S+::\S+)\s+"
+#
+# 錨は結果語の側に打つ。nodeid を `\S+` で取ると `test_p[hello world]` のような
+# parametrize 済みの nodeid で行ごとマッチせず、その case が base 側にも
+# candidate 側にも現れないまま消える。regressions にも disappeared にも
+# 載らないので、赤くなっても検出されない（issue #28）。
+#
+# 二段に分けるのは、nodeid と理由の両方が自由テキストで、どちらにも結果語が
+# 入りうるため。厳密版は理由を丸括弧の1組に限って、結果語の位置を
+# 後続の形から逆算させる。緩い版は理由の形を仮定しない代わりに nodeid を
+# 貪欲に取る。厳密版で解けない出力形が来たときに行ごと落とさないための
+# 受け皿で、落とすと上と同じ「静かに消える」型に戻る。
+PROGRESS_STRICT_RE = re.compile(
+    r"^(?P<nodeid>\S.*?::.*?)\s+"
+    r"(?P<outcome>PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)"
+    r"(?:\s+\([^)]*\))?"
+    r"\s+\[\s*\d+%\]$"
+)
+PROGRESS_LOOSE_RE = re.compile(
+    r"^(?P<nodeid>\S.*::.*)\s+"
     r"(?P<outcome>PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b"
     r".*\[\s*\d+%\]$"
 )
@@ -457,7 +478,8 @@ def parse_pytest_outcomes(out):
     """
     res = {}
     for ln in out.splitlines():
-        m = PROGRESS_RE.match(ln.strip())
+        s = ln.strip()
+        m = PROGRESS_STRICT_RE.match(s) or PROGRESS_LOOSE_RE.match(s)
         if m:
             res[m.group("nodeid")] = m.group("outcome")
     return res
@@ -830,26 +852,55 @@ def current_tree(repo):
     return h.hexdigest()
 
 
+def load_accepted(path):
+    """受理記録を `{リポジトリ: レコード}` で返す。読めなければ空。
+
+    旧形式（レコード1件を直に持つオブジェクト）もここで新形式へ寄せる。
+    寄せずに捨てると、道具を更新した時点で有効だった受理が黙って外れる。
+    """
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    if "repo" in data and "tree" in data:
+        return {data["repo"]: data}
+    return {k: v for k, v in data.items() if isinstance(v, dict)}
+
+
+def store_accepted(path, repo, record):
+    """1リポジトリ分の受理を、他のリポジトリの受理を消さずに書く。
+
+    以前は単一のオブジェクトを丸ごと上書きしていたため、2つ目を受理した時点で
+    1つ目が黙って `REVIEW` へ戻っていた。押した順序で結果が変わり、
+    利用者からは「受理したはずなのに通らない」としか見えない（issue #29）。
+    この道具は2つのリポジトリを対象にする設計なので、器も対象の数だけ要る。
+    """
+    recs = load_accepted(path)
+    recs[repo] = record
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(recs, f)
+
+
 def accept_review(repo, reason):
     """今のツリー1つに紐づく承認を書く。
 
     台帳にならない。承認は特定のツリーにしか効かず、将来の変更へ持ち越せない。
     ファイルを1バイトでも編集すればツリーが変わって外れる。
     """
-    os.makedirs(os.path.dirname(ACCEPT_PATH), exist_ok=True)
-    with open(ACCEPT_PATH, "w") as f:
-        json.dump({"repo": repo, "tree": current_tree(repo),
-                   "verifier_version": VERSION, "reason": reason}, f)
+    store_accepted(ACCEPT_PATH, repo,
+                   {"repo": repo, "tree": current_tree(repo),
+                    "verifier_version": VERSION, "reason": reason})
 
 
 def accepted_for_current_tree(repo):
-    try:
-        with open(ACCEPT_PATH) as f:
-            rec = json.load(f)
-    except (OSError, ValueError):
+    rec = load_accepted(ACCEPT_PATH).get(repo)
+    if not rec:
         return False
-    return (rec.get("repo") == repo
-            and rec.get("tree") == current_tree(repo)
+    return (rec.get("tree") == current_tree(repo)
             and rec.get("verifier_version") == VERSION)
 
 
@@ -882,6 +933,17 @@ def main(argv):
     if "--selftest-normalize" in argv:
         i = argv.index("--selftest-normalize")
         print(normalize(argv[i + 1]))
+        return 0
+
+    if "--selftest-accept-store" in argv:
+        # 受理記録の入れ物だけを、渡されたパスの上で確かめる口。
+        # 本番の ACCEPT_PATH には触れない。受理が互いを消さないことは
+        # 実装の中だけで閉じずに外から検査できるようにする（issue #29）。
+        i = argv.index("--selftest-accept-store")
+        path, ops = ast.literal_eval(argv[i + 1])
+        for repo, rec in ops:
+            store_accepted(path, repo, rec)
+        print(json.dumps(load_accepted(path), sort_keys=True))
         return 0
 
     if "--print-binds" in argv:
