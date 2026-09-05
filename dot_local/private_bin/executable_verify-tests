@@ -550,7 +550,114 @@ def trusted_overlay(base_tree, cand_tree, base_tracked):
     return pairs
 
 
+def execution_gate(base_regressions, cand_regressions):
+    """base のテストと candidate のテストを両方 candidate へ当てた結果を見る。"""
+    base_ok = not base_regressions
+    cand_ok = not cand_regressions
+    if base_ok and cand_ok:
+        return "PASS"
+    if not base_ok and cand_ok:
+        return "REVIEW"   # 契約変更の可能性。機械では意図を決められない
+    return "FAIL"
+
+
+def promotion_gate(repo, base_sha, base_tracked):
+    """candidate の契約を次の base にしてよいかを別に見る。
+
+    実行の門だけでは「実装は壊さず、次回から弱くする」を捕まえられない。
+    今回の candidate が壊れていなくても、弱くなったテストが次の trust root になる。
+
+    判定は byte-for-byte の同一性だけを使う。diff の見た目から
+    「削除または弱める方向」を推測しない。
+    """
+    changed = []
+    for rel in trusted_artifacts(base_tracked):
+        out = subprocess.run(
+            ["git", "-C", repo, "diff", "--quiet", base_sha, "--", rel],
+            capture_output=True, text=True,
+        )
+        if out.returncode != 0:
+            changed.append(rel)
+    return changed
+
+
+def touched_known_red(repo, base_sha, base_res, cand_res):
+    """既知の赤とその対象を今回の patch が触ったか。
+
+    無関係な作業を既知の赤で止めないための ratchet が、
+    赤い領域を触った変更まで盲目的に通すのを防ぐ。
+
+    対象実装の対応は命名規約で決める。推論はしない。当たらないものは
+    テストファイル自身を触った場合だけ格上げの対象になる。
+    """
+    red_files = {k.split("::", 1)[0] for k, v in base_res.items() if is_red(v)}
+    still_red_files = {k.split("::", 1)[0] for k, v in cand_res.items() if is_red(v)}
+    out = subprocess.run(
+        ["git", "-C", repo, "diff", "--name-only", base_sha],
+        capture_output=True, text=True,
+    )
+    touched = {ln for ln in out.stdout.splitlines() if ln.strip()}
+
+    escalate = []
+    for test in sorted(red_files & still_red_files):
+        # テスト自身を触ったか、命名規約で対応づく実装を触ったか。
+        # 実装ファイルは cand_res に現れないので、交差ではなく
+        # テストごとに「触られた集合」を作って判定する。
+        related = {test} | implementation_of(test)
+        if related & touched:
+            escalate.append(test)
+    return escalate
+
+
+def implementation_of(test_path):
+    """テストに対応する実装を命名規約だけで決める。
+
+    規約に当たらないものは空を返す。推論しに行くと、外れたときに
+    黙って通す側へ倒れる。
+    """
+    d = os.path.dirname(test_path)
+    base = os.path.basename(test_path)
+    cands = []
+    if base.endswith(".test.sh"):
+        stem = base[: -len(".test.sh")]
+        if stem.startswith("executable_"):
+            cands.append(stem + ".sh")
+        else:
+            cands += [stem + ".sh", "executable_" + stem + ".sh"]
+    elif base.startswith("test_") and base.endswith(".py"):
+        cands.append(base[len("test_"):])
+    elif base.startswith("test_") and base.endswith(".sh"):
+        cands.append(base[len("test_"):])
+    return {os.path.join(d, c) if d else c for c in cands}
+
+
+def verdict(payload):
+    """三値を決める唯一の場所。
+
+    execution_gate は「base レーンと candidate レーンの差分」だけを見る。
+    機構の失敗と本番への書き込みは、そこより先に立って FAIL を返す。
+    優先順位は 機構の失敗 → 本番へ書いた → 実行の門 → 昇格の門 → 既知の赤。
+    """
+    if payload.get("harness_failed"):
+        return "FAIL"
+    if payload.get("wrote_production"):
+        return "FAIL"
+    gate = execution_gate(payload["base_regressions"], payload["cand_regressions"])
+    if gate == "FAIL":
+        return "FAIL"
+    if gate == "REVIEW":
+        return "REVIEW"
+    if payload.get("contract_changed") or payload.get("touched_red"):
+        return "REVIEW"
+    return "PASS"
+
+
 def main(argv):
+    if "--selftest-verdict" in argv:
+        i = argv.index("--selftest-verdict")
+        print(verdict(ast.literal_eval(argv[i + 1])))
+        return 0
+
     if "--selftest-regressions" in argv:
         i = argv.index("--selftest-regressions")
         base, cand = ast.literal_eval(argv[i + 1])
@@ -614,17 +721,32 @@ def main(argv):
         overlay = trusted_overlay(base_tree, repo, r1.get("tracked", []))
         r2 = evaluate(repo, extra_ro=overlay)           # candidate × base のテスト
         base_regressions = regressions(r1.get("results", {}), r2.get("results", {}))
-        for k in base_regressions:
-            print(f"== 旧契約を破った: {k}")
         after = snapshot_watched()
         counted, noted = diff_watched(before, after)
         cand_regressions = regressions(r1.get("results", {}), r3.get("results", {}))
-        for k in cand_regressions:
-            print(f"== 新規 regression: {k}")
-        for p in counted:
-            print(f"== 本番へ書いた: {p}")
         for p in noted:
             print(f"== 変化（判定に算入しない）: {p}")
+        # R1 と R2 は full=False。構造の検査と収集の差分を当てない。
+        # 当てると導入の初回に merge-base が必ず落ち、仕組みが自分で自分を塞ぐ。
+        reasons = (harness_failure_reasons(r3)
+                   + harness_failure_reasons(r1, full=False)
+                   + harness_failure_reasons(r2, full=False))
+        payload = {
+            "harness_failed": bool(reasons),
+            "wrote_production": bool(counted),
+            "base_regressions": base_regressions,
+            "cand_regressions": cand_regressions,
+            "contract_changed": bool(promotion_gate(repo, sha, r1.get("tracked", []))),
+            "touched_red": bool(touched_known_red(
+                repo, sha, r1.get("results", {}), r3.get("results", {}))),
+        }
+        v = verdict(payload)
+        print(v)
+        for x in (reasons
+                  + [f"本番へ書いた: {p}" for p in counted]
+                  + [f"新規 regression: {k}" for k in cand_regressions]
+                  + [f"旧契約を破った: {k}" for k in base_regressions]):
+            print(f"  {x}")
         return 0
     finally:
         drop_base_worktree(repo, base_tree)
