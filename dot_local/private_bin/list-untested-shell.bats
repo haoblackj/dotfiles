@@ -6,7 +6,28 @@
 
 setup() {
     LIST="$BATS_TEST_DIRNAME/list-untested-shell.sh"
-    PENGUINEX_REPO="/home/yagu001/repo/github.com/haoblackj/penguinEx/.claude/worktrees/issue-16-mutation"
+    # issue #16 用のワークツリーは作業が終われば消える一時的な存在。
+    # 消えた瞬間にこの絶対パスを固定していると exit 2 になり全件が
+    # 恒久的に赤くなるので、存在すればワークツリー、無ければ main の
+    # チェックアウトへ自動で落とす。ただし main へ単純に向け替えるだけ
+    # では直らない: このブランチがまだ main へマージされていない間は
+    # main 側の一覧が19本ではなく25本になる（超過6本は
+    # check-repo.sh・check-gpu-tdr.sh・check-issues.sh・
+    # memory-triage-scan.sh・check_claude_hooks.sh・check_claude_md.sh
+    # の mutation-target 宣言コミットがまだ main に無いため、実測済み）。
+    # 両方の状態で赤くならないよう、存在チェックで切り替える。
+    # マージ後にワークツリーが消えれば main は19本になっているはず。
+    # PENGUINEX_REPO_OVERRIDE で明示的に上書きもできる（切り替えの
+    # 手動確認・デバッグ用）。
+    local worktree="/home/yagu001/repo/github.com/haoblackj/penguinEx/.claude/worktrees/issue-16-mutation"
+    local main_checkout="$HOME/repo/github.com/haoblackj/penguinEx"
+    if [ -n "${PENGUINEX_REPO_OVERRIDE:-}" ]; then
+        PENGUINEX_REPO="$PENGUINEX_REPO_OVERRIDE"
+    elif [ -d "$worktree" ]; then
+        PENGUINEX_REPO="$worktree"
+    else
+        PENGUINEX_REPO="$main_checkout"
+    fi
     CHEZMOI_REPO="$HOME/.local/share/chezmoi"
 }
 
