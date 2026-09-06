@@ -173,13 +173,18 @@ DEPLOYED_TOOL = os.path.expanduser("~/.local/bin/verify-tests")
 
 
 def deployed_tool_bind():
-    """`--` の口へ渡す追加の読み取り専用 bind。
+    """`--` の口へ渡す追加の読み取り専用 bind。**配られる一式をまとめて見せる。**
 
     RO_BINDS へ足さない。あれは全走行に効くので、差分判定の走行の内側にも
     道具が現れることになる。加えて `--print-binds` が返す一覧の意味が
     「テストが本番を読むために要る場所」から外れる。
+
+    要求ファイル（`MUTATE_REQUIREMENTS`）も一緒に見せる。HOME を使い捨てへ
+    差し替える以上、足さなければ「配られている」（受け入れ条件8）を確かめる
+    手段がこの道具の中に一つも無くなる。道具の本体と同じ扱いにする。
     """
-    return [(DEPLOYED_TOOL, DEPLOYED_TOOL)] if os.path.isfile(DEPLOYED_TOOL) else []
+    return [(p, p) for p in (DEPLOYED_TOOL, MUTATE_REQUIREMENTS)
+            if os.path.isfile(p)]
 
 
 # chezmoi のソース側。対象リポジトリの1つ（haoblackj/dotfiles）の実体でもある。
@@ -915,12 +920,25 @@ SKIPPED_FILTERED = "filtered"    # フィルタが落とした（`worker_outcome
 SKIPPED_BROKEN = "broken"        # 道具がその変異体を測れなかった
 
 
+# タイムアウトで kill と数えられた記録の目印。**cosmic-ray はタイムアウトを
+# kill に数える**（`cosmic_ray/testing.py` の `run_tests` が
+# `subprocess.TimeoutExpired` を捕まえて `(TestOutcome.KILLED, "timeout")` を
+# 返す。venv の実物で確認）。出力がこの1語ちょうどの kill だけを数える。
+# 数えないと、**遅いだけのテストが高い撃墜率を出す経路が塞がらない。**
+PY_TIMEOUT_OUTPUT = "timeout"
+
+
 def ids_from_cosmic_ray(dump_json):
-    """`cosmic-ray dump` の出力を読み、`(rows, skipped)` を返す。
+    """`cosmic-ray dump` の出力を読み、`(rows, skipped, timeouts)` を返す。
 
     `rows` の1行は `(識別子, 生き残りか, test_outcome, worker_outcome)`。
     `skipped` の1件は `(種別, test_outcome, worker_outcome)` で、行にならなかった
-    記録が**1件残らず**ここに載る。
+    記録が**1件残らず**ここに載る。`timeouts` は対象ごとの、タイムアウトで
+    kill と数えられた件数。
+
+    **タイムアウトの数え役をここに置く。**dump を読む場所を2つに割ると、門は
+    通っているのに片方の解釈が違う、という食い違いが起きえて、そのとき片方は
+    必ず黙っている。`skipped` を足したときと同じ理由（下の注記）。
 
     **結果の種別を識別子と一緒に返す。**返さないと Task 7 の門が同じ dump を
     もう一度自前で読むことになり、読み手が2つに育つ。育つと「門は通っているのに
@@ -962,7 +980,7 @@ def ids_from_cosmic_ray(dump_json):
     黙って捨てると、その変異体が生き残っていても基準に載らない。
     #16 が塞ごうとしている型そのもの。
     """
-    out, skipped = [], []
+    out, skipped, timeouts = [], [], {}
     for raw in dump_json.splitlines():
         raw = raw.strip()
         if not raw:
@@ -1017,9 +1035,18 @@ def ids_from_cosmic_ray(dump_json):
         if content is None:
             stop(f"{module_path}:{line}: diff にその行の追加行が無い")
             continue
-        out.append((mutant_id(module_path, line, content),
-                    outcome == "survived", outcome, worker))
-    return out, skipped
+        ident = mutant_id(module_path, line, content)
+        # **行を作った対象すべてに件数を置く。**タイムアウトが1件も無かった
+        # 対象を鍵ごと落とすと、読む側が `.get(t, 0)` で埋めることになり、
+        # 「記録が無い」と「0件だった」が同じ字面になる。
+        timeouts.setdefault(ident[0], 0)
+        # **正の形で数える。**「kill であって出力がこの1語」だけを数える。
+        # 「出力に timeout を含む」で数えると、テストが自分の出力へその語を
+        # 書いただけの kill が混ざる。
+        if outcome == "killed" and result.get("output") == PY_TIMEOUT_OUTPUT:
+            timeouts[ident[0]] += 1
+        out.append((ident, outcome == "survived", outcome, worker))
+    return out, skipped, timeouts
 
 
 # 判別力を測れた `test_outcome`。**この2つ以外はすべて「測れなかった」側。**
@@ -1087,7 +1114,7 @@ def python_lane_gate(dump_json, init_count, unmutated_rc):
         return ("変異を当てない状態で test-command が落ちる"
                 f"（終了コード {unmutated_rc}）。"
                 "赤いテストは変異体を残らず kill するので満点になる")
-    rows, skipped = ids_from_cosmic_ray(dump_json)
+    rows, skipped, _timeouts = ids_from_cosmic_ray(dump_json)
     # 行のうち、測れたと言えないもの。**`worker_outcome` も見る。**片方だけを
     # 見ると、道具が異常を申告した記録が判別力の数へ入る。
     stalled = [(k, outcome, worker) for k, _survived, outcome, worker in rows
@@ -1454,11 +1481,11 @@ def shell_test_command(test_rel):
         raise Unmeasurable(
             f"{test_rel}: 起動の仕方が決まっていない拡張子"
             f"（{ext or '拡張子が無い'}）")
-    cmd = f"{runner} {shlex.quote(test_rel)}"
-    if ANALYZE_MUTANT_TOKEN in cmd:
-        raise Unmeasurable(
-            f"{test_rel}: テストの命令に {ANALYZE_MUTANT_TOKEN} の字面を含められない")
-    return cmd
+    # **`ANALYZE_MUTANT_TOKEN` の検査はここに置かない。**analyze_mutants へ実際に
+    # 渡すのは、この文字列を作業コピーへの `cd` と連ねた別の文字列である。
+    # ここだけを見る形にすると、連ねた側に字面が入ったときに素通りする。
+    # 検査は `analyze_shell_mutants` が最終の文字列へ当てる。
+    return f"{runner} {shlex.quote(test_rel)}"
 
 
 def mutant_dir_name(target):
@@ -1547,8 +1574,22 @@ def generate_shell_mutants(repo, sandbox, copy, target, include_python):
     return host, mutant_names(target, os.listdir(host))
 
 
+# analyze_mutants がタイムアウトで変異体を落としたときに標準出力へ書く1行
+# （`universalmutator/analyze.py`、ソースで確認）。**そのあと SIGTERM のあとの
+# 終了コードを見るので、タイムアウトは kill に数えられる。**遅いだけのテストが
+# 高い撃墜率を出す経路がここに開くので、件数を数えて報告へ出す。
+SHELL_TIMEOUT_LINE = "HAD TO TERMINATE ANALYSIS"
+
+
 def analyze_shell_mutants(repo, sandbox, copy, target, cmd, host, kept):
-    """`kept` に挙げた変異体だけを analyze_mutants へ掛け、`(kill, 生き残り)` を返す。
+    """`kept` に挙げた変異体だけを analyze_mutants へ掛ける。
+
+    返すのは `(kill, 生き残り, タイムアウトの件数)`。**タイムアウトを数える。**
+    この道具はタイムアウトを kill に数えるので、数えないと「テストが判別した」と
+    「テストが遅いだけだった」が成績の上で同じ顔をする。
+
+    **成功した走行の出力を捨てない。**捨てると `SHELL_TIMEOUT_LINE` を後から
+    数える材料が残らない。
 
     **終了コードで判定しない。**analyze_mutants は変異体が1件も無くても 0 で
     終わり（analyze.py の `count == 0` の枝）、そのとき killed.txt と
@@ -1564,11 +1605,18 @@ def analyze_shell_mutants(repo, sandbox, copy, target, cmd, host, kept):
         f.write("\n".join(kept) + "\n")
     # テストは作業コピーのルートから走らせる。対象を相対パスで開くテストが
     # 多数なので、変異体置き場の側で走らせると原本も見つからない。
+    script = f"cd {shlex.quote(copy)} && {cmd}"
+    # **渡す文字列そのものへ当てる。**analyze_mutants はこの字面を含むかどうかで
+    # 「変異体を対象ファイルへ置き換えるか」を決めるので、含んでいると置き換えが
+    # 起きず、全変異体で原本のテストが走って「1件も kill されなかった」になる。
+    if ANALYZE_MUTANT_TOKEN in script:
+        raise Unmeasurable(
+            f"{target}: analyze_mutants へ渡す命令に "
+            f"{ANALYZE_MUTANT_TOKEN} の字面を含められない（{script}）")
     rc, out, err = _run_in_dir(
         repo, sandbox, inside,
         [os.path.join(MUTATE_VENV, "bin", "analyze_mutants"),
-         os.path.join(copy, target),
-         f"cd {shlex.quote(copy)} && {cmd}",
+         os.path.join(copy, target), script,
          "--fromFile", SHELL_KEEP_FILE,
          "--noShuffle", "--timeout", SHELL_ANALYZE_TIMEOUT])
     if rc != 0:
@@ -1584,7 +1632,7 @@ def analyze_shell_mutants(repo, sandbox, copy, target, cmd, host, kept):
     if unknown:
         raise Unmeasurable(
             f"{target}: 走らせていない変異体の結果がある（{unknown[0]}）")
-    return killed, notkilled
+    return killed, notkilled, (out + err).count(SHELL_TIMEOUT_LINE)
 
 
 def read_mutant_list(path, target):
@@ -1604,7 +1652,8 @@ def blank_shell_result(test_rel):
     """
     return {"test": test_rel, "command": None, "python_rules": None,
             "mutants": None, "excluded": None, "analyzed": None,
-            "killed": None, "survivors": None, "unmeasurable": None}
+            "killed": None, "survivors": None, "timeouts": None,
+            "unmeasurable": None}
 
 
 def shell_lane_target(repo, sandbox, copy, target, test_rel):
@@ -1656,16 +1705,24 @@ def shell_lane_target(repo, sandbox, copy, target, test_rel):
             raise Unmeasurable(
                 f"{target}: 構文検査を通った変異体が1件も無い"
                 f"（{len(names)}件のうち{len(dropped)}件を除外）")
-        killed, notkilled = analyze_shell_mutants(
+        killed, notkilled, timeouts = analyze_shell_mutants(
             repo, sandbox, copy, target, cmd, host, kept)
         got["analyzed"] = len(kept)
         got["killed"] = len(killed)
+        got["timeouts"] = timeouts
         got["survivors"] = [
             list(ids_from_universalmutator(target, os.path.join(host, n),
                                            host_copy))
             for n in notkilled]
     except Unmeasurable as e:
         got["unmeasurable"] = str(e)
+    except Exception as e:                              # noqa: BLE001
+        # **想定外の失敗もこの対象1つに閉じる。**閉じないと、14対象で約3分半の
+        # 走行が1対象の予期せぬ例外で全損する。落ちた対象は「計測できなかった」
+        # として基準を書かない側へ回るので、黙って満点になる経路は開かない。
+        # **型と本文を残す。**残さないと、次に読む人が原因を別の場所から探す。
+        got["unmeasurable"] = (
+            f"{target}: 想定外の失敗（{type(e).__name__}: {e}）")
     return got
 
 
@@ -2201,8 +2258,33 @@ def targets_to_classify(baseline, current):
                   | {t for t, _ in current["unmeasurable"]})
 
 
-def classify_target(baseline, current, target):
+def classify_targets(baseline, current):
+    """分類すべき対象すべての分類を返す。`(分類, 止まった対象, 差分)` の3つ。
+
+    **`compare` を1回だけ計算する。**対象ごとに `classify_target` の中で
+    計算し直すと、対象数の2乗の仕事になる（実測の対象は24本。将来増える）。
+    差分そのものも報告に要るので、ここで作って呼び出し側へ渡す。
+
+    **回す対象は `targets_to_classify` で作る。**呼び出し側が「今回の対象だけ」を
+    独自に組み立てると、基準に在るのに走行から消えた対象を誰も見ないまま
+    基準を静かに刈る経路がそこに開く。`classify_target` の門は渡されたときに
+    しか働かない。
+    """
+    diff = compare(baseline, current)
+    labels, failed = {}, {}
+    for target in targets_to_classify(baseline, current):
+        try:
+            labels[target] = classify_target(baseline, current, target, diff)
+        except ValueError as e:
+            failed[target] = str(e)
+    return labels, failed, diff
+
+
+def classify_target(baseline, current, target, diff):
     """その対象1つに当たる分類を返す。
+
+    `diff` は `compare(baseline, current)` の結果。**自分で計算しない。**
+    対象ごとに計算し直すと全体で対象数の2乗になる。作るのは `classify_targets`。
 
     返しうるのは5分類のうち3つ（`UNMEASURABLE` / `NO_BASELINE` / `REGRESSED`）と、
     どれにも当たらないことを表す `NO_FINDING`。残る2つ（「対象外」「実行できな
@@ -2226,7 +2308,7 @@ def classify_target(baseline, current, target):
             f"{target}: 今回の走行の対象にも、計測できなかった対象にも無い")
     if target not in set(baseline["targets"]):
         return NO_BASELINE
-    if compare(baseline, current).get(target):
+    if diff.get(target):
         return REGRESSED
     return NO_FINDING
 
@@ -3032,7 +3114,481 @@ def accepted_for_current_tree(repo):
             and rec.get("verifier_version") == VERSION)
 
 
+# --- `--mutate` の起動、分類、報告 ---
+
+# リポジトリ単位でしか出ない2つの分類。対象1つに当たることが無いので
+# `classify_target` は返さない。
+OUT_OF_SCOPE = "対象外"
+NOT_RUNNABLE = "実行できなかった"
+
+# 依存を固定した要求ファイル。**道具と同じ場所へ配る**（受け入れ条件8）。
+# chezmoi のソースでは `dot_local/private_bin/` に道具と並べてある。名前を
+# 書き起こすのはここ1箇所で、venv を作る命令もここから作る。
+MUTATE_REQUIREMENTS = os.path.join(
+    os.path.dirname(DEPLOYED_TOOL), "mutation-requirements.txt")
+
+# Python レーンのセッション。**作業コピーの外へ置く。**中へ置くと sqlite が
+# 作業コピーに現れ、リポジトリを走査する形のテストが原本と違うものを見る
+# （`SHELL_MUTANT_ROOT` と同じ理由）。
+PY_SESSION_NAME = "verify-tests-cosmic-ray.sqlite"
+
+# sqlite が同じ場所へ書く連れのファイル。作り直す前に消す分。
+PY_SESSION_SUFFIXES = ("", "-wal", "-shm")
+
+
+def mutate_setup_hint(venv_path=MUTATE_VENV, req=MUTATE_REQUIREMENTS):
+    """変異用の venv を作る命令を1行で返す（受け入れ条件42）。
+
+    **要求ファイルを名指しする。**「uv pip install cosmic-ray universalmutator」
+    と書くと、その場の最新版が入る。基準の生き残り集合は道具の版に依存するので、
+    版の違う venv で作り直した基準は前の基準と比べられない。
+    """
+    return (f"uv venv {venv_path} && "
+            f"uv pip install --python {venv_path}/bin/python -r {req}")
+
+
+def _cosmic_ray(repo, sandbox, copy, args):
+    """作業コピーの中で cosmic-ray を1回起動する。
+
+    **PATH 解決に頼らない。**`python` が PATH に無いだけで全変異体が
+    `INCOMPETENT` になった実例がある（`MUTATE_VENV` の注記）。
+    """
+    return _run_in_dir(repo, sandbox, copy,
+                       [os.path.join(MUTATE_VENV, "bin", "cosmic-ray"), *args])
+
+
+def python_lane_session(repo, sandbox, copy, config, conf):
+    """cosmic-ray を1回まわし、`(init の件数, 変異なしの終了コード, dump)` を返す。
+
+    **`init_count` は `cosmic-ray init` の直後の work item 数。**`dump` の行を
+    数えて作る。`cr-filter-operators` の**後**の件数で作ってはいけない
+    ——フィルタは work item を消さずに結果だけを書くので、後で数えると
+    `python_lane_gate` の「`init` の件数 = 行 + 読み飛ばし」の照合が
+    毎回発火するか、逆に何も見ないものになる。`init` の標準出力の解析でも
+    作らない。書式が変われば黙って別の数になる。
+
+    **設定はリポジトリ相対で渡す。**`cosmic-ray init` は設定に書かれたパスを
+    cwd 基準で解決するので、絶対で渡すと `excluded-modules` のグロブが
+    cwd 基準のままになり、門が数えた集合と実際に測る集合がずれる。
+
+    **`unmutated_rc` は `test-command` そのものを走らせて取る。**`cosmic-ray
+    baseline` の終了コードを渡さない。あれは `test-command` が起動できなくても
+    0 を返す（実測）。
+    """
+    host = os.path.join(sandbox, PY_SESSION_NAME)
+    for suffix in PY_SESSION_SUFFIXES:
+        if os.path.exists(host + suffix):
+            os.remove(host + suffix)
+    session = inside_home(PY_SESSION_NAME)
+
+    rc, out, err = _cosmic_ray(repo, sandbox, copy, ["init", config, session])
+    if rc != 0:
+        raise Unmeasurable(
+            f"cosmic-ray init が失敗した（rc={rc}）{_tail(err or out)}")
+    rc, out, err = _cosmic_ray(repo, sandbox, copy, ["dump", session])
+    if rc != 0:
+        raise Unmeasurable(
+            f"cosmic-ray dump が失敗した（rc={rc}）{_tail(err or out)}")
+    init_count = len([ln for ln in out.splitlines() if ln.strip()])
+
+    # **設定がフィルタを宣言しているときだけ走らせる。**宣言を見ずに走らせると、
+    # フィルタの設定を持たないリポジトリで cr-filter-operators が落ちて原因の
+    # 読めない失敗になる。宣言があるのに走らせないと、除外したはずの演算子が
+    # そのまま測定へ流れ込む。
+    if (conf.get("filters") or {}).get("operators-filter"):
+        rc, out, err = _run_in_dir(
+            repo, sandbox, copy,
+            [os.path.join(MUTATE_VENV, "bin", "cr-filter-operators"),
+             session, config])
+        if rc != 0:
+            raise Unmeasurable(
+                f"cr-filter-operators が失敗した（rc={rc}）{_tail(err or out)}")
+
+    command = conf.get("test-command")
+    if not isinstance(command, str) or not command.strip():
+        raise Unmeasurable(f"{config}: `test-command` が空")
+    try:
+        argv = shlex.split(command)
+    except ValueError as e:
+        raise Unmeasurable(f"{config}: `test-command` を語に割れない（{e}）")
+    if not argv:
+        raise Unmeasurable(f"{config}: `test-command` が語を1つも持たない")
+    # **cosmic-ray と同じ起動の仕方で走らせる。**`run_tests` は `shlex.split` して
+    # Popen へ渡すだけで shell を通さない（`cosmic_ray/testing.py`、実測）。
+    # `bash -c` で包むと、包んだせいで通る／落ちるという差がここだけに出る。
+    unmutated_rc, _, _ = _run_in_dir(repo, sandbox, copy, argv)
+
+    rc, out, err = _cosmic_ray(repo, sandbox, copy, ["exec", config, session])
+    if rc != 0:
+        raise Unmeasurable(
+            f"cosmic-ray exec が失敗した（rc={rc}）{_tail(err or out)}")
+    rc, dump, err = _cosmic_ray(repo, sandbox, copy, ["dump", session])
+    if rc != 0:
+        raise Unmeasurable(
+            f"cosmic-ray dump が失敗した（rc={rc}）{_tail(err or dump)}")
+    return init_count, unmutated_rc, dump
+
+
+def blank_lane():
+    """レーン1つ分の入れ物。**測れた対象すべてに3つの記録が揃う形で返す。**
+
+    - `targets` / `survivors` / `excluded` / `unmeasurable` … 走行の結果へそのまま入る
+    - `stats` … 対象ごとの件数（報告だけに使う）
+    - `blocked` … レーン全体が立ち上がらなかった理由。対象の一覧すら決まらない
+      ときだけ。決まるなら対象ごとの `unmeasurable` へ落とす
+    - `notes` … 判定には効かないが報告へ出す行
+    """
+    return {"targets": [], "survivors": {}, "excluded": {}, "unmeasurable": [],
+            "stats": {}, "blocked": None, "notes": []}
+
+
+def run_python_lane(repo, sandbox, copy):
+    """Python レーンを1セッション回し、`blank_lane` の形で返す。
+
+    **リポジトリ単位で1セッション。**cosmic-ray のセッションが設定1つに対して
+    1つなので、粒度をそちらへ合わせる。門が止めるときは Python 対象がまとめて
+    「計測できなかった」へ落ちる。
+
+    **ループを `mutate_main` へ畳まない。**畳むと、本番資産の前後比較が変異体
+    ごとに行われていないこと（受け入れ条件40）を見る検査が `mutate_main` の
+    一語に潰れ、実際に変異体ごとに取っていても素通りする（`run_shell_lane` と
+    同じ理由）。
+    """
+    out = blank_lane()
+    try:
+        config, conf = mutation_config(repo)
+        known = sorted(py_target_set(repo, sandbox))
+    except Unmeasurable as e:
+        # 対象の一覧そのものが決まらない。対象ごとに落とせないのでレーンごと。
+        out["blocked"] = f"Python レーン: {e}"
+        return out
+    if not known:
+        out["blocked"] = (
+            "Python レーン: 対象の `.py` が1本も無い"
+            "（`module-path` と `excluded-modules` を見る）")
+        return out
+    try:
+        init_count, unmutated_rc, dump = python_lane_session(
+            repo, sandbox, copy, config, conf)
+        reason = python_lane_gate(dump, init_count, unmutated_rc)
+        if reason is not None:
+            raise Unmeasurable(reason)
+        rows, _skipped, timeouts = ids_from_cosmic_ray(dump)
+    except Unmeasurable as e:
+        # **対象ごとに落とす。**原因は1セッションぶん共通だが、分類も
+        # `--update-baseline` の単位も対象なので、粒度をそちらへ揃える。
+        out["unmeasurable"] = [(t, f"{t}: {e}") for t in known]
+        return out
+    got = group_by_target(rows)
+    seen = {}
+    for row in rows:
+        seen[row[0][0]] = seen.get(row[0][0], 0) + 1
+    out["targets"] = list(got["targets"])
+    out["survivors"] = {t: list(got["survivors"][t]) for t in got["targets"]}
+    out["unmeasurable"] = list(got["unmeasurable"])
+    # **Python レーンには構文検査の前段が無い。**shell レーンの `excluded` は
+    # 生成した変異体を `bash -n` と `ast.parse` に掛けて落とした分で、cosmic-ray は
+    # 構文の壊れた変異体をそもそも作らない。ここの 0 は「渡し忘れ」ではなく
+    # 「その段が無い」ことの記録である。**`.get(t, 0)` で後から埋めさせない**
+    # ために、レーンの側で対象ごとに明示して置く。
+    out["excluded"] = {t: [] for t in got["targets"]}
+    for t in got["targets"]:
+        alive = len(out["survivors"][t])
+        total = seen[t]
+        out["stats"][t] = {
+            "mutants": total, "excluded": 0, "analyzed": total,
+            "killed": total - alive, "survivors": alive,
+            "timeouts": timeouts[t]}
+    # 変異体が1件も出なかった対象。**止めない**（門の粒度をセッション単位から
+    # 対象単位へ変えるのは spec の変更にあたる）が、黙って落とさない。
+    # 「測っていない」を静かに通さないための行。
+    silent = sorted(set(known) - set(got["targets"])
+                    - {t for t, _ in got["unmeasurable"]})
+    if silent:
+        out["notes"].append(
+            "変異体が1件も出なかった Python 対象: " + "、".join(silent))
+    return out
+
+
+def shell_lane_result(rows):
+    """`run_shell_lane` の対象ごとの成績を `blank_lane` の形へ移す。
+
+    **測れた対象には `survivors` と `excluded` を必ず両方置く。**片方でも
+    欠けたまま渡すと `survivors_for` / `filtered_counts_for` が止める。止める形に
+    してあるのは、空や 0 で埋めた対象へ満点が焼き付くのを防ぐため。ここで
+    埋めずに、記録の欠けた対象は「計測できなかった」へ落とす。
+    """
+    out = blank_lane()
+    for target in sorted(rows):
+        row = rows[target]
+        if row["unmeasurable"] is not None:
+            out["unmeasurable"].append((target, row["unmeasurable"]))
+            continue
+        lacking = [k for k in ("mutants", "excluded", "analyzed", "killed",
+                               "survivors", "timeouts") if row[k] is None]
+        if lacking:
+            out["unmeasurable"].append(
+                (target, f"{target}: 測れたはずの対象に記録が無い"
+                         f"（{'、'.join(lacking)}）"))
+            continue
+        out["targets"].append(target)
+        out["survivors"][target] = [tuple(k) for k in row["survivors"]]
+        out["excluded"][target] = [tuple(k) for k in row["excluded"]]
+        out["stats"][target] = {
+            "mutants": row["mutants"], "excluded": len(row["excluded"]),
+            "analyzed": row["analyzed"], "killed": row["killed"],
+            "survivors": len(row["survivors"]), "timeouts": row["timeouts"]}
+    return out
+
+
+def merge_lanes(lanes):
+    """レーンの結果を合併し、`(走行の結果, 成績, 立ち上がらなかった理由, 注記)`。
+
+    **同じ対象が2つのレーンに現れたら止める。**Python レーンは `.py` を、
+    shell レーンは宣言先を測るので現状は重ならないが、重なったときにどちらの
+    成績を採るかを黙って決めると、採らなかった側の記録が消える。
+    """
+    targets, survivors, excluded, bad = [], {}, {}, []
+    stats, blocked, notes = {}, [], []
+    for lane in lanes:
+        clash = sorted(set(lane["targets"]) & set(targets))
+        if clash:
+            raise BaselineBroken(
+                f"同じ対象が2つのレーンに現れた（{'、'.join(clash)}）。"
+                "どちらの成績を採るかを決められない")
+        targets += list(lane["targets"])
+        survivors.update(lane["survivors"])
+        excluded.update(lane["excluded"])
+        stats.update(lane["stats"])
+        bad += list(lane["unmeasurable"])
+        notes += list(lane["notes"])
+        if lane["blocked"]:
+            blocked.append(lane["blocked"])
+    current = {"targets": sorted(targets), "survivors": survivors,
+               "excluded": excluded, "unmeasurable": bad}
+    return current, stats, blocked, notes
+
+
+def score_line(target, s):
+    """対象1つの成績の行（受け入れ条件23）。
+
+    **生存率は併記するだけで判定には使わない。**等価ミュータントが率の上で
+    永久に生存側へ計上され続けるので、閾値を運用すると緩めた幅の中に本物の
+    劣化が隠れる。判定は生き残りの集合の差分で行う。
+
+    **タイムアウト由来の kill を別に出す。**両方の道具がタイムアウトを kill に
+    数えるので、出さないと「テストが判別した」と「テストが遅かった」が成績の
+    上で同じ顔をする。
+    """
+    analyzed = s["analyzed"]
+    rate = ("—" if analyzed == 0
+            else f"{100.0 * s['survivors'] / analyzed:.1f}%")
+    return (f"  {target}  変異体 {s['mutants']}"
+            f"（構文検査で除外 {s['excluded']} / 測定 {analyzed}）"
+            f"  kill {s['killed']}  生き残り {s['survivors']}"
+            f"  生存率 {rate}  タイムアウト由来の kill {s['timeouts']}")
+
+
+def mutate_report(current, stats, base, tools, diff, labels, failed,
+                  unmeasured_rows, notes):
+    """`--mutate` の報告の行。**0件でも見出しを出す。**
+
+    黙って省くと、該当が無かったのか報告の側が落としたのかを読む人が区別
+    できない（`update_report` と同じ流儀）。
+    """
+    lines = ["-- 対象ごとの成績 --"]
+    lines += [score_line(t, stats[t]) for t in current["targets"]]
+    if not current["targets"]:
+        lines.append("  （測れた対象なし）")
+
+    # 受け入れ条件24。**パスと行番号と変異後の行の内容で出す。**
+    alive = survivors_for(current)
+    total = sum(len(v) for v in alive.values())
+    lines.append(f"-- 生き残った変異体: {total}件 --")
+    for t in current["targets"]:
+        for path, line, content in alive[t]:
+            lines.append(f"  {path}:{line}: {content}")
+
+    lines.append(f"-- 計測できなかった対象: {len(current['unmeasurable'])}件 --")
+    lines += [f"  {reason}" for _t, reason in sorted(current["unmeasurable"])]
+
+    # 受け入れ条件12。
+    lines.append(f"-- 測っていない対象: {len(unmeasured_rows)}件 --")
+    lines += [f"  {p} — {why}" for p, why in unmeasured_rows]
+
+    # 受け入れ条件34。**2種類とも出す。**片方だけ出すと「除外はこれだけ」に見える。
+    report = excluded_report(base)
+    lines.append(f"-- 判定から外した変異体（非決定）: {report['count']}件 --")
+    lines += [f"  {ln}" for ln in report["lines"]]
+    lines.append(
+        f"-- 構文検査が落とした変異体（基準）: {report['filtered_total']}件 --")
+
+    drift = compare_filtered(base, current)
+    lines.append(f"-- 構文検査による除外の件数が基準と違う対象: {len(drift)}件 --")
+    lines += [f"  {t}: 基準 {was} → 今回 {now}"
+              for t, (was, now) in sorted(drift.items())]
+
+    tdrift = tool_drift(base, tools)
+    lines.append(f"-- 道具の版が基準と違う: {len(tdrift)}件 --")
+    lines += [f"  {name}: 基準 {was} → 今回 {now}" for name, was, now in tdrift]
+    lines.append("  版が違う走行で差分が出ても、判別力が落ちたとは読めない"
+                 if tdrift else "  今回の版: "
+                 + "、".join(f"{n} {tools[n]}" for n in sorted(tools)))
+
+    lines.append(f"-- 基準に無い生き残り: {sum(len(v) for v in diff.values())}件 --")
+    for t in sorted(diff):
+        for path, line, content in diff[t]:
+            lines.append(f"  {path}:{line}: {content}")
+
+    lines.append("-- 対象ごとの分類 --")
+    for t in sorted(labels):
+        if labels[t] != NO_FINDING:
+            lines.append(f"  {labels[t]}: {t}")
+    for t in sorted(failed):
+        lines.append(f"  {UNMEASURABLE}: {failed[t]}")
+    lines += [f"== {n}" for n in notes]
+    return lines
+
+
+def mutate_verdict(labels, failed, blocked):
+    """`--mutate` のリポジトリ単位の分類と終了コード。
+
+    優先順位は「計測できなかった」「判別力が落ちた」「基準が無い」。上に立つ
+    「対象外」と「実行できなかった」はここより手前で決まる。
+
+    **分類の値を正の形で数え上げる。**「知っている分類以外は無害」と書くと、
+    分類が1つ増えたときに黙って所見なしの側へ落ちる。
+    """
+    unknown = sorted(set(labels.values())
+                     - {UNMEASURABLE, REGRESSED, NO_BASELINE, NO_FINDING})
+    if unknown:
+        raise BaselineBroken(f"知らない分類がある（{'、'.join(unknown)}）")
+    if blocked or failed or UNMEASURABLE in labels.values():
+        return UNMEASURABLE, 1
+    if REGRESSED in labels.values():
+        return REGRESSED, 1
+    if NO_BASELINE in labels.values():
+        return NO_BASELINE, 1
+    return NO_FINDING, 0
+
+
+def mutate_run(repo, sandbox):
+    """両レーンを走らせ、`(走行の結果, 成績, 止まった理由, 注記, 測っていない対象)`。
+
+    **完全性の門を走行の前に見る。**`module-path` の手書きの一覧に無い
+    ディレクトリへ置かれた `.py` は、名指しの一覧と同じように黙って対象外に
+    なる。1本でもあれば「計測できなかった」で止める（受け入れ条件5）。
+    """
+    copy = make_worktree_copy(repo, sandbox)
+    if copy is None:
+        return None, {}, ["作業コピーを作れなかった"], [], []
+    tracked = tracked_files(repo, sandbox)
+    if tracked is None:
+        return None, {}, ["git ls-files が失敗した"], [], []
+    rows = unmeasured(repo, tracked)
+    try:
+        gap = completeness_gap(repo, sandbox)
+    except Unmeasurable as e:
+        return None, {}, [str(e)], [], rows
+    if gap:
+        return None, {}, ["対象にも除外にも属さない追跡 `.py` がある: "
+                          + "、".join(sorted(gap))], [], rows
+    py = run_python_lane(repo, sandbox, copy)
+    pairs = shell_pairs(repo, tracked)
+    sh = shell_lane_result(run_shell_lane(repo, sandbox, pairs["pairs"]))
+    # 宣言を読めなかったテストも「計測できなかった」に載せる。載せないと、
+    # 宣言を1本消しただけでその対象が網から静かに消える（受け入れ条件13・14）。
+    sh["unmeasurable"] += list(pairs["unmeasurable"])
+    current, stats, blocked, notes = merge_lanes([py, sh])
+    return current, stats, blocked, notes, rows
+
+
+def mutate_main(repo, argv):
+    """`verify-tests <repo> --mutate`。**既定で非0を返す。**
+
+    分類の優先順位は「対象外」「実行できなかった」「計測できなかった」
+    「判別力が落ちた」「基準が無い」。先の2つは `main` とここの入口で決まる
+    （「対象外」は隔離を組む手前、「実行できなかった」は bwrap と venv の有無）。
+    """
+    if "--strict" in argv or "--" in argv:
+        print(f"{NOT_RUNNABLE}: --mutate は --strict とも -- とも併用できません。"
+              "--mutate は所見が1つでもあれば既定で非0を返すので --strict が要らない")
+        return 1
+    try:
+        tools = mutation_tool_versions()
+    except Unmeasurable as e:
+        # 「実行できなかった」。venv も道具も無ければそもそも測れていない。
+        # **`--update-baseline` を付けても非0のまま。**壊れた計測結果を基準として
+        # 書き込まないため。
+        print(f"{NOT_RUNNABLE}: {e}")
+        print(f"  作る: {mutate_setup_hint()}")
+        return 1
+    before = snapshot_watched()
+    sandbox = make_sandbox_home()
+    try:
+        current, stats, blocked, notes, rows = mutate_run(repo, sandbox)
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
+    # 本番資産の前後比較は走行ごとに1回（受け入れ条件40）。変異体ごとではない。
+    if watched_report(before):
+        blocked = list(blocked) + ["走行が本番資産へ書いた（上の行を見る）"]
+    if current is None:
+        print(f"{UNMEASURABLE}: 走行を組み立てられなかった")
+        for why in blocked:
+            print(f"  {why}")
+        for n in rows:
+            print(f"  測っていない対象: {n[0]} — {n[1]}")
+        return 1
+    current["tools"] = tools
+
+    path = baseline_path(repo)
+    try:
+        base = load_baseline(path)
+        labels, failed, diff = classify_targets(base, current)
+        for ln in mutate_report(current, stats, base, tools, diff,
+                                labels, failed, rows, notes):
+            print(ln)
+        if "--update-baseline" in argv:
+            if blocked:
+                # 立ち上がらなかった走行の結果で基準を書き換えない。
+                print(f"{UNMEASURABLE}: 基準を書かない")
+                for why in blocked:
+                    print(f"  {why}")
+                return 1
+            written, skipped = update_baseline(path, current)
+            for ln in update_report(current, written, skipped):
+                print(ln)
+            label, code = update_verdict(skipped)
+            print(f"分類: {label}")
+            return code
+        label, code = mutate_verdict(labels, failed, blocked)
+    except BaselineBroken as e:
+        # **「計測できなかった」へ落とす。**基準の入れ物が壊れているので、
+        # 今回の成績を基準と比べられていない。5分類のうちこれが最も近い。
+        print(f"{UNMEASURABLE}: {e}")
+        return 1
+    for why in blocked:
+        print(f"  {why}")
+    print(f"分類: {label}")
+    return code
+
+
+USAGE = [
+    "使い方: verify-tests <リポジトリ> [--strict] [--discover-only]"
+    " [--mutate [--update-baseline]] [--accept-review <理由>]"
+    " [-- <pytest への引数>]",
+    "--mutate は所見が1つでもあれば非0を返す（既定）。"
+    "/morning からも pre-push からも呼ばないので、"
+    "止める側に倒しても他の報告を巻き添えにしない。--strict は取らない",
+]
+
+
 def main(argv):
+    if "--help" in argv:
+        for ln in USAGE:
+            print(ln)
+        return 0
+
     if "--selftest-verdict" in argv:
         i = argv.index("--selftest-verdict")
         print(verdict(ast.literal_eval(argv[i + 1])))
@@ -3128,21 +3684,21 @@ def main(argv):
         path, current, tools, wanted = ast.literal_eval(argv[i + 1])
         try:
             base = load_baseline(path)
-            if wanted is None:
-                # **独自に組み立てない。**基準側を合併しない一覧を既定にすると、
-                # これを写した呼び出し側が、基準に在るのに走行から消えた対象を
-                # 見逃す。
-                wanted = targets_to_classify(base, current)
-            labels, failed = {}, {}
-            for t in wanted:
-                try:
-                    labels[t] = classify_target(base, current, t)
-                except ValueError as e:
-                    failed[t] = str(e)
+            # **`classify_targets` を通す。**独自に回すと、`compare` を1回に
+            # まとめる形も、基準側を合併する一覧も、この口の中だけで別に書かれる。
+            labels, failed, diff = classify_targets(base, current)
+            if wanted is not None:
+                # 明示の一覧は「走行に無い対象を渡したときに止まる」ことを外から
+                # 撃つためのもの。合併された一覧の上から、渡された分だけを取り直す。
+                labels, failed = {}, {}
+                for t in wanted:
+                    try:
+                        labels[t] = classify_target(base, current, t, diff)
+                    except ValueError as e:
+                        failed[t] = str(e)
             payload = {
                 "baseline": baseline_document(base),
-                "compare": {t: [list(k) for k in v]
-                            for t, v in compare(base, current).items()},
+                "compare": {t: [list(k) for k in v] for t, v in diff.items()},
                 "filtered_drift": {t: list(v) for t, v
                                    in compare_filtered(base, current).items()},
                 "excluded_report": excluded_report(base),
@@ -3389,11 +3945,12 @@ def main(argv):
         with open(argv[i + 1], encoding="utf-8") as f:
             text = f.read()
         try:
-            ids, skipped = ids_from_cosmic_ray(text)
+            ids, skipped, timeouts = ids_from_cosmic_ray(text)
             # **行にならなかった記録も返す。**返さないと、門が捕まえる根拠に
             # なっている集合を外から一度も見られない。
             payload = {"ids": [[list(k), s, t, w] for k, s, t, w in ids],
                        "skipped": [list(s) for s in skipped],
+                       "timeouts": timeouts,
                        "grouped": None, "unmeasurable": None}
             got = group_by_target(ids)
             payload["grouped"] = {
@@ -3404,8 +3961,8 @@ def main(argv):
                                  for t, why in got["unmeasurable"]],
             }
         except Unmeasurable as e:
-            payload = {"ids": None, "skipped": None, "grouped": None,
-                       "unmeasurable": f"{UNMEASURABLE}: {e}"}
+            payload = {"ids": None, "skipped": None, "timeouts": None,
+                       "grouped": None, "unmeasurable": f"{UNMEASURABLE}: {e}"}
         print(json.dumps(payload, sort_keys=True, ensure_ascii=False))
         return 0
 
@@ -3511,13 +4068,17 @@ def main(argv):
     head = argv[: argv.index("--")] if "--" in argv else argv
     positional = [a for a in head if not a.startswith("-")]
     if not positional:
-        print("使い方: verify-tests <リポジトリ> [--strict] [--discover-only]"
-              " [--accept-review <理由>] [-- <pytest への引数>]")
+        for ln in USAGE:
+            print(ln)
         return 1
     repo = os.path.abspath(positional[0])
 
+    # **「対象外」が優先順位の先頭に立つ。**`--mutate` もここを共有する。
+    # 対象でないリポジトリでは隔離を組む必要がそもそも無いので、`bwrap` や
+    # venv が無くても「実行できなかった」にはならず0で通す（受け入れ条件44）。
     if not in_scope(repo):
-        print(f"対象外: {repo}（読み取り専用 bind の一覧を持たないので検査しない）")
+        print(f"{OUT_OF_SCOPE}: {repo}"
+              "（読み取り専用 bind の一覧を持たないので検査しない）")
         return 0
 
     if "--accept-review" in argv:
@@ -3531,9 +4092,14 @@ def main(argv):
         return 0
 
     if not bwrap_available():
-        print("実行できなかった: bwrap が PATH にありません。"
+        print(f"{NOT_RUNNABLE}: bwrap が PATH にありません。"
               "`sudo apt install bubblewrap` で導入してください")
         return 1
+
+    # 「対象外」と「実行できなかった」（bwrap）を通り抜けた先で分岐する。
+    # 順序を変えると、優先順位の先頭2つが `--mutate` だけ別になる。
+    if "--mutate" in argv:
+        return mutate_main(repo, argv)
 
     strict = "--strict" in argv
     discover_only = "--discover-only" in argv
