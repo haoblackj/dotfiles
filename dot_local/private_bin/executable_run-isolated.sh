@@ -7,10 +7,15 @@
 # 骨格（層1 Task 1）。build_bwrap / RO_BINDS / make_sandbox_home は
 # ~/.local/share/chezmoi/dot_local/private_bin/executable_verify-tests の
 # 実物を読んで同じ構成を再現している。あちらは変更しない。
+#
+# 出力の取り出し口（層1 Task 2）。隔離の中の $COVERAGE_OUT_DIR
+# （= $HOME/out）へ書かれたものを、--out 指定時にホスト側へコピーする。
+# COVERAGE_OUT_DIR という名前は後続タスクのカバレッジ設定が字面で使うため、
+# 変更しない。
 set -uo pipefail
 
 usage() {
-    echo "使い方: run-isolated.sh <repo> -- <コマンド...>" >&2
+    echo "使い方: run-isolated.sh <repo> [--out <dir>] -- <コマンド...>" >&2
 }
 
 if [ "$#" -lt 1 ]; then
@@ -20,6 +25,17 @@ fi
 
 repo=$1
 shift
+
+out_dir=""
+if [ "${1-}" = "--out" ]; then
+    shift
+    if [ "$#" -eq 0 ]; then
+        usage
+        exit 2
+    fi
+    out_dir=$1
+    shift
+fi
 
 if [ "${1-}" != "--" ]; then
     usage
@@ -53,6 +69,10 @@ trap cleanup EXIT
 
 mkdir -p "$sandbox/.claude/projects/$FIXTURE_PROJECT/memory"
 
+# コマンドが COVERAGE_OUT_DIR へ書いたものを走行後に取り出す置き場。
+# --out の有無に関わらず用意する（中のコマンドは --out を意識しなくてよい）。
+mkdir -p "$sandbox/out"
+
 # 実物の build_bwrap() を書き写した。ホスト全体を読み取り専用にし、
 # HOME だけをサンドボックスへ差し替える。--ro-bind で HOME を被せると
 # Read-only file system で HOME 配下への書き込みがすべて失敗するので、
@@ -69,6 +89,8 @@ for p in "${RO_BINDS[@]}"; do
         bwrap_argv+=(--ro-bind "$p" "$p")
     fi
 done
+
+bwrap_argv+=(--setenv COVERAGE_OUT_DIR "$HOME/out")
 
 bwrap_argv+=(--ro-bind "$repo" "$repo")
 
@@ -89,4 +111,14 @@ fi
 bwrap_argv+=(--chdir "$repo" -- "$@")
 
 "${bwrap_argv[@]}"
-exit $?
+rc=$?
+
+# サンドボックスを消す前（trap cleanup が走る前）にコピーする。
+# 中のコマンドが失敗していても（rc が非0でも）、それまでに書かれた
+# 出力はここでコピーする。
+if [ -n "$out_dir" ]; then
+    mkdir -p "$out_dir"
+    cp -a "$sandbox/out/." "$out_dir/"
+fi
+
+exit "$rc"

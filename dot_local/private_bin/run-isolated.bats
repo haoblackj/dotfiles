@@ -54,3 +54,39 @@ teardown() {
     # 使い方エラーとして予約した終了コード（2）とちょうど一致することを見る。
     [ "$status" -eq 2 ]
 }
+
+@test "--out で指定したホスト側ディレクトリに、隔離内で書いたファイルが残る" {
+    out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    [ "$status" -eq 0 ]
+    [ -e "$out_dir/result.txt" ]
+    [ "$(cat "$out_dir/result.txt")" = "hello" ]
+    rm -rf -- "$out_dir"
+}
+
+@test "--out を付けない走行では、中で書いたものが残らない" {
+    run "$RUN_ISOLATED" "$REPO_DIR" -- sh -c 'touch "$COVERAGE_OUT_DIR/marker" && echo "$COVERAGE_OUT_DIR"'
+    [ "$status" -eq 0 ]
+    # サンドボックス内の COVERAGE_OUT_DIR のパスをそのまま出力させ、
+    # 走行後（サンドボックス破棄後）にそのパスがホスト側に存在しないことを見る。
+    [ ! -e "$output" ]
+}
+
+@test "--out の指す先ディレクトリが無ければ作る" {
+    base_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
+    out_dir="$base_dir/nested/dir"
+    [ ! -e "$out_dir" ]
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hi > "$COVERAGE_OUT_DIR/f"'
+    [ "$status" -eq 0 ]
+    [ -d "$out_dir" ]
+    [ -e "$out_dir/f" ]
+    rm -rf -- "$base_dir"
+}
+
+@test "中のコマンドが失敗しても、それまでに書かれた出力は取り出せる" {
+    out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo partial > "$COVERAGE_OUT_DIR/partial.txt"; exit 1'
+    [ "$status" -eq 1 ]
+    [ -e "$out_dir/partial.txt" ]
+    rm -rf -- "$out_dir"
+}
