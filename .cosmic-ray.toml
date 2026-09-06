@@ -72,10 +72,12 @@ test-command = "/bin/sh -c '/home/yagu001/.local/share/verify-tests-venv/bin/pyt
 name = "local"
 
 [cosmic-ray.filters.operators-filter]
-# cosmic-ray 8.7.0 の不具合。ドットを含む例外名（`subprocess.TimeoutExpired` など）へ
-# 当てると parso が `Name` ではなく `PythonNode` を返し、`mutate` が `AttributeError`
-# で落ちて**正当な変異体が `incompetent` を返す。**対象10本に該当が9箇所あるので、
+# cosmic-ray 8.7.0 の不具合。**組（タプル）の中のドット付きの例外名**
+# （`except (subprocess.TimeoutExpired, OSError):` など）へ当てると parso が `Name` では
+# なく `PythonNode` を返し、`mutate` が `AttributeError` で落ちて
+# **正当な変異体が `incompetent` を返す。**対象10本に該当が4箇所あるので、
 # 除外しないと「`incompetent` が1件も無いこと」の門が毎回必ず発火する。
+# **単独の節は落ちない。**`except subprocess.TimeoutExpired:` は成功する（実測）。
 #
 # **除外しているのは閾値ではなく対象で、門の閾値は0のまま。**「既知の原因による
 # `incompetent` は除く」形は採らない（除外の判定を自前で書くことになり、上流が
