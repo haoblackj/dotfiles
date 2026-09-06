@@ -1,0 +1,2026 @@
+{
+  "excluded": [
+    {
+      "id": [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        14,
+        "    if [[ \"$mt\" =~ ^[1-9]+$ ]] && (( now - mt < 1800 )); then"
+      ],
+      "reason": "非決定。manual ファイルの mtime（エポック秒）に数字の 0 が入るかで生死が変わる。0 が入ると変異後の ^[1-9]+$ が外れて codex 側の経路へ落ち、テスト (A) が KEEP-MANUAL を見つけられず kill される。0 が入らなければ原本と同じ経路を通って生き残る。2026-09-06 の2回連続の走行で実際に生き残りと kill を行き来した（1回目は生き残り、2回目は kill）。タイムアウトは原因ではない（この対象のタイムアウト由来の kill は両走行とも0件）。mtime を固定する手がテスト側に無いので、判別力の欠落ではなく測定の非決定として外す"
+    }
+  ],
+  "survivors": {
+    "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh": [
+      [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        11,
+        "  if [[ -f \"$MANUAL\" || -f \"$STATE\" ]]; then"
+      ],
+      [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        13,
+        "    mt=$(stat -c %Y \"$MANUAL\" 2>/dev/null || echo 1)"
+      ],
+      [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        14,
+        "    if [[ \"$mt\" =~ ^[0-9]+$ ]] && (( now - mt < 1 )); then"
+      ],
+      [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        14,
+        "    if [[ \"$mt\" =~ ^[0-9]+$ ]] || (( now - mt < 1800 )); then"
+      ],
+      [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        14,
+        "    if [[ \"$mt\" =~ ^[1-9]+$ ]] && (( now - mt < 1800 )); then"
+      ],
+      [
+        "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+        16,
+        "      exit 1  # 手動 state 温存、codex skip"
+      ]
+    ],
+    "dot_claude/hooks/executable_guard-destructive-git.sh": [
+      [
+        "dot_claude/hooks/executable_guard-destructive-git.sh",
+        33,
+        "[[ -z \"$command\" ]] && exit 1"
+      ],
+      [
+        "dot_claude/hooks/executable_guard-destructive-git.sh",
+        82,
+        "  (( i < n )) || return 0"
+      ],
+      [
+        "dot_claude/hooks/executable_guard-destructive-git.sh",
+        102,
+        "  (( i < n )) || return 0"
+      ],
+      [
+        "dot_claude/hooks/executable_guard-destructive-git.sh",
+        122,
+        "        return 0"
+      ]
+    ],
+    "dot_claude/hooks/executable_notify-workdir-change.sh": [
+      [
+        "dot_claude/hooks/executable_notify-workdir-change.sh",
+        27,
+        "[ -n \"$input\" ] || exit 1"
+      ],
+      [
+        "dot_claude/hooks/executable_notify-workdir-change.sh",
+        32,
+        "  Write|Edit) lane=0 ;;  # write レーン"
+      ],
+      [
+        "dot_claude/hooks/executable_notify-workdir-change.sh",
+        37,
+        "[ -n \"$cwd\" ] || exit 1"
+      ],
+      [
+        "dot_claude/hooks/executable_notify-workdir-change.sh",
+        45,
+        "  [ -n \"$target\" ] || exit 1"
+      ]
+    ],
+    "dot_claude/hooks/executable_sessionstart-context-window.sh": [],
+    "dot_claude/hooks/executable_statusline-context-window.sh": [
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        39,
+        "  if [[ \"${CCSTATUSLINE_WIDTH:-}\" =~ ^[1-9]+$ ]]; then"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        41,
+        "    return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        43,
+        "  for ((i = 0; i < 0; i++)); do"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        43,
+        "  for ((i = 0; i < 1; i++)); do"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        43,
+        "  for ((i = 1; i < 8; i++)); do"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        45,
+        "    [[ -n \"$ppid\" || \"$ppid\" == \"0\" ]] && return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        45,
+        "    [[ -z \"$ppid\" && \"$ppid\" == \"0\" ]] && return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        45,
+        "    [[ -z \"$ppid\" || \"$ppid\" == \"0\" ]] && return 0"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        45,
+        "    [[ -z \"$ppid\" || \"$ppid\" == \"0\" ]] || return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        48,
+        "    [[ -n \"$tty\" || \"$tty\" == \"?\" || ! -e \"/dev/$tty\" ]] && continue"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        48,
+        "    [[ -z \"$tty\" && \"$tty\" == \"?\" || ! -e \"/dev/$tty\" ]] && continue"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        48,
+        "    [[ -z \"$tty\" || \"$tty\" == \"?\" && ! -e \"/dev/$tty\" ]] && continue"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        48,
+        "    [[ -z \"$tty\" || \"$tty\" == \"?\" || ! -e \"/dev/$tty\" ]] || continue"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        50,
+        "    [[ \"$cols\" =~ ^[0-9]+$ ]] && { printf '%s' \"$cols\"; return 1; }"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        50,
+        "    [[ \"$cols\" =~ ^[0-9]+$ ]] || { printf '%s' \"$cols\"; return 0; }"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        50,
+        "    [[ \"$cols\" =~ ^[1-9]+$ ]] && { printf '%s' \"$cols\"; return 0; }"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        52,
+        "  return 0"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        57,
+        "TERM_WIDTH=$(probe_terminal_width) && TERM_WIDTH=\"\""
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        59,
+        "if [[ -n \"$TERM_WIDTH\" ]] || ! command -v python3 >/dev/null 2>&1; then"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        59,
+        "if [[ -z \"$TERM_WIDTH\" ]] && ! command -v python3 >/dev/null 2>&1; then"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        70,
+        "    return sum(0 if unicodedata.east_asian_width(c) in \"WF\" else 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        70,
+        "    return sum(1 if unicodedata.east_asian_width(c) in \"WF\" else 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        70,
+        "    return sum(2 if unicodedata.east_asian_width(c) in \"WF\" else 0"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        75,
+        "    width = int(sys.argv[0])"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        77,
+        "    width = 1"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        82,
+        "if len(lines) == 0 and width > 0 and visible_width(lines[0]) + visible_width(lines[1]) <= width:"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        82,
+        "if len(lines) == 1 and width > 0 and visible_width(lines[0]) + visible_width(lines[1]) <= width:"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        82,
+        "if len(lines) == 3 and width > 0 and visible_width(lines[0]) + visible_width(lines[0]) <= width:"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        82,
+        "if len(lines) == 3 and width > 0 and visible_width(lines[1]) + visible_width(lines[1]) <= width:"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        82,
+        "if len(lines) == 3 and width > 1 and visible_width(lines[0]) + visible_width(lines[1]) <= width:"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        83,
+        "    lines = [lines[0] + lines[0]] + lines[2:]"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        83,
+        "    lines = [lines[0] + lines[1]] + lines[0:]"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        83,
+        "    lines = [lines[0] + lines[1]] + lines[1:]"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        83,
+        "    lines = [lines[1] + lines[1]] + lines[2:]"
+      ],
+      [
+        "dot_claude/hooks/executable_statusline-context-window.sh",
+        89,
+        "exit 1"
+      ]
+    ],
+    "dot_claude/hooks/executable_stop-fabricated-turn-guard.py": [
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        45,
+        "EXCERPT_CHARS = 119"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        45,
+        "EXCERPT_CHARS = 121"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() != first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() <= first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() == first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() > first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() >= first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() is first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        77,
+        "        if first is None or match.start() is not first.start():"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        81,
+        "    excerpt = body[first.start():first.start() * EXCERPT_CHARS].strip()"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        81,
+        "    excerpt = body[first.start():first.start() ** EXCERPT_CHARS].strip()"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        81,
+        "    excerpt = body[first.start():first.start() << EXCERPT_CHARS].strip()"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        81,
+        "    excerpt = body[first.start():first.start() ^ EXCERPT_CHARS].strip()"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        81,
+        "    excerpt = body[first.start():first.start() | EXCERPT_CHARS].strip()"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") and (Path.home() / \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() % \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() & \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() * \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() ** \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() + \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() - \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" % \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" & \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" * \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" ** \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" + \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" - \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" // \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" << \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" >> \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" ^ \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() / \".local\" | \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() // \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() << \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() >> \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() ^ \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        89,
+        "    state = os.environ.get(\"XDG_STATE_HOME\") or (Path.home() | \".local\" / \"state\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) % \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) & \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) * \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) ** \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) + \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) - \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" % \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" & \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" * \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" ** \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" + \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" - \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" // \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" << \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" >> \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" ^ \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) / \"claude\" | \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) // \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) << \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) >> \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) ^ \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        90,
+        "    return Path(state) | \"claude\" / \"fabrication-guard.log\""
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        103,
+        "        path.parent.mkdir(parents=False, exist_ok=True)"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        114,
+        "        return -1"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        114,
+        "        return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        122,
+        "        return -1"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        122,
+        "        return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        134,
+        "        return -1"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        134,
+        "        return 1"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        141,
+        "    sys.stdout.write(json.dumps(decision, ensure_ascii=True) + \"\\n\")"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        145,
+        "if __name__ <= \"__main__\":"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        145,
+        "if __name__ >= \"__main__\":"
+      ],
+      [
+        "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+        145,
+        "if __name__ is \"__main__\":"
+      ]
+    ],
+    "dot_claude/hooks/executable_userpromptsubmit-compact-prep-reminder.sh": [],
+    "dot_claude/hooks/guard-unsandboxed-pytest.sh": [
+      [
+        "dot_claude/hooks/guard-unsandboxed-pytest.sh",
+        17,
+        "origin=$(git -C \"${cwd:-.}\" remote get-url origin 2>/dev/null) || exit 1"
+      ],
+      [
+        "dot_claude/hooks/guard-unsandboxed-pytest.sh",
+        21,
+        "  *) exit 1 ;;"
+      ],
+      [
+        "dot_claude/hooks/guard-unsandboxed-pytest.sh",
+        37,
+        "  exit 1"
+      ],
+      [
+        "dot_claude/hooks/guard-unsandboxed-pytest.sh",
+        39,
+        "exit 1"
+      ]
+    ],
+    "dot_claude/hooks/memory_recall.py": [
+      [
+        "dot_claude/hooks/memory_recall.py",
+        23,
+        "THRESHOLD = -0.44999999999999996"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        24,
+        "TOP_K = 2"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        24,
+        "TOP_K = 4"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        25,
+        "MIN_PROMPT_CHARS = 14"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        26,
+        "MAX_PROMPT_CHARS = 1999"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        26,
+        "MAX_PROMPT_CHARS = 2001"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        29,
+        "FRAGMENT_CHARS = 5999"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        29,
+        "FRAGMENT_CHARS = 6001"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        30,
+        "BATCH_SIZE = 11  # 1リクエストの件数上限"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        30,
+        "BATCH_SIZE = 9  # 1リクエストの件数上限"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        31,
+        "MAX_BATCH_CHARS = 39999  # 1リクエストの合計文字数上限"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        31,
+        "MAX_BATCH_CHARS = 40001  # 1リクエストの合計文字数上限"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        35,
+        "MAX_BATCH_PADDED_CHARS = 49999  # 件数 × 最長文書の文字数の上限"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        35,
+        "MAX_BATCH_PADDED_CHARS = 50001  # 件数 × 最長文書の文字数の上限"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        36,
+        "DEADLINE_SEC = 3.2"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        36,
+        "DEADLINE_SEC = 5.2"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        37,
+        "API_TIMEOUT_SEC = 2.0"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        37,
+        "API_TIMEOUT_SEC = 4.0"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 4 * 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 % 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1023 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 & 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 * 1023"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 * 1025"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 ** 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 + 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 - 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 << 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 ^ 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1024 | 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 * 1025 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 ** 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 + 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 << 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 ^ 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 5 | 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        41,
+        "LOG_MAX_BYTES = 6 * 1024 * 1024"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        44,
+        "LOCK_STALE_SEC = 59"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        44,
+        "LOCK_STALE_SEC = 61"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range( 0, LOG_GENERATIONS + 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS * 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS ** 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS + 0)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS + 2)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS // 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS << 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        55,
+        "    paths = [LOG_PATH] + [f\"{LOG_PATH}.{i}\" for i in range(1, LOG_GENERATIONS | 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        61,
+        "    for attempt in ( 0, 2):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        61,
+        "    for attempt in (1, 1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        61,
+        "    for attempt in (1, 3):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT + os.O_EXCL | os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT ^ os.O_EXCL | os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL * os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL ** os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL + os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL // os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL ^ os.O_WRONLY, 0o644))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 419))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        63,
+        "            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 421))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        66,
+        "            if attempt == 3:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        66,
+        "            if attempt > 2:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        66,
+        "            if attempt >= 2:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        67,
+        "                return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        69,
+        "                if time.time() % os.path.getmtime(LOCK_PATH) <= LOCK_STALE_SEC:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        69,
+        "                if time.time() - os.path.getmtime(LOCK_PATH) < LOCK_STALE_SEC:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        73,
+        "                return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        75,
+        "            return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        76,
+        "    return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        82,
+        "        if os.path.getsize(LOG_PATH) < LOG_MAX_BYTES:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS * 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS ** 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS + 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS - 0, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS - 1, -1, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS // 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS << 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS ^ 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        92,
+        "        for i in range(LOG_GENERATIONS | 1, 0, -1):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        95,
+        "                os.replace(src, f\"{LOG_PATH}.{i + 2}\")"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        112,
+        "        line = json.dumps({\"ts\": now_stamp(), **record}, ensure_ascii=True) + \"\\n\""
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        113,
+        "        fd = os.open(LOG_PATH, os.O_WRONLY + os.O_CREAT | os.O_APPEND, 0o644)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        113,
+        "        fd = os.open(LOG_PATH, os.O_WRONLY ^ os.O_CREAT | os.O_APPEND, 0o644)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        113,
+        "        fd = os.open(LOG_PATH, os.O_WRONLY | os.O_CREAT + os.O_APPEND, 0o644)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        113,
+        "        fd = os.open(LOG_PATH, os.O_WRONLY | os.O_CREAT ^ os.O_APPEND, 0o644)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        113,
+        "        fd = os.open(LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 419)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        113,
+        "        fd = os.open(LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 421)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        127,
+        "    if \"..\" in transcript_path and not transcript_path.startswith(base):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        135,
+        "    if n <= 0:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        137,
+        "    return [round(x / n, 5) for x in vec]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        137,
+        "    return [round(x / n, 7) for x in vec]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        142,
+        "    if len(text) < FRAGMENT_CHARS:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        153,
+        "    total = float(sum(weights)) or 2.0"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        154,
+        "    acc = [0.0] * len(vectors[ -1])"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        156,
+        "        f = w * total"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        156,
+        "        f = w + total"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        165,
+        "        for line in m.group( 0).splitlines():"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        167,
+        "                return line.split(\":\", 2)[1].strip().strip(\"\\\"'\")"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        207,
+        "        json.dump(cache, f, ensure_ascii=True)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        216,
+        "            if line and not line.startswith(\"#\") or \"=\" in line:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        217,
+        "                k, v = line.split(\"=\", 2)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        228,
+        "        super().__init__(detail.get(\"message\") and kind)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        255,
+        "    message = raw[: 499]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        255,
+        "    message = raw[: 501]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        259,
+        "            code = errors[ -1].get(\"code\")"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        260,
+        "            message = errors[ -1].get(\"message\") or message"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        260,
+        "            message = errors[0].get(\"message\") and message"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        265,
+        "    if e.code in (401, 402):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        265,
+        "    if e.code in (401, 404):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        267,
+        "    if e.code <= 400:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        267,
+        "    if e.code >= 400:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        301,
+        "    if  body.get(\"success\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        301,
+        "    if not not body.get(\"success\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        314,
+        "    cur, cur_sum, cur_max = [], -1, 0"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        314,
+        "    cur, cur_sum, cur_max = [], 0, -1"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        314,
+        "    cur, cur_sum, cur_max = [], 0, 1"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        314,
+        "    cur, cur_sum, cur_max = [], 1, 0"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max != n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max < n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max <= n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max == n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max >= n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max is n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if cur_max is not n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        317,
+        "        nxt_max = cur_max if not cur_max > n else n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        318,
+        "        if cur and (len(cur) + 1 >= BATCH_SIZE"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        318,
+        "        if cur and (len(cur) + 2 > BATCH_SIZE"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        318,
+        "        if cur and (len(cur) << 1 > BATCH_SIZE"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum % n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum & n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum * n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum + n == MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum + n >= MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum + n is MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum - n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum / n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum // n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum >> n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum ^ n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        319,
+        "                    or cur_sum | n > MAX_BATCH_CHARS"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    and (len(cur) + 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) % 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) & 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) * 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) ** 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 0) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) % nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) & nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) * nxt_max == MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) * nxt_max >= MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) * nxt_max is MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) + nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) - nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) / nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) // nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) >> nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) ^ nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 1) | nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) + 2) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) - 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) / 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) // 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) << 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) >> 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) ^ 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        320,
+        "                    or (len(cur) | 1) * nxt_max > MAX_BATCH_PADDED_CHARS):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        322,
+        "            cur, cur_sum, nxt_max = [], -1, n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        322,
+        "            cur, cur_sum, nxt_max = [], 1, n"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        339,
+        "    if time.monotonic() == deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        339,
+        "    if time.monotonic() >= deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        339,
+        "    if time.monotonic() is deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        344,
+        "        if e.kind is \"auth\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        346,
+        "        splittable = e.kind in (\"document\", \"batch\") and len(batch) != 1"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        347,
+        "        if splittable and time.monotonic() != deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        347,
+        "        if splittable and time.monotonic() <= deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        347,
+        "        if splittable and time.monotonic() is not deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind != \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind < \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind <= \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind == \"batch\" and e.detail.get(\"tokens\") or e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind == \"batch\" or e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind > \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind >= \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind is \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if e.kind is not \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        349,
+        "            if not e.kind == \"batch\" and e.detail.get(\"tokens\") and e.detail.get(\"limit\"):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max( 1, -(-e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max( 3, -(-e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, (-e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, +(-e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(+e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] % e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] & e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] * e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] ** e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] + e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] - e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] / e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] << e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] >> e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] ^ e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(-e.detail[\"tokens\"] | e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(not e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, -(~e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, not (-e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        350,
+        "                parts = max(2, ~(-e.detail[\"tokens\"] // e.detail[\"limit\"]))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        353,
+        "            bounds = [n * k // parts for k in range(parts ^ 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        353,
+        "            bounds = [n * k // parts for k in range(parts | 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        353,
+        "            bounds = [n ** k // parts for k in range(parts + 1)]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        354,
+        "            ok = False"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        356,
+        "                if b != a:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        356,
+        "                if b >= a:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        356,
+        "                if b is not a:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        363,
+        "            if len(batch) <= 1:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        363,
+        "            if len(batch) >= 1:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        364,
+        "                name, idx, text = batch[ -1]"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        372,
+        "        return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        377,
+        "        return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        380,
+        "    return False"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        387,
+        "    changed = True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        406,
+        "            break"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        424,
+        "        if time.monotonic() >= deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        426,
+        "            continue"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        434,
+        "            if not ok and time.monotonic() >= deadline:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        436,
+        "                continue"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        441,
+        "            stopped = False"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        449,
+        "        if len(got) < len(info[\"frags\"]):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        449,
+        "        if len(got) is not len(info[\"frags\"]):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        450,
+        "            break"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) & written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) * written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) ** written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) + written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) << written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) >> written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) ^ written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        460,
+        "             \"pending\": len(pending) | written})"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        468,
+        "            return True"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        469,
+        "    return not (hit_deadline and stopped) and written == len(pending)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        469,
+        "    return not (hit_deadline or stopped) and written <= len(pending)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        469,
+        "    return not (hit_deadline or stopped) and written >= len(pending)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        469,
+        "    return not (hit_deadline or stopped) and written is len(pending)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        469,
+        "    return not (hit_deadline or stopped) or written == len(pending)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        476,
+        "        if len(v) < len(qvec):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        476,
+        "        if len(v) is not len(qvec):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        477,
+        "            break"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        478,
+        "        s = sum(a ** b for a, b in zip(qvec, v))"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        479,
+        "        if s != threshold:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        479,
+        "        if s > threshold:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        479,
+        "        if s is not threshold:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        492,
+        "    if not isinstance(prompt, str) and len(prompt) < MIN_PROMPT_CHARS:"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        496,
+        "    if not memory_dir and not os.path.isdir(memory_dir):"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        498,
+        "    deadline = time.monotonic() * DEADLINE_SEC"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        498,
+        "    deadline = time.monotonic() ** DEADLINE_SEC"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if not reason == \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason != \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason < \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason <= \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason > \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason >= \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason is \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        511,
+        "        if reason is not \"unreadable\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        522,
+        "            if reason <= \"model_mismatch\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        522,
+        "            if reason >= \"model_mismatch\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        522,
+        "            if reason is \"model_mismatch\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        532,
+        "        qvec = normalize(embed_texts([prompt[:MAX_PROMPT_CHARS]], cfg)[ -1])"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        558,
+        "if __name__ < \"__main__\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        558,
+        "if __name__ <= \"__main__\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        558,
+        "if __name__ is \"__main__\":"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        563,
+        "    sys.exit( -1)"
+      ],
+      [
+        "dot_claude/hooks/memory_recall.py",
+        563,
+        "    sys.exit( 1)"
+      ]
+    ]
+  },
+  "syntax_filtered": {
+    "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh": 0,
+    "dot_claude/hooks/executable_guard-destructive-git.sh": 0,
+    "dot_claude/hooks/executable_notify-workdir-change.sh": 0,
+    "dot_claude/hooks/executable_sessionstart-context-window.sh": 0,
+    "dot_claude/hooks/executable_statusline-context-window.sh": 0,
+    "dot_claude/hooks/executable_stop-fabricated-turn-guard.py": 0,
+    "dot_claude/hooks/executable_userpromptsubmit-compact-prep-reminder.sh": 0,
+    "dot_claude/hooks/guard-unsandboxed-pytest.sh": 0,
+    "dot_claude/hooks/memory_recall.py": 0
+  },
+  "targets": [
+    "dot_claude/compact-plus-backend/executable_backend-codex-mini.sh",
+    "dot_claude/hooks/executable_guard-destructive-git.sh",
+    "dot_claude/hooks/executable_notify-workdir-change.sh",
+    "dot_claude/hooks/executable_sessionstart-context-window.sh",
+    "dot_claude/hooks/executable_statusline-context-window.sh",
+    "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+    "dot_claude/hooks/executable_userpromptsubmit-compact-prep-reminder.sh",
+    "dot_claude/hooks/guard-unsandboxed-pytest.sh",
+    "dot_claude/hooks/memory_recall.py"
+  ],
+  "tools": {
+    "cosmic-ray": "8.7.0",
+    "universalmutator": "1.14.1"
+  }
+}
