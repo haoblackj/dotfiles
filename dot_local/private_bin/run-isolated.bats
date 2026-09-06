@@ -141,12 +141,25 @@ teardown() {
 
 @test "監視対象が変わらなければ報告が空で0で終わる" {
     watched_dir="$(mktemp -d -t run-isolated-test-watched.XXXXXX)"
-    echo before > "$watched_dir/existing.txt"
     export VERIFY_TESTS_WATCHED="$watched_dir"
+
+    # まず監視が実際に有効であることを確かめる（対象が1件以上あり、走行の
+    # 前後で mtime を実際に読んでいることの証拠）。ここが通らなければ
+    # 「報告が空」が「変化が無かったから」なのか「そもそも監視していない
+    # から」なのか区別できない。mtime 差分が実装されていなければ、この
+    # ブロックの時点でこのテストは赤くなる。
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    [ "$status" -eq 4 ]
+    [[ "$output" == *"本番へ書いた: $watched_dir/result.txt"* ]]
+
+    # 監視が有効だと確かめた上で、改めて何も書き換えない走行を見る。
+    # ここでの「報告が空・終了コード0」は、直前のブロックで監視が働いて
+    # いることを既に確認済みなので、「変化が無かったから空」だと言える。
     run "$RUN_ISOLATED" "$REPO_DIR" -- true
-    unset VERIFY_TESTS_WATCHED
     [ "$status" -eq 0 ]
     [[ "$output" != *"$watched_dir"* ]]
+
+    unset VERIFY_TESTS_WATCHED
     rm -rf -- "$watched_dir"
 }
 
