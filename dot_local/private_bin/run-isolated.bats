@@ -213,24 +213,35 @@ teardown() {
     chmod +x "$mutant"
 
     # 実際に置換が起きたことを見る(空振りで両方とも変化なしだと、以降の
-    # 赤/緑の判定が「もともとの挙動」を見ているだけになりかねない)。
+    # 赤/緑の判定が「もともとの挙動」を見ているだけになりかねない)。まだ
+    # どちらの run も走っていないので、ここで落ちても本番へは何も届かない。
     [[ "$(cat "$mutant")" == *"$fixture_dir"* ]]
     ! grep -q -F -- '--ro-bind "$p" "$p")' "$mutant"
 
     # 壊した複製: フィクスチャ(本番ではない自作のディレクトリ)が
-    # 書き込み可能になっている(赤=保護が効いていない状態)。
+    # 書き込み可能になっている(赤=保護が効いていない状態)はず。
     run "$mutant" "$REPO_DIR" -- touch "$mutant_marker"
-    [ "$status" -eq 0 ]
-    [ -e "$mutant_marker" ]
-
+    mutant_status="$status"
+    mutant_marker_exists=0
+    [ -e "$mutant_marker" ] && mutant_marker_exists=1
     rm -f -- "$mutant"
     rm -rf -- "$fixture_dir"
 
-    # 原本: 実在するRO_BINDSのエントリへの書き込みは失敗する(緑)。
+    # 原本: 実在するRO_BINDSのエントリ(~/.claude/hooks)への書き込みは失敗する
+    # はず(緑)。カーネルの読み取り専用bindが失敗を保証するが、万一 assert が
+    # 落ちてもマーカーを本番のパスに残さないよう、存在確認と削除を assert
+    # より前で行う。
     original_marker="$HOME/.claude/hooks/.run-isolated-mutation-test-marker-$$"
     run "$RUN_ISOLATED" "$REPO_DIR" -- touch "$original_marker"
-    [ "$status" -ne 0 ]
-    [ ! -e "$original_marker" ]
+    original_status="$status"
+    original_marker_exists=0
+    [ -e "$original_marker" ] && original_marker_exists=1
+    rm -f -- "$original_marker"
+
+    [ "$mutant_status" -eq 0 ]
+    [ "$mutant_marker_exists" -eq 1 ]
+    [ "$original_status" -ne 0 ]
+    [ "$original_marker_exists" -eq 0 ]
 }
 
 @test "(b) diff_watchedの呼び出しを外すと本番資産への書き込みを見逃すが、原本は検出する" {
@@ -268,15 +279,20 @@ teardown() {
 
     ! grep -q -F -- '--bind "$sandbox" "$HOME"' "$mutant"
 
-    # 壊した複製: 使い捨てHOMEへ差し替わらず、本番のHOMEがそのまま見える(赤)。
+    # 壊した複製: 使い捨てHOMEへ差し替わらず、本番のHOMEがそのまま見えるはず(赤)。
     run "$mutant" "$REPO_DIR" -- test -e "$marker"
-    [ "$status" -eq 0 ]
+    mutant_status="$status"
 
-    # 原本: 使い捨てHOMEへ差し替わっており、マーカーは見えない(緑)。
+    # 原本: 使い捨てHOMEへ差し替わっており、マーカーは見えないはず(緑)。
+    # 同じマーカーを両方の走行で使うため、削除は両方の run が終わったあと・
+    # assert より前で行う(assert が落ちても本番のHOMEに痕跡を残さない)。
     run "$RUN_ISOLATED" "$REPO_DIR" -- test -e "$marker"
-    [ "$status" -eq 1 ]
+    original_status="$status"
 
     rm -f -- "$marker" "$mutant"
+
+    [ "$mutant_status" -eq 0 ]
+    [ "$original_status" -eq 1 ]
 }
 
 # 上記3つの壊し方は、いずれもファイル中の特定の文字列を置換(grep -v /
