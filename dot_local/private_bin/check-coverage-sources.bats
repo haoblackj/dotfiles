@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# mutation-target: dot_local/private_bin/executable_check-coverage-sources.sh
 # check-coverage-sources.sh が、pyproject.toml の [tool.coverage.run] の
 # source/omit から漏れた追跡 .py を見つけることを確かめる。
 # 詳細は penguinEx の
