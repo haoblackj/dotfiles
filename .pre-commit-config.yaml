@@ -12,3 +12,14 @@ repos:
           bash -c 'command -v verify-tests >/dev/null 2>&1 ||
           { echo "verify-tests が PATH にありません（検査を飛ばしました）"; exit 0; };
           verify-tests "$(git rev-parse --show-toplevel)" --strict'
+      - id: check-coverage-sources
+        name: check-coverage-sources
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+        entry: >-
+          bash -c 'command -v check-coverage-sources.sh >/dev/null 2>&1 ||
+          { echo "check-coverage-sources.sh が PATH にありません"; exit 1; };
+          check-coverage-sources.sh "$(git rev-parse --show-toplevel)"'
