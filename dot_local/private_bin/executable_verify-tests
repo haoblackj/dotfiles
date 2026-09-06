@@ -3293,12 +3293,10 @@ def run_python_lane(repo, sandbox, copy):
     # ために、レーンの側で対象ごとに明示して置く。
     out["excluded"] = {t: [] for t in got["targets"]}
     for t in got["targets"]:
-        alive = len(out["survivors"][t])
-        total = seen[t]
-        out["stats"][t] = {
-            "mutants": total, "excluded": 0, "analyzed": total,
-            "killed": total - alive, "survivors": alive,
-            "timeouts": timeouts[t]}
+        # **kill 数と生き残り数はここに持たない。**報告は `survivors_for` を
+        # 通した件数から導く（`STATS_KEYS` の注記）。
+        out["stats"][t] = {"mutants": seen[t], "excluded": 0,
+                           "analyzed": seen[t], "timeouts": timeouts[t]}
     # 変異体が1件も出なかった対象。**止めない**（門の粒度をセッション単位から
     # 対象単位へ変えるのは spec の変更にあたる）が、黙って落とさない。
     # 「測っていない」を静かに通さないための行。
@@ -3334,10 +3332,12 @@ def shell_lane_result(rows):
         out["targets"].append(target)
         out["survivors"][target] = [tuple(k) for k in row["survivors"]]
         out["excluded"][target] = [tuple(k) for k in row["excluded"]]
+        # `killed` と `survivors` はここに持たない（`STATS_KEYS` の注記）。
+        # レーンは `killed + notkilled == kept` を門で確かめてから返すので、
+        # `analyzed - 生き残り` と一致する。一致するなら持つ理由が無い。
         out["stats"][target] = {
             "mutants": row["mutants"], "excluded": len(row["excluded"]),
-            "analyzed": row["analyzed"], "killed": row["killed"],
-            "survivors": len(row["survivors"]), "timeouts": row["timeouts"]}
+            "analyzed": row["analyzed"], "timeouts": row["timeouts"]}
     return out
 
 
@@ -3369,8 +3369,19 @@ def merge_lanes(lanes):
     return current, stats, blocked, notes
 
 
-def score_line(target, s):
+# 成績が持つ鍵。**kill 数と生き残り数を持たない。**どちらも
+# 「測定した件数」と「生き残りの集合の大きさ」から決まる。レーンの側で数え直すと、
+# 報告が読む件数と判定が読む集合が別経路になり、**食い違ったときに成績の行だけが
+# 嘘をつき、判定は正しいまま**になる。生き残りの件数は `survivors_for` を通した
+# ものだけを使う（`compare` や `store_baseline` が読むのと同じ門）。
+STATS_KEYS = ("mutants", "excluded", "analyzed", "timeouts")
+
+
+def score_line(target, s, alive):
     """対象1つの成績の行（受け入れ条件23）。
+
+    `alive` は `survivors_for` が返した、その対象の生き残りの識別子。
+    **件数をここで数え直さない。**判定が使う集合そのものから導く。
 
     **生存率は併記するだけで判定には使わない。**等価ミュータントが率の上で
     永久に生存側へ計上され続けるので、閾値を運用すると緩めた幅の中に本物の
@@ -3380,34 +3391,47 @@ def score_line(target, s):
     数えるので、出さないと「テストが判別した」と「テストが遅かった」が成績の
     上で同じ顔をする。
     """
+    lacking = [k for k in STATS_KEYS if k not in s]
+    if lacking:
+        raise BaselineBroken(
+            f"{target}: 成績の記録が足りない（{'、'.join(lacking)}）")
     analyzed = s["analyzed"]
+    survivors = len(alive)
     rate = ("—" if analyzed == 0
-            else f"{100.0 * s['survivors'] / analyzed:.1f}%")
+            else f"{100.0 * survivors / analyzed:.1f}%")
     return (f"  {target}  変異体 {s['mutants']}"
             f"（構文検査で除外 {s['excluded']} / 測定 {analyzed}）"
-            f"  kill {s['killed']}  生き残り {s['survivors']}"
+            f"  kill {analyzed - survivors}  生き残り {survivors}"
             f"  生存率 {rate}  タイムアウト由来の kill {s['timeouts']}")
 
 
 def mutate_report(current, stats, base, tools, diff, labels, failed,
-                  unmeasured_rows, notes):
+                  unmeasured_rows, notes, blocked):
     """`--mutate` の報告の行。**0件でも見出しを出す。**
 
     黙って省くと、該当が無かったのか報告の側が落としたのかを読む人が区別
-    できない（`update_report` と同じ流儀）。
+    できない（`update_report` と同じ流儀）。**最も重い理由をこの流儀の外に
+    置かない。**レーンが丸ごと立ち上がらなかったことと、走行が本番資産へ
+    書いたことは `blocked` に載る。見出しの無い裸の行として末尾へ流すと、
+    「計測できなかった対象: 0件」と「分類: 計測できなかった」が並ぶ報告になる。
     """
+    # **生き残りの集合を先に作る。**成績の行がここから件数を取る。
+    alive = survivors_for(current)
+
     lines = ["-- 対象ごとの成績 --"]
-    lines += [score_line(t, stats[t]) for t in current["targets"]]
+    lines += [score_line(t, stats[t], alive[t]) for t in current["targets"]]
     if not current["targets"]:
         lines.append("  （測れた対象なし）")
 
     # 受け入れ条件24。**パスと行番号と変異後の行の内容で出す。**
-    alive = survivors_for(current)
     total = sum(len(v) for v in alive.values())
     lines.append(f"-- 生き残った変異体: {total}件 --")
     for t in current["targets"]:
         for path, line, content in alive[t]:
             lines.append(f"  {path}:{line}: {content}")
+
+    lines.append(f"-- レーンが立ち上がらなかった: {len(blocked)}件 --")
+    lines += [f"  {why}" for why in blocked]
 
     lines.append(f"-- 計測できなかった対象: {len(current['unmeasurable'])}件 --")
     lines += [f"  {reason}" for _t, reason in sorted(current["unmeasurable"])]
@@ -3510,8 +3534,12 @@ def mutate_main(repo, argv):
     「判別力が落ちた」「基準が無い」。先の2つは `main` とここの入口で決まる
     （「対象外」は隔離を組む手前、「実行できなかった」は bwrap と venv の有無）。
     """
-    if "--strict" in argv or "--" in argv:
-        print(f"{NOT_RUNNABLE}: --mutate は --strict とも -- とも併用できません。"
+    # **効かない指定を黙って無視しない。**無視すると、打った人には効いたように
+    # 見える。`--strict` は `--mutate` が既定で非0を返すので要らず、`--` と
+    # `--discover-only` は変異の走行に当たる意味を持たない。
+    misused = [f for f in ("--strict", "--", "--discover-only") if f in argv]
+    if misused:
+        print(f"{NOT_RUNNABLE}: --mutate は {' / '.join(misused)} と併用できません。"
               "--mutate は所見が1つでもあれば既定で非0を返すので --strict が要らない")
         return 1
     try:
@@ -3527,17 +3555,25 @@ def mutate_main(repo, argv):
     sandbox = make_sandbox_home()
     try:
         current, stats, blocked, notes, rows = mutate_run(repo, sandbox)
+    except BaselineBroken as e:
+        # `merge_lanes` が投げうる（対象が2つのレーンに現れた場合）。現状は
+        # 到達しないが、**到達したときに素の traceback にしない。**
+        current, stats, blocked, notes, rows = None, {}, [str(e)], [], []
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
     # 本番資産の前後比較は走行ごとに1回（受け入れ条件40）。変異体ごとではない。
     if watched_report(before):
         blocked = list(blocked) + ["走行が本番資産へ書いた（上の行を見る）"]
     if current is None:
+        # 走行の入れ物すら組み立てられていないので、報告の他の節は出せない。
+        # **見出しと件数は同じ流儀で出す。**
         print(f"{UNMEASURABLE}: 走行を組み立てられなかった")
+        print(f"-- レーンが立ち上がらなかった: {len(blocked)}件 --")
         for why in blocked:
             print(f"  {why}")
-        for n in rows:
-            print(f"  測っていない対象: {n[0]} — {n[1]}")
+        print(f"-- 測っていない対象: {len(rows)}件 --")
+        for path_, why in rows:
+            print(f"  {path_} — {why}")
         return 1
     current["tools"] = tools
 
@@ -3546,14 +3582,13 @@ def mutate_main(repo, argv):
         base = load_baseline(path)
         labels, failed, diff = classify_targets(base, current)
         for ln in mutate_report(current, stats, base, tools, diff,
-                                labels, failed, rows, notes):
+                                labels, failed, rows, notes, blocked):
             print(ln)
         if "--update-baseline" in argv:
             if blocked:
                 # 立ち上がらなかった走行の結果で基準を書き換えない。
+                # 理由は上の節が既に1件1行で出している。
                 print(f"{UNMEASURABLE}: 基準を書かない")
-                for why in blocked:
-                    print(f"  {why}")
                 return 1
             written, skipped = update_baseline(path, current)
             for ln in update_report(current, written, skipped):
@@ -3567,8 +3602,6 @@ def mutate_main(repo, argv):
         # 今回の成績を基準と比べられていない。5分類のうちこれが最も近い。
         print(f"{UNMEASURABLE}: {e}")
         return 1
-    for why in blocked:
-        print(f"  {why}")
     print(f"分類: {label}")
     return code
 
@@ -4100,6 +4133,17 @@ def main(argv):
     # 順序を変えると、優先順位の先頭2つが `--mutate` だけ別になる。
     if "--mutate" in argv:
         return mutate_main(repo, argv)
+
+    # **効かない指定を黙って無視しない。**`--mutate` の側で `--strict` を
+    # 拒否したのと同じ理由で、逆向きも拒否する。無視すると、基準を書いたつもりの
+    # 走行が v1 の差分判定として通り、打った人には効いたように見える。
+    # **効かない指定を黙って無視しない。**`--mutate` の側で `--strict` を
+    # 拒否したのと同じ理由で、逆向きも拒否する。無視すると、基準を書いたつもりの
+    # 走行が v1 の差分判定として通り、打った人には効いたように見える。
+    if "--update-baseline" in argv:
+        print(f"{NOT_RUNNABLE}: --update-baseline は --mutate と一緒に使います"
+              "（単独では基準を書く走行そのものが起きません）")
+        return 1
 
     strict = "--strict" in argv
     discover_only = "--discover-only" in argv
