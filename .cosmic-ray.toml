@@ -48,6 +48,7 @@ timeout = 30
 # 書くと、あとから同じディレクトリへ置かれた `.py` まで黙って除外に入る。1本ずつ
 # 名指しすることで、新しい `.py` は必ず対象か完全性の門のどちらかに現れる。
 excluded-modules = [
+    "dot_claude/hooks/tests/test_coverage_config.py",  # テストそのもの
     "dot_claude/hooks/tests/test_memory_recall.py",  # テストそのもの
 ]
 
