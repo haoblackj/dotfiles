@@ -1,2 +1,37 @@
 [tool.pytest.ini_options]
 testpaths = ["dot_claude/hooks/tests"]
+
+# カバレッジの設定（penguinEx issue #16、テスト基盤の層2）。
+# penguinEx 側の pyproject.toml と同じ構成。source だけがこのリポジトリの
+# 実体（dot_claude/hooks 配下）に合わせてある。
+[tool.coverage.run]
+branch = true
+# **データファイルをリポジトリの外へ置く。**run-isolated はリポジトリを
+# 読み取り専用で bind するので、既定の <repo>/.coverage では書けない。
+# 隔離の中の $HOME は書けるので、そこへ置いて --out で取り出す。
+data_file = "${COVERAGE_OUT_DIR?}/.coverage"
+# **テストコード自身も計測する。**実行されていないテストファイルは、
+# カバレッジ0ではなく「そのファイルが一度も読み込まれていない」として
+# 現れる。テストがあるのに走っていない、という状態をこれで捕まえる。
+source = [
+    "dot_claude/hooks",
+]
+omit = [
+    # シェルテスト（executable_stop-fabricated-turn-guard.test.sh）が
+    # サブプロセスとして起動する対象で、pytest 経由のカバレッジ計測は
+    # 届かない。テストが無いわけではなく、計測の手段が別（shell）にある。
+    # **グロブでまとめない**（同じディレクトリへあとから置かれた .py まで
+    # 黙って除外に入るため）。
+    "dot_claude/hooks/executable_stop-fabricated-turn-guard.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# **これが無いと「一度も実行されていないファイル」の探索がサブディレクトリを
+# 飛ばす。**coverage.py は既定で、importable なファイル（ツリーの根にあるか、
+# `__init__.py` を持つディレクトリの中）しか未実行ファイルとして数えない。
+# **このリポジトリに `__init__.py` は1本も無い**うえ、唯一のテストが
+# `dot_claude/hooks/tests/` にあるため、これが無いと受け入れ条件8が
+# 1本も効かない。
+include_namespace_packages = true
