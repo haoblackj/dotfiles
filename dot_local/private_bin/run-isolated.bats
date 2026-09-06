@@ -117,3 +117,54 @@ teardown() {
     [ ! -e "$out_dir/partial.txt" ]
     rm -rf -- "$out_dir"
 }
+
+# 層1 Task 3: 本番資産の mtime 差分。
+#
+# bwrap の下からは本番の監視対象へ物理的に書けない（それが隔離の目的その
+# ものなので、これは正しい振る舞い）。そのため「走行中に監視対象が変わる」
+# 状況は、--out の指す先を監視対象そのものに重ねることで作る。--out の
+# 取り出しはこの道具自身がホスト側へ書く経路であり、それが監視対象と重なる
+# ことは実際に起こりうる（本番資産の保護が要る理由そのもの）。
+#
+# VERIFY_TESTS_WATCHED / VERIFY_TESTS_WATCHED_EXCLUDE でフィクスチャへ
+# 差し替える。実物の本番パスへは触れない。
+
+@test "監視対象のディレクトリへ --out が書くと報告に出て非0で終わる" {
+    watched_dir="$(mktemp -d -t run-isolated-test-watched.XXXXXX)"
+    export VERIFY_TESTS_WATCHED="$watched_dir"
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    unset VERIFY_TESTS_WATCHED
+    [ "$status" -eq 4 ]
+    [[ "$output" == *"本番へ書いた: $watched_dir/result.txt"* ]]
+    rm -rf -- "$watched_dir"
+}
+
+@test "監視対象が変わらなければ報告が空で0で終わる" {
+    watched_dir="$(mktemp -d -t run-isolated-test-watched.XXXXXX)"
+    echo before > "$watched_dir/existing.txt"
+    export VERIFY_TESTS_WATCHED="$watched_dir"
+    run "$RUN_ISOLATED" "$REPO_DIR" -- true
+    unset VERIFY_TESTS_WATCHED
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"$watched_dir"* ]]
+    rm -rf -- "$watched_dir"
+}
+
+@test "監視の一覧が空なら監視していないと分かる形で報告する" {
+    export VERIFY_TESTS_WATCHED=""
+    run "$RUN_ISOLATED" "$REPO_DIR" -- true
+    unset VERIFY_TESTS_WATCHED
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"監視対象なし"* ]]
+}
+
+@test "環境変数の除外に当てはまる変化は判定に算入せず報告だけする" {
+    watched_dir="$(mktemp -d -t run-isolated-test-watched.XXXXXX)"
+    export VERIFY_TESTS_WATCHED="$watched_dir"
+    export VERIFY_TESTS_WATCHED_EXCLUDE="$watched_dir"
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    unset VERIFY_TESTS_WATCHED VERIFY_TESTS_WATCHED_EXCLUDE
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"変化（判定に算入しない）: $watched_dir/result.txt"* ]]
+    rm -rf -- "$watched_dir"
+}
