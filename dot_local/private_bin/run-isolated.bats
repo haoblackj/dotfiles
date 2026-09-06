@@ -90,3 +90,30 @@ teardown() {
     [ -e "$out_dir/partial.txt" ]
     rm -rf -- "$out_dir"
 }
+
+@test "中のコマンドは成功したが --out の指す先が書き込み不可なら警告を出し専用の終了コードで知らせる" {
+    out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
+    chmod 500 "$out_dir"
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    chmod 700 "$out_dir"
+    # 取り出しの失敗が「正常終了(0)」に化けていないことを見る。
+    # 中のコマンド自体は成功しているので、素の 0/1 と衝突しない
+    # 専用コード（3）であることまで確かめる。
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"警告"* ]]
+    [ ! -e "$out_dir/result.txt" ]
+    rm -rf -- "$out_dir"
+}
+
+@test "中のコマンドが失敗し --out の指す先も書き込み不可なら、中のコマンドの終了コードを優先して伝え警告も出す" {
+    out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
+    chmod 500 "$out_dir"
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo partial > "$COVERAGE_OUT_DIR/partial.txt"; exit 1'
+    chmod 700 "$out_dir"
+    # 取り出しにも失敗しているが、中のコマンドの終了コード（1）が
+    # 専用コード（3）に上書きされず、そのまま外へ伝わることを見る。
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"警告"* ]]
+    [ ! -e "$out_dir/partial.txt" ]
+    rm -rf -- "$out_dir"
+}

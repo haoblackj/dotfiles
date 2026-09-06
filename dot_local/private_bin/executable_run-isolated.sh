@@ -116,9 +116,30 @@ rc=$?
 # サンドボックスを消す前（trap cleanup が走る前）にコピーする。
 # 中のコマンドが失敗していても（rc が非0でも）、それまでに書かれた
 # 出力はここでコピーする。
+#
+# mkdir/cp の失敗を握りつぶさない。--out の指す先が書き込み不可等で
+# コピーできなかった場合は必ず stderr へ警告を出す。
+# 終了コードの扱い（層1 Task 2 レビュー指摘対応）:
+#   - 中のコマンドが失敗していた場合（rc != 0）は、その rc をそのまま
+#     優先して返す。中のコマンドの終了コードは Task 1 からの土台の
+#     要件であり、取り出し失敗の警告は別途 stderr で分かるため、
+#     ここで rc を上書きしない。
+#   - 中のコマンドが成功していた場合（rc == 0）は、取り出しが失敗した
+#     まま 0 を返すと「正常終了」と区別が付かず、カバレッジのデータが
+#     静かに欠損する。そのため専用の終了コード 3（予約）を返す。
+extract_failed=0
 if [ -n "$out_dir" ]; then
-    mkdir -p "$out_dir"
-    cp -a "$sandbox/out/." "$out_dir/"
+    if ! mkdir -p "$out_dir"; then
+        echo "run-isolated.sh: 警告: --out の指す先 '$out_dir' を作成できません" >&2
+        extract_failed=1
+    elif ! cp -a "$sandbox/out/." "$out_dir/"; then
+        echo "run-isolated.sh: 警告: '$sandbox/out' から '$out_dir' への出力のコピーに失敗しました" >&2
+        extract_failed=1
+    fi
+fi
+
+if [ "$extract_failed" -eq 1 ] && [ "$rc" -eq 0 ]; then
+    exit 3
 fi
 
 exit "$rc"
