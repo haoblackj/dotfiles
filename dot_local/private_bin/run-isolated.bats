@@ -346,3 +346,85 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" -eq 1 ]
 }
+
+# 層2 Task 8: shell テストのカバレッジ（kcov）。
+# bats 自体は既に隔離の中から見えている（/home/linuxbrew は使い捨て HOME の
+# 被せの外）ため、bind の追加は kcov でも要らない見込みだが、実際に要るか
+# どうかは Step 4 で確かめる。要らなければ run-isolated.sh は変えない。
+
+@test "隔離の中でkcov --versionが成功する" {
+    run "$RUN_ISOLATED" "$REPO_DIR" -- kcov --version
+    [ "$status" -eq 0 ]
+}
+
+@test "kcovでbatsテストを計測すると--outで指定した先に実行/未実行両方の行を含むカバレッジが取り出される" {
+    out_dir="$(mktemp -d -t run-isolated-test-kcov-out.XXXXXX)"
+
+    # REPO_DIR は run-isolated.sh から同じ絶対パスで ro-bind されるので、
+    # ここに置いたフィクスチャは隔離の中からも同じパスで見える。
+    cat > "$REPO_DIR/kcov-target.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+covered_branch() {
+    echo "covered"
+}
+uncovered_branch() {
+    echo "uncovered"
+}
+if [ "${1:-}" = "run-covered" ]; then
+    covered_branch
+else
+    uncovered_branch
+fi
+SCRIPT
+    chmod +x "$REPO_DIR/kcov-target.sh"
+
+    cat > "$REPO_DIR/kcov-target.bats" <<'BATSFILE'
+#!/usr/bin/env bats
+@test "covered_branchだけを通す" {
+    run bash "$BATS_TEST_DIRNAME/kcov-target.sh" run-covered
+    [ "$status" -eq 0 ]
+    [ "$output" = "covered" ]
+}
+BATSFILE
+
+    # run-isolated.sh は COVERAGE_OUT_DIR を隔離の中で "$HOME/out" に設定する
+    # （--setenv COVERAGE_OUT_DIR "$HOME/out"）。kcov はここでは `-- ` の直後の
+    # コマンドそのもの（sh -c で包まない）なので、環境変数展開をホスト側の
+    # bats には期待できない。$HOME はホストと隔離の中とで同じ文字列を指し
+    # （--bind "$sandbox" "$HOME" で中身だけ差し替わる）、隔離の中からは
+    # bind mount 越しに同じ場所を指すため、ホスト側でこの文字列を組み立てて
+    # そのまま渡してよい。
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- \
+        kcov "$HOME/out/kcov-report" bats "$REPO_DIR/kcov-target.bats"
+    [ "$status" -eq 0 ]
+
+    report_dir="$out_dir/kcov-report"
+    [ -d "$report_dir" ]
+
+    # kcov は走行1回につき1つの cobertura.xml を、実行したバイナリ名の
+    # ハッシュ付きディレクトリ（例: bats.<hash>/cobertura.xml）の下に作る。
+    # そのファイルの中から kcov-target.sh 自身の <class> ブロック（filename
+    # 属性でこのファイルを指すもの）だけを取り出す。bats 本体の他スクリプトの
+    # 行を巻き込むと「たまたまどこかに hits="0" がある」だけで通ってしまう
+    # ため、対象を絞る。
+    target_cobertura="$(grep -l -F -- "kcov-target.sh" "$report_dir"/*/cobertura.xml 2>/dev/null | head -n 1)"
+    [ -n "$target_cobertura" ]
+    [ -e "$target_cobertura" ]
+
+    class_file="$(mktemp -t run-isolated-test-kcov-class.XXXXXX)"
+    awk '/filename="[^"]*kcov-target\.sh"/,/<\/class>/' "$target_cobertura" > "$class_file"
+    [ -s "$class_file" ]
+
+    # 実行された行（hits > 0）と実行されなかった行（hits="0"）の両方が
+    # 現れていることを見る。全行が実行済みなら計測が効いていない。
+    run grep -c -E 'hits="0"' "$class_file"
+    [ "$status" -eq 0 ]
+    [ "$output" -gt 0 ]
+
+    run grep -c -E 'hits="[1-9][0-9]*"' "$class_file"
+    [ "$status" -eq 0 ]
+    [ "$output" -gt 0 ]
+
+    rm -f -- "$class_file"
+    rm -rf -- "$out_dir"
+}
