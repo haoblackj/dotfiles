@@ -1,0 +1,7 @@
+# penguinEx と chezmoi のテストを走らせる venv。
+# システムの pip は PEP 668 で塞がれており、サンドボックスは $HOME を
+# 差し替えるので pip install --user も中から見えない。だから venv を作り、
+# run-isolated が読み取り専用で見せる。
+pytest==9.1.1
+coverage[toml]==7.11.0
+pytest-cov==7.0.0

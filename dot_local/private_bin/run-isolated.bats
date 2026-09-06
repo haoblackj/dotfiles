@@ -320,3 +320,29 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" -eq 1 ]
 }
+
+# 層1 Task 5: カバレッジを取れる python が隔離の中で使える状態にする。
+# venv 本体（~/.local/share/penguinex-test-venv）は git 管理外。
+# venv の作り方・要求バージョンは test-requirements.txt を参照。
+
+@test "隔離の中でpythonがvenvのものを指す" {
+    run "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import sys; print(sys.executable)'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"penguinex-test-venv"* ]]
+}
+
+@test "隔離の中でimport coverageが成功する" {
+    run "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import coverage'
+    [ "$status" -eq 0 ]
+}
+
+@test "隔離の中でimport pytest_covが成功する" {
+    run "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import pytest_cov'
+    [ "$status" -eq 0 ]
+}
+
+@test "venvのパスがrun-isolated.shの中で1箇所にだけ書かれている" {
+    run grep -c -F -- "penguinex-test-venv" "$RUN_ISOLATED"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 1 ]
+}

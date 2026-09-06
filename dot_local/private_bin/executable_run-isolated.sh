@@ -56,10 +56,19 @@ if [ "$#" -eq 0 ]; then
     exit 2
 fi
 
+# カバレッジを取れる python 一式（層1 Task 5）。venv 本体は git 管理外
+# （置き場所と要求パッケージは ~/.local/bin/test-requirements.txt を参照）。
+# venv は $HOME 配下にあるため、下の --bind による HOME 差し替えで隠れる。
+# RO_BINDS へ加えることで読み取り専用のまま見せ直す（HOME 差し替えより後に
+# 適用されるので、RO_BINDS の他エントリと同じ理屈で上書きされない）。
+# venv のパスはここ1箇所にしか書かない。
+VENV_DIR="$HOME/.local/share/penguinex-test-venv"
+
 # 実物の verify-tests の RO_BINDS を書き写した。読み取り専用で渡す場所。
 RO_BINDS=(
     "$HOME/.claude/hooks"
     "$HOME/.local/share/chezmoi/dot_claude/private_settings.json"
+    "$VENV_DIR"
 )
 
 # 実物の verify-tests の FIXTURE_PROJECT を書き写した。
@@ -238,6 +247,11 @@ for p in "${RO_BINDS[@]}"; do
 done
 
 bwrap_argv+=(--setenv COVERAGE_OUT_DIR "$HOME/out")
+
+# venv の bin を PATH の先頭へ差し込む。「見える」（RO_BINDS）だけでは
+# 中で走るコマンドが venv の python を選ばない。python も pytest もこれで
+# venv のものになる。
+bwrap_argv+=(--setenv PATH "$VENV_DIR/bin:$PATH")
 
 bwrap_argv+=(--ro-bind "$repo" "$repo")
 
