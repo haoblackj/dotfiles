@@ -181,3 +181,126 @@ teardown() {
     [[ "$output" == *"変化（判定に算入しない）: $watched_dir/result.txt"* ]]
     rm -rf -- "$watched_dir"
 }
+
+# 層1 Task 4: ラッパーを意図的に壊し、テストが実際に赤くなることを確かめる。
+#
+# 壊すのは常に $RUN_ISOLATED（配置先の実物）の「複製」に対してのみ行う。
+# 複製は各テストの中で mktemp によりその場で作り、走行後に消す。$RUN_ISOLATED
+# 自身は一切書き換えない。各テストは「壊した複製で赤くなる」ことと「壊して
+# いない原本で緑になる」ことの両方を1つのテストの中で確かめる。片方だけでは
+# 検査が効いているかどうか判断できない。
+#
+# (a) の壊し方は統制側の裁定に従う。RO_BINDS には環境変数での差し替え口が
+# 無いため、複製の中で一覧そのものをテスト用のフィクスチャ（自作の空
+# ディレクトリで、本番の実データではない）へ書き換えたうえで、そのフィクス
+# チャへの bind を --ro-bind から --bind へ変える。原本側は RO_BINDS を
+# 差し替えられないため、実在するエントリ（~/.claude/hooks）へ書き込みが
+# 「失敗する」ことだけを見る。書き込みは期待どおり失敗するので、本番の
+# ファイルには一切触れない。
+
+@test "(a) RO_BINDSをフィクスチャへ差し替え--bindへ変えると読み取り専用のはずのパスへ書けてしまうが、原本の既存RO_BINDSは書き込みを防ぐ" {
+    fixture_dir="$(mktemp -d -t run-isolated-test-mutant-a-fixture.XXXXXX)"
+    mutant_marker="$fixture_dir/marker"
+    mutant="$(mktemp -t run-isolated-test-mutant-a.XXXXXX)"
+
+    awk -v fixture="$fixture_dir" '
+        /^RO_BINDS=\($/ { print; print "    \"" fixture "\""; print ")"; skip=1; next }
+        skip && /^\)$/ { skip=0; next }
+        skip { next }
+        { print }
+    ' "$RUN_ISOLATED" > "$mutant"
+    sed -i 's#--ro-bind "$p" "$p")#--bind "$p" "$p")#' "$mutant"
+    chmod +x "$mutant"
+
+    # 実際に置換が起きたことを見る(空振りで両方とも変化なしだと、以降の
+    # 赤/緑の判定が「もともとの挙動」を見ているだけになりかねない)。
+    [[ "$(cat "$mutant")" == *"$fixture_dir"* ]]
+    ! grep -q -F -- '--ro-bind "$p" "$p")' "$mutant"
+
+    # 壊した複製: フィクスチャ(本番ではない自作のディレクトリ)が
+    # 書き込み可能になっている(赤=保護が効いていない状態)。
+    run "$mutant" "$REPO_DIR" -- touch "$mutant_marker"
+    [ "$status" -eq 0 ]
+    [ -e "$mutant_marker" ]
+
+    rm -f -- "$mutant"
+    rm -rf -- "$fixture_dir"
+
+    # 原本: 実在するRO_BINDSのエントリへの書き込みは失敗する(緑)。
+    original_marker="$HOME/.claude/hooks/.run-isolated-mutation-test-marker-$$"
+    run "$RUN_ISOLATED" "$REPO_DIR" -- touch "$original_marker"
+    [ "$status" -ne 0 ]
+    [ ! -e "$original_marker" ]
+}
+
+@test "(b) diff_watchedの呼び出しを外すと本番資産への書き込みを見逃すが、原本は検出する" {
+    watched_dir="$(mktemp -d -t run-isolated-test-mutant-b-watched.XXXXXX)"
+    mutant="$(mktemp -t run-isolated-test-mutant-b.XXXXXX)"
+    grep -v -F -- 'diff_watched watched_before watched_after mutation_counted mutation_noted' "$RUN_ISOLATED" > "$mutant"
+    chmod +x "$mutant"
+
+    ! grep -q -F -- 'diff_watched watched_before watched_after mutation_counted mutation_noted' "$mutant"
+
+    export VERIFY_TESTS_WATCHED="$watched_dir"
+
+    # 壊した複製: 監視対象への書き込みが起きても検出されず0で終わる(赤)。
+    run "$mutant" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    [ "$status" -eq 0 ]
+
+    rm -f -- "$watched_dir/result.txt"
+
+    # 原本: 同じ状況で検出し、専用の終了コード(4)で報告する(緑)。
+    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    [ "$status" -eq 4 ]
+    [[ "$output" == *"本番へ書いた: $watched_dir/result.txt"* ]]
+
+    unset VERIFY_TESTS_WATCHED
+    rm -f -- "$mutant"
+    rm -rf -- "$watched_dir"
+}
+
+@test "(c) 使い捨てHOMEへの差し替えを外すと本番のHOMEが隔離の中に見えるが、原本は見せない" {
+    marker="$HOME/.run-isolated-mutation-test-marker-c-$$"
+    : > "$marker"
+    mutant="$(mktemp -t run-isolated-test-mutant-c.XXXXXX)"
+    grep -v -F -- '--bind "$sandbox" "$HOME"' "$RUN_ISOLATED" > "$mutant"
+    chmod +x "$mutant"
+
+    ! grep -q -F -- '--bind "$sandbox" "$HOME"' "$mutant"
+
+    # 壊した複製: 使い捨てHOMEへ差し替わらず、本番のHOMEがそのまま見える(赤)。
+    run "$mutant" "$REPO_DIR" -- test -e "$marker"
+    [ "$status" -eq 0 ]
+
+    # 原本: 使い捨てHOMEへ差し替わっており、マーカーは見えない(緑)。
+    run "$RUN_ISOLATED" "$REPO_DIR" -- test -e "$marker"
+    [ "$status" -eq 1 ]
+
+    rm -f -- "$marker" "$mutant"
+}
+
+# 上記3つの壊し方は、いずれもファイル中の特定の文字列を置換(grep -v /
+# sed)することで作っている。その置換対象が2箇所以上に当たると、意図しない
+# 場所も壊れ、「別の理由で赤くなったのに確認できたと読める」空振りになる
+# (過去に実際に起きている)。run-isolated.sh は Task 5 で venv 用の
+# --ro-bind を足すためにもう一度書き換わる予定で、書き方によっては (a) の
+# 置換対象が2箇所に当たるようになりうる。一度確かめて終わりにせず、常時
+# 走るテストとして置いておく。
+
+@test "(a) 壊すために使う置換対象の文字列がrun-isolated.shの中で一意である" {
+    run grep -c -F -- '--ro-bind "$p" "$p")' "$RUN_ISOLATED"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 1 ]
+}
+
+@test "(b) 壊すために使う置換対象の文字列がrun-isolated.shの中で一意である" {
+    run grep -c -F -- 'diff_watched watched_before watched_after mutation_counted mutation_noted' "$RUN_ISOLATED"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 1 ]
+}
+
+@test "(c) 壊すために使う置換対象の文字列がrun-isolated.shの中で一意である" {
+    run grep -c -F -- '--bind "$sandbox" "$HOME"' "$RUN_ISOLATED"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 1 ]
+}
