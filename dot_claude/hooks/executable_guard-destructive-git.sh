@@ -144,6 +144,9 @@ analyze() {
 }
 
 hit=""
+# 末尾の tr ';&|()\n' の重複指摘(SC2020)はこのwhileループ全体(の入力側の
+# プロセス置換)に対するものなので、ディレクティブはループの先頭に置く。
+# shellcheck disable=SC2020
 while IFS= read -r seg; do
   [[ -z "${seg//[[:space:]]/}" ]] && continue
   read -r -a toks <<< "$seg"
@@ -154,6 +157,10 @@ while IFS= read -r seg; do
   fi
 # 末尾の改行は必須。無いと最後のセグメントを read が拾わず、単一コマンド
 # （`git reset --hard` そのもの）が丸ごと素通りする。
+# tr のSET2の重複(SC2020、ループ先頭で除外済み)を指摘しているが、SET2が
+# 短ければ最後の文字が埋め草として繰り返される仕様上、'\n' 1文字だけに
+# 詰めても挙動は同一(確認済み)。破壊的git操作を止めるフックなので、
+# 動作確認済みのこの記述は変更しない。
 done < <(printf '%s\n' "$command" | tr ';&|()\n' '\n\n\n\n\n\n')
 
 [[ -z "$hit" ]] && exit 0

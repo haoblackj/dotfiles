@@ -169,6 +169,8 @@ snapshot_watched() {
     local mtime size path
     while read -r mtime size path; do
         [ -z "$path" ] && continue
+        # out_ref は呼び出し元の連想配列を指す nameref の出力引数。呼び出し元でしか読まれないため、この関数の中では未使用に見える(既知の誤検出)。
+        # shellcheck disable=SC2034
         out_ref["$path"]="$mtime $size"
     done < <(stat -c '%.9Y %s %n' "${files[@]}" 2>/dev/null)
 }
@@ -210,6 +212,8 @@ if watched_pattern_list_empty; then
     echo "run-isolated.sh: 監視対象なし（何も監視していません）" >&2
 fi
 
+# watched_before は snapshot_watched/diff_watched へ変数名として渡し、nameref経由で間接的に読み書きする。直接の "$watched_before" 展開が無いため未使用に見える(既知の誤検出)。
+# shellcheck disable=SC2034
 declare -A watched_before=()
 snapshot_watched watched_before
 
@@ -218,6 +222,8 @@ snapshot_watched watched_before
 # 実物の make_sandbox_home() を書き写した。使い捨ての HOME を作り、
 # memory のフィクスチャを1つ置く。
 sandbox=$(mktemp -d -t run-isolated-sandbox.XXXXXX) || exit 1
+# 直後の trap cleanup EXIT から間接的に呼ばれる。直接の呼び出しが無いため未使用に見える(既知の誤検出)。
+# shellcheck disable=SC2329
 cleanup() {
     rm -rf -- "$sandbox"
 }
@@ -302,6 +308,8 @@ fi
 # 層1 Task 3: 走行の前後で監視対象の更新時刻を比べる。
 # --out の取り出し（上のブロック）が終わった後で「後」のスナップショットを
 # 取る。取り出し自体が監視対象へ書く経路になりうるため、その分も見る。
+# watched_after も watched_before と同じ理由(nameref越しの間接参照のみ)。
+# shellcheck disable=SC2034
 declare -A watched_after=()
 snapshot_watched watched_after
 

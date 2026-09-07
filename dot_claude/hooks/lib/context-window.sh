@@ -1,6 +1,8 @@
+# shellcheck shell=bash
 # コンテキストウィンドウ幅と警告閾値の判定。source して使う共有ライブラリ。
 # sessionstart-context-window.sh と userpromptsubmit-compact-prep-reminder.sh の両方から読む。
-# 実行はしないため shebang も実行権限も持たせない。
+# 実行はしないため shebang も実行権限も持たせない。呼び出し元は両方とも
+# #!/bin/bash なので、shebangの代わりにこのディレクティブで対象shellを明示する。
 #
 # モデル名から標準ウィンドウ幅を判定する:
 #   claude-haiku-4-5* / claude-opus-5*                               → 200,000 tokens

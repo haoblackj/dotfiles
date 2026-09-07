@@ -217,7 +217,7 @@ teardown() {
     # 赤/緑の判定が「もともとの挙動」を見ているだけになりかねない)。まだ
     # どちらの run も走っていないので、ここで落ちても本番へは何も届かない。
     [[ "$(cat "$mutant")" == *"$fixture_dir"* ]]
-    ! grep -q -F -- '--ro-bind "$p" "$p")' "$mutant"
+    run ! grep -q -F -- '--ro-bind "$p" "$p")' "$mutant"
 
     # 壊した複製: フィクスチャ(本番ではない自作のディレクトリ)が
     # 書き込み可能になっている(赤=保護が効いていない状態)はず。
@@ -251,7 +251,7 @@ teardown() {
     grep -v -F -- 'diff_watched watched_before watched_after mutation_counted mutation_noted' "$RUN_ISOLATED" > "$mutant"
     chmod +x "$mutant"
 
-    ! grep -q -F -- 'diff_watched watched_before watched_after mutation_counted mutation_noted' "$mutant"
+    run ! grep -q -F -- 'diff_watched watched_before watched_after mutation_counted mutation_noted' "$mutant"
 
     export VERIFY_TESTS_WATCHED="$watched_dir"
 
@@ -278,7 +278,7 @@ teardown() {
     grep -v -F -- '--bind "$sandbox" "$HOME"' "$RUN_ISOLATED" > "$mutant"
     chmod +x "$mutant"
 
-    ! grep -q -F -- '--bind "$sandbox" "$HOME"' "$mutant"
+    run ! grep -q -F -- '--bind "$sandbox" "$HOME"' "$mutant"
 
     # 壊した複製: 使い捨てHOMEへ差し替わらず、本番のHOMEがそのまま見えるはず(赤)。
     run "$mutant" "$REPO_DIR" -- test -e "$marker"

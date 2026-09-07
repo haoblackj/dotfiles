@@ -45,3 +45,17 @@ repos:
           bash -c 'command -v check-pytest-gate.sh >/dev/null 2>&1 ||
           { echo "check-pytest-gate.sh が PATH にありません"; exit 1; };
           check-pytest-gate.sh "$(git rev-parse --show-toplevel)"'
+      - id: shellcheck
+        name: shellcheck
+        language: system
+        stages: [pre-commit]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+        entry: >-
+          bash -c 'command -v shellcheck >/dev/null 2>&1 ||
+          { echo "shellcheck が PATH にありません"; exit 1; };
+          cd "$(git rev-parse --show-toplevel)" || exit 1;
+          mapfile -d "" -t files < <(git ls-files -z "*.sh" "*.bats");
+          [ "${#files[@]}" -eq 0 ] && exit 0;
+          shellcheck -P SCRIPTDIR -e SC2015,SC2016,SC2030,SC2031 "${files[@]}"'
