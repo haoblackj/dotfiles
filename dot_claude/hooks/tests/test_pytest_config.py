@@ -88,5 +88,61 @@ class PytestConfigTest(unittest.TestCase):
         self.assertIn("dot_claude/hooks/tests/test_pytest_config.py", excluded)
 
 
+class StrictActuallyFiresTest(unittest.TestCase):
+    """`strict = true` が実際に効いていることを、子プロセスで確かめる。
+
+    **設定の値を読むだけでは足りない。**設定が正しくても pytest 側の
+    解釈が変われば門は消える。登録していないマーカーを打ったテストを
+    使い捨てのリポジトリへ置き、`strict` の有無だけを変えて2回走らせる。
+    """
+
+    MARKED_TEST = (
+        "import pytest\n"
+        "\n"
+        "\n"
+        "@pytest.mark.this_marker_is_not_registered\n"
+        "def test_placeholder():\n"
+        "    assert True\n"
+    )
+
+    def _run_in_temp_repo(self, ini_body):
+        import subprocess
+        import sys
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "pyproject.toml"), "w", encoding="utf-8") as f:
+                f.write("[tool.pytest.ini_options]\n" + ini_body)
+            with open(os.path.join(tmp, "test_marked.py"), "w", encoding="utf-8") as f:
+                f.write(self.MARKED_TEST)
+            return subprocess.run(
+                [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", tmp],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+            )
+
+    def test_unregistered_marker_passes_without_strict(self):
+        # 対照。`strict` が無ければ打ち間違えたマーカーは黙って通る。
+        # **この側が落ちるなら、次の検査は `strict` とは無関係な理由で
+        # 赤くなっている。**
+        result = self._run_in_temp_repo('minversion = "9"\n')
+        self.assertEqual(
+            result.returncode, 0,
+            f"strict 無しでも落ちた。この検査は strict を測っていない:\n"
+            f"{result.stdout}\n{result.stderr}",
+        )
+
+    def test_unregistered_marker_fails_with_strict(self):
+        # 本命。`strict = true` を足しただけで、同じテストが落ちる。
+        result = self._run_in_temp_repo('minversion = "9"\nstrict = true\n')
+        self.assertNotEqual(
+            result.returncode, 0,
+            f"strict = true でも打ち間違えたマーカーが通った:\n"
+            f"{result.stdout}\n{result.stderr}",
+        )
+        self.assertIn("this_marker_is_not_registered", result.stdout + result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
