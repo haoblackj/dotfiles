@@ -42,7 +42,7 @@ setup_fake_home() {
 }
 
 run_push() { # fake_home -> stdout捨て、stderrを返す
-  HOME="$1" bash "$SCRIPT" push 2>&1 >/dev/null
+  { HOME="$1" bash "$SCRIPT" push >/dev/null; } 2>&1
 }
 
 # =========================================================================
