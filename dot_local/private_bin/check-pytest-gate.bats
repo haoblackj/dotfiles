@@ -110,6 +110,28 @@ FAKE
     [[ "$output" == *"解析できませんでした"* ]]
 }
 
+@test "sp-repo-review が空出力なら落ちる" {
+    # uvx 自体は実行できるが、標準出力が空のまま終わる形を再現する
+    # （ネットワーク不調・タイムアウトなどで起こりうる）。既存の
+    # 5つの失敗経路（解析失敗・0件評価・全件skip・uvx不在）はすべて
+    # bats で押さえていたが、`[ -z "$report" ]` の分岐だけテストが
+    # 無かった。
+    make_repo "$TMP/empty"
+    mkdir -p "$TMP/fakebin"
+    cat > "$TMP/fakebin/uvx" <<'FAKE'
+#!/usr/bin/env bash
+exit 0
+FAKE
+    chmod +x "$TMP/fakebin/uvx"
+
+    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/empty"
+    [ "$status" -ne 0 ]
+    # 「指摘なし」で通っていないことの証拠。
+    [[ "$output" != *"指摘なし"* ]]
+    # 空出力の経路で落ちたことの証拠（他の経路のメッセージと重複しない）。
+    [[ "$output" == *"出力を返しませんでした"* ]]
+}
+
 @test "PP3xx が1件も評価されていなければ落ちる（0件を合格と区別する）" {
     # JSON としては正しいが、checks の中に PP3 で始まるキーが1件も
     # 無い形を再現する。sp-repo-review の将来のバージョンで PP3xx の
@@ -168,6 +190,41 @@ FAKE
     # （前のテストの「キーが無い」ケースと同じメッセージを共有するが、
     # どちらの実際の状況でも真である文言のため許容する）。
     [[ "$output" == *"評価されていません"* ]]
+}
+
+@test "解析器が件数を出さずに黙って終われば落ちる（fail-open を防ぐ）" {
+    # shell と python の間の契約は「1行目が件数」という位置だけの約束で、
+    # 型は保証されない。python3 が PATH にあって exit 0 で終わっても、
+    # 何も出力しない壊れ方だと1行目が空になる。ここを確かめずに
+    # `[ "$pp3_count" -eq 0 ]` へ渡すと、bash が「整数の式が予期されます」
+    # とエラーを出してその比較自体が偽になり、$failed も空のまま
+    # 「PP3xx: 指摘なし」で exit 0 に落ちる（fail-open）。
+    # PP302 が実際に fail している report を返す偽 uvx と、
+    # 何も出力せず exit 0 する偽 python3 の組み合わせで再現する。
+    make_repo "$TMP/pp3fail"
+    mkdir -p "$TMP/fakebin"
+    cat > "$TMP/fakebin/uvx" <<'FAKE'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"status": "mixed", "families": {}, "checks": {
+    "PP302": {"description": "minversion がある", "result": false, "err_msg": ""}
+}}
+JSON
+FAKE
+    chmod +x "$TMP/fakebin/uvx"
+    cat > "$TMP/fakebin/python3" <<'FAKE'
+#!/usr/bin/env bash
+exit 0
+FAKE
+    chmod +x "$TMP/fakebin/python3"
+
+    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/pp3fail"
+    [ "$status" -ne 0 ]
+    # 「指摘なし」で通っていないことの証拠（PP302 は実際に fail している）。
+    [[ "$output" != *"指摘なし"* ]]
+    # 件数行を読めなかった経路で落ちたことの証拠
+    # （解析失敗・0件評価・全件skip のどのメッセージとも別）。
+    [[ "$output" == *"件数行を読めませんでした"* ]]
 }
 
 @test "uvx が無ければ飛ばさずに落ちる" {

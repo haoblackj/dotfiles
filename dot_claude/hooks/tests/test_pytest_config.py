@@ -144,5 +144,25 @@ class StrictActuallyFiresTest(unittest.TestCase):
         self.assertIn("this_marker_is_not_registered", result.stdout + result.stderr)
 
 
+def test_this_repositorys_config_is_the_effective_one(pytestconfig):
+    """このリポジトリで実際に走っている pytest が、この pyproject.toml の
+    `[tool.pytest.ini_options]` を読んでいることを確かめる。
+
+    **上のテストは「ファイルに何が書いてあるか」しか見ていない。**
+    `StrictActuallyFiresTest` も `strict` が使い捨てのリポジトリで効くこと
+    しか証明しない。もし `pytest.ini` や `setup.cfg` がこのリポジトリに
+    足されたら、pytest は `[tool.pytest.ini_options]` を無視してそちらを
+    使う。そうなっても上のテストは pyproject.toml を直接読んでいるだけ
+    なので全部緑のまま残り、門がいつの間にか無効化されたことに誰も
+    気付けない。`pytestconfig.getini` は pytest が実際に採用した設定
+    ソースを経由するので、ここが緑であることは「この pyproject.toml が
+    有効である」ことの証拠になる。
+
+    `unittest.TestCase` のメソッドにはしない。`pytestconfig` フィクスチャは
+    `TestCase` のサブクラス内では使えない。
+    """
+    assert pytestconfig.getini("strict") is True
+
+
 if __name__ == "__main__":
     unittest.main()
