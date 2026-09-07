@@ -1,3 +1,4 @@
+default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: local
     hooks:
@@ -45,6 +46,18 @@ repos:
           bash -c 'command -v check-pytest-gate.sh >/dev/null 2>&1 ||
           { echo "check-pytest-gate.sh が PATH にありません"; exit 1; };
           check-pytest-gate.sh "$(git rev-parse --show-toplevel)"'
+      # ShellCheck の除外規則 -e SC2015,SC2016,SC2030,SC2031 の理由
+      # （両リポジトリで同一内容。自己完結させるため）。
+      # SC2015（`A && B || C` は if-then-else ではない）:
+      #   多数のファイルに散る自己点検スクリプトの慣用句。呼ばれる報告関数は
+      #   echo のみで、B が失敗して C が誤発火する経路が構造的に無い。
+      # SC2016（シングルクォート内は展開されない）:
+      #   多数のファイルに散る。別シェルへ渡す文字列と、grep/awk のパターン。
+      #   このシェルで展開してはいけないことが意図。
+      # SC2030 / SC2031（サブシェル内の変更はローカルに留まる）:
+      #   `.bats` の `@test` がサブシェルとして扱われることに由来。bats が
+      #   各テストを隔離するのは設計どおりで、今後書く `.bats` に構造上
+      #   必ず出る。
       - id: shellcheck
         name: shellcheck
         language: system
