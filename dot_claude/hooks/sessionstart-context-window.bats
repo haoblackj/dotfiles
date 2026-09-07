@@ -3,6 +3,10 @@
 # sessionstart-context-window.sh のユニットテスト。
 set -u
 
+marker_of() { # session_id
+    cat "$TMPDIR_TEST/claude-context-window/$1" 2>/dev/null || echo ''
+}
+
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/executable_sessionstart-context-window.sh"
     TMPDIR_TEST="$(mktemp -d)"
@@ -11,10 +15,6 @@ setup() {
 
 teardown() {
     rm -rf -- "$TMPDIR_TEST"
-}
-
-marker_of() { # session_id
-    cat "$TMPDIR_TEST/claude-context-window/$1" 2>/dev/null || echo ''
 }
 
 @test "[1m]サフィックス付き -> 1,000,000がマーカーに書かれる" {
