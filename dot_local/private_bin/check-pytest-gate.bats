@@ -110,6 +110,34 @@ FAKE
     [[ "$output" == *"解析できませんでした"* ]]
 }
 
+@test "PP3xx が1件も評価されていなければ落ちる（0件を合格と区別する）" {
+    # JSON としては正しいが、checks の中に PP3 で始まるキーが1件も
+    # 無い形を再現する。sp-repo-review の将来のバージョンで PP3xx の
+    # コード体系が変わる・extras の欠落でファミリーが登録されない
+    # などで起こりうる。0件は「全部通った」とは別の故障であり、
+    # 「解析できなかった」（テスト6）とも別のメッセージで区別すること。
+    make_repo "$TMP/nopp3"
+    mkdir -p "$TMP/fakebin"
+    cat > "$TMP/fakebin/uvx" <<'FAKE'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"status": "mixed", "families": {}, "checks": {
+    "GH100": {"description": "GitHub Actions を使っている", "result": false, "err_msg": ""},
+    "PY001": {"description": "pyproject.toml がある", "result": true, "err_msg": ""}
+}}
+JSON
+FAKE
+    chmod +x "$TMP/fakebin/uvx"
+
+    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/nopp3"
+    [ "$status" -ne 0 ]
+    # 「指摘なし」で通っていないことの証拠。
+    [[ "$output" != *"指摘なし"* ]]
+    # 失敗が「PP3xx が1件も無かった」経路によるものであることの証拠
+    # （解析失敗の経路＝テスト6とは別のメッセージ）。
+    [[ "$output" == *"見つかりませんでした"* ]]
+}
+
 @test "uvx が無ければ飛ばさずに落ちる" {
     # 受け入れ条件26の型。道具が見つからないときに exit 0 で通す形を
     # 後継で繰り返さない。
