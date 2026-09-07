@@ -133,9 +133,41 @@ FAKE
     [ "$status" -ne 0 ]
     # 「指摘なし」で通っていないことの証拠。
     [[ "$output" != *"指摘なし"* ]]
-    # 失敗が「PP3xx が1件も無かった」経路によるものであることの証拠
-    # （解析失敗の経路＝テスト6とは別のメッセージ）。
-    [[ "$output" == *"見つかりませんでした"* ]]
+    # 失敗が「PP3xx が1件も評価されていなかった」経路によるものであることの
+    # 証拠（解析失敗の経路＝テスト6とは別のメッセージ）。
+    [[ "$output" == *"評価されていません"* ]]
+}
+
+@test "PP3xx のキーはあるが全部 skip（result: null）なら落ちる" {
+    # キーが存在する ≠ 評価された。repo-review は result: null を
+    # skip として扱い、依存する検査（例: PP301）が通らないと下流の
+    # PP30x は自動で null になる。skip されたキーも checks には残る
+    # ので、キーの数だけを見る実装だと「一家まるごと skip」を
+    # 「評価済み」と誤認して素通りしてしまう
+    # （実際に repo-review のソースと sp_repo_review の requires 宣言で
+    # 確認された経路。前のテスト「キーが1件も無い」とは別の穴）。
+    make_repo "$TMP/allskip"
+    mkdir -p "$TMP/fakebin"
+    cat > "$TMP/fakebin/uvx" <<'FAKE'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"status": "mixed", "families": {}, "checks": {
+    "PP301": {"description": "pytest 設定が pyproject にある", "result": null, "err_msg": ""},
+    "PP302": {"description": "minversion がある", "result": null, "err_msg": ""},
+    "PP303": {"description": "testpaths がある", "result": null, "err_msg": ""}
+}}
+JSON
+FAKE
+    chmod +x "$TMP/fakebin/uvx"
+
+    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/allskip"
+    [ "$status" -ne 0 ]
+    # 「指摘なし」で通っていないことの証拠。
+    [[ "$output" != *"指摘なし"* ]]
+    # 「1件も評価されていない」経路で落ちたことの証拠
+    # （前のテストの「キーが無い」ケースと同じメッセージを共有するが、
+    # どちらの実際の状況でも真である文言のため許容する）。
+    [[ "$output" == *"評価されていません"* ]]
 }
 
 @test "uvx が無ければ飛ばさずに落ちる" {

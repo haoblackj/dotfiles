@@ -67,17 +67,24 @@ fi
 # python3 の traceback は stderr へそのまま出る。**抑制しない** — 門が
 # 落ちた原因を読む側に見せるため。
 #
-# **1行目に PP3 で始まる検査の総数を出す。**result の真偽だけを見ると、
+# **1行目に「評価された」PP3xx の総数を出す。**result の真偽だけを見ると、
 # 「PP3 で始まる検査が1件もヒットしなかった」場合も $failed が空になり、
 # 「全部通った」と区別が付かない。sp-repo-review の将来のバージョンで
 # PP3xx のコード体系が変わる・`[cli]` extras が pytest 検査ファミリーの
 # 依存を欠いて登録に失敗するなど、JSON としては正しいのに PP3xx が
 # 0件しか無い形は現実にありうる（このコマンドはバージョン固定していない）。
+#
+# **キーが存在する ≠ 評価された。**repo-review は result: null を
+# 「skip」として扱う（依存する検査が通らなかったときに自動でこうなる）。
+# skip されたキーは checks に残るので、キーの数だけを数えると
+# 「一家まるごと skip」を「評価済み」と誤認して素通りする。
+# 数えるのは result が null でないものだけにする。
 if ! result="$(printf '%s' "$report" | python3 -c '
 import json, sys
 checks = json.load(sys.stdin)["checks"]
 pp3_names = [name for name in checks if name.startswith("PP3")]
-print(len(pp3_names))
+evaluated = [name for name in pp3_names if checks[name].get("result") is not None]
+print(len(evaluated))
 for name in sorted(pp3_names):
     if checks[name].get("result") is False:
         print(name, checks[name].get("description", ""))
@@ -90,14 +97,17 @@ fi
 pp3_count="$(printf '%s\n' "$result" | head -n1)"
 failed="$(printf '%s\n' "$result" | tail -n +2)"
 
-# **0件評価は不合格にする。**「PP3xx が1件も評価されていない」は
+# **評価0件は不合格にする。**「PP3xx が1件も評価されていない」は
 # 「PP3xx が全部通った」とは別の故障で、出力から区別できないと
 # 門自体がこの設計の消そうとしている「黙って通る」型に落ちる。
-# 解析できなかった場合（上の分岐）とは別のメッセージにする —
-# push を止められた側が、どちらの故障か読んで判断できるように。
+# 「PP3 のキーが1件も無い」と「PP3 のキーはあるが全部 skip」の
+# どちらでもこの分岐に来る。両方に共通して言えることしか書かない
+# （両方に真でない言い回しはしない）。解析できなかった場合
+# （上の分岐）とは別のメッセージにする — push を止められた側が、
+# どちらの故障か読んで判断できるように。
 if [ "$pp3_count" -eq 0 ]; then
-    echo "PP3xx の検査が1件も見つかりませんでした: $repo" >&2
-    echo "（sp-repo-review の出力に PP3 で始まる検査が無い形でした。バージョンの変化や依存の欠落を疑ってください）" >&2
+    echo "PP3xx の検査が1件も評価されていません: $repo" >&2
+    echo "（sp-repo-review の出力に PP3 で始まる検査が無いか、全て skip（result: null）でした。バージョンの変化や依存の欠落を疑ってください）" >&2
     exit 1
 fi
 
