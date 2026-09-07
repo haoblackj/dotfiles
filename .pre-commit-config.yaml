@@ -34,3 +34,14 @@ repos:
           bash -c 'command -v list-untested-shell.sh >/dev/null 2>&1 ||
           { echo "list-untested-shell.sh が PATH にありません"; exit 0; };
           list-untested-shell.sh "$(git rev-parse --show-toplevel)" "$HOME/repo/github.com/haoblackj/penguinEx"'
+      - id: check-pytest-gate
+        name: check-pytest-gate
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+        entry: >-
+          bash -c 'command -v check-pytest-gate.sh >/dev/null 2>&1 ||
+          { echo "check-pytest-gate.sh が PATH にありません"; exit 1; };
+          check-pytest-gate.sh "$(git rev-parse --show-toplevel)"'
