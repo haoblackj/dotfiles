@@ -3,6 +3,10 @@
 # statusline-context-window.sh のユニットテスト。
 set -u
 
+marker_of() { # session_id
+    cat "$TMPDIR_TEST/claude-status-context-window/$1" 2>/dev/null || echo ''
+}
+
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/executable_statusline-context-window.sh"
     TMPDIR_TEST="$(mktemp -d)"
@@ -22,10 +26,6 @@ EOS
 
 teardown() {
     rm -rf -- "$TMPDIR_TEST"
-}
-
-marker_of() { # session_id
-    cat "$TMPDIR_TEST/claude-status-context-window/$1" 2>/dev/null || echo ''
 }
 
 @test "session_idとcontext_window_sizeが揃った入力 -> マーカーに窓幅、stdoutは元のJSONがそのまま通る" {
