@@ -99,9 +99,11 @@ case "${1:-pull}" in
     #
     # 移行が走った回だけは全体を対象にする（リンクだけ張られて実体が
     # 追跡されない状態を避けるため）。
+    # ls-files 側を落とさないこと。ワークツリーから memory/ ごと消えた回は -d が
+    # 偽になるが、その削除は追跡対象なのでステージする必要がある。
     if [ "$MIGRATED" = "1" ]; then
       git -C "$ROOT" add -A
-    else
+    elif [ -d "$ROOT/memory" ] || [ -n "$(git -C "$ROOT" ls-files -- memory)" ]; then
       git -C "$ROOT" add -A -- memory
     fi
 
