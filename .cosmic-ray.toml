@@ -50,6 +50,7 @@ timeout = 30
 excluded-modules = [
     "dot_claude/hooks/tests/test_coverage_config.py",  # テストそのもの
     "dot_claude/hooks/tests/test_memory_recall.py",  # テストそのもの
+    "dot_claude/hooks/tests/test_pytest_config.py",  # テストそのもの
 ]
 
 # **`pytest` の1回の実行と、対象が `.py` の宣言済み shell テストだけ。**
