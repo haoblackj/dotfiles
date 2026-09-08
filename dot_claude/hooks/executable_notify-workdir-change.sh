@@ -10,7 +10,7 @@
 # additionalContext で渡す。止めない（permissionDecision は返さない）。
 #
 # 設計: penguinEx docs/superpowers/specs/2026-09-04-workdir-notice-design.md
-# テスト: chezmoi ソース側の executable_notify-workdir-change.test.sh
+# テスト: chezmoi ソース側の notify-workdir-change.bats
 #
 # 注意点。
 #   - stdin はソケットで渡る。$(</dev/stdin) は ENXIO で落ちるので $(cat) を使う。
