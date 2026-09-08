@@ -457,8 +457,8 @@ MUTATE_SH_PATTERNS = (r"^.*\.test\.sh$", r"^test_.*\.sh$", r"^.*\.bats$")
 # どちらも宣言は `none` なので、この集合が無くても対にはならない。要るのは
 # 測っていない対象の一覧（受け入れ条件12）へ理由付きで載せるため。
 MUTATE_SHELL_EXCLUDED = {
-    "dot_claude/hooks/executable_settings-wiring.test.sh",
-    "dot_claude/compact-plus-backend/executable_e2e-integration.test.sh",
+    "dot_claude/hooks/settings-wiring.bats",
+    "dot_claude/compact-plus-backend/e2e-integration.bats",
 }
 
 # 測っていない対象の一覧（受け入れ条件12）。「測らない理由」を1種類に
@@ -504,10 +504,10 @@ UNMEASURED_EXTENSIONLESS = {
 # issue #20 / #21)`。隔離という走行方式の都合で測れないだけなので、issue
 # #20 / #21 が閉じれば対象へ戻る一時的な除外（v1 の SHELL_EXCLUDED と同根）。
 UNMEASURED_SHELL_EXCLUDED_REASONS = {
-    "dot_claude/hooks/executable_settings-wiring.test.sh":
+    "dot_claude/hooks/settings-wiring.bats":
         "対象が設定ファイル（private_settings.json）でスクリプトではないため、"
         "恒久的に対を組めない",
-    "dot_claude/compact-plus-backend/executable_e2e-integration.test.sh":
+    "dot_claude/compact-plus-backend/e2e-integration.bats":
         "隔離下では本来の挙動を測れないための一時的な除外"
         "（issue #20 / #21 が閉じれば対象へ戻る）",
 }
