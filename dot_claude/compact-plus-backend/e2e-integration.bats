@@ -18,13 +18,13 @@ teardown() {
     # plugin バージョンをハードコードせず動的解決(更新耐性)
     CACHE=$(find "$HOME/.claude/plugins/cache" -path '*compact-plus/*/hooks' -type d 2>/dev/null | sort -V | tail -1)
     if [[ -z "$CACHE" || ! -d "$CACHE" ]]; then
-        skip "compact-plus plugin hooksが未検出(installされているか)"
+        skip "compact-plus plugin hooksが未検出($HOME/.claude/plugins/cache 配下を '*compact-plus/*/hooks' で検索したが見つからなかった。installされているか)"
     fi
     PROD=~/.claude/hooks/userpromptsubmit-compact-prep-reminder.sh
     BACKEND=~/.claude/compact-plus-backend/backend-codex-mini.sh
     TP="$HOME/.claude/projects/-home-yagu001-repo-github-com-haoblackj-penguinEx/9bbdb771-6e0a-427a-88e1-c79f8f1d071d.jsonl"
     if [[ ! -f "$TP" ]]; then
-        skip "本番トランスクリプトが見つからない(ローテーションで消失しうる。issue #20 / #21 対象)"
+        skip "本番トランスクリプトが見つからない: $TP (ローテーションで消失しうる。issue #20 / #21 対象)"
     fi
     SID="e2e$$"
     J="{\"session_id\":\"$SID\",\"transcript_path\":\"$TP\",\"trigger\":\"manual\",\"custom_instructions\":\"\"}"
