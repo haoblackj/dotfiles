@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_local/private_bin/executable_list-untested-shell.sh
 # list-untested-shell.sh が、追跡 .sh のうちテストを持たないものを
 # 正しく列挙することを確かめる。詳細は penguinEx の
 # .superpowers/sdd/2026-09-06-test-foundation-layer1-2/ を参照。
@@ -62,8 +61,9 @@ setup() {
     [ "$status" -eq 0 ]
     [[ "$output" != *"/check-issues.sh"* ]]
     [[ "$output" != *"executable_guard-destructive-git.sh"* ]]
-    # この計画がchezmoiへ足した3本自身も、mutation-target宣言でテストを
-    # 持つと認識されるはず。ここが漏れると一覧が22本に戻る（Step 4）。
+    # この計画がchezmoiへ足した3本自身も、命名規約(<name>.bats ↔
+    # executable_<name>.sh)でテストを持つと認識されるはず。ここが漏れる
+    # と一覧が22本に戻る（Step 4）。
     [[ "$output" != *"executable_run-isolated.sh"* ]]
     [[ "$output" != *"executable_check-coverage-sources.sh"* ]]
     [[ "$output" != *"executable_list-untested-shell.sh"* ]]
@@ -72,7 +72,20 @@ setup() {
 @test "テストファイル自身は一覧に出ない" {
     run "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
     [ "$status" -eq 0 ]
-    [[ "$output" != *"check-issues.test.sh"* ]]
-    [[ "$output" != *"test_check_repo.sh"* ]]
-    [[ "$output" != *"executable_guard-destructive-git.test.sh"* ]]
+    # 層4b Task 9 で判定を .bats の命名規約へ切り替えた。以前の
+    # フィクスチャ名（check-issues.test.sh・test_check_repo.sh・
+    # executable_guard-destructive-git.test.sh）は層4a/Task 6/Task 2の
+    # 移行でとうに存在しなくなっており、「存在しない名前が出ないこと」
+    # を確かめるだけの空振りになっていた。移行後の実名へ差し替える。
+    # .bats は git ls-files '*.sh' の候補集合に入らないため一覧へは
+    # 構造的に出ない。ここでは名前が実在するファイルであることに加え、
+    # 対応する実装（check-issues.sh・check-repo.sh・
+    # guard-destructive-git.sh）が命名規約の対応づけで一覧から正しく
+    # 除かれていることも確かめ、空振りにしない。
+    [[ "$output" != *"check-issues.bats"* ]]
+    [[ "$output" != *"check-repo.bats"* ]]
+    [[ "$output" != *"guard-destructive-git.bats"* ]]
+    [[ "$output" != *"/check-issues.sh"* ]]
+    [[ "$output" != *"/check-repo.sh"* ]]
+    [[ "$output" != *"/guard-destructive-git.sh"* ]]
 }
