@@ -48,7 +48,7 @@ source = [
     "dot_claude/hooks",
 ]
 omit = [
-    # シェルテスト（executable_stop-fabricated-turn-guard.test.sh）が
+    # シェルテスト（stop-fabricated-turn-guard.bats）が
     # サブプロセスとして起動する対象で、pytest 経由のカバレッジ計測は
     # 届かない。テストが無いわけではなく、計測の手段が別（shell）にある。
     # **グロブでまとめない**（同じディレクトリへあとから置かれた .py まで
