@@ -5,14 +5,16 @@
 # テスト基盤の層2 Task 9）。詳細は penguinEx の
 # .superpowers/sdd/2026-09-06-test-foundation-layer1-2/ を参照。
 #
-# 判定は「テストを持つか」を # mutation-target: 宣言から導く。宣言は
-# *.test.sh / test_*.sh の2行目、および .bats の2行目に置く規約
-# （実物は他の *.test.sh を参照）。`.bats` 自体には実装ファイルとの命名
-# 対応の規約がまだ無い（層2時点で3本しか無い）ため、いまは宣言だけを
-# 頼りにする。層4で .bats の命名規約（実装との対応づけ）が固まったら、
-# read_mutation_target() をやめて命名規約ベースの対応づけへ切り替える。
-# それまでは、.bats を足すたびに宣言を書き忘れると一覧を汚す
-# （Task 9 自身がこの罠に落ちた。詳細は task-9-brief.md Step 4）。
+# 判定は「テストを持つか」を .bats の命名規約から導く（層4b Task 9で
+# # mutation-target: 宣言から切り替え済み）。`<dir>/<name>.bats` は、
+# 同じディレクトリの次のいずれかを対象とみなす:
+#   <name>.sh / <name>.py / executable_<name>.sh / executable_<name>.py
+# （executable_ 接頭辞は chezmoi のソースツリーで、配置時に外れるため
+# 候補に含める。.py も候補にする — commit-verification-judge.py や
+# stop-fabricated-turn-guard.py のように対象が Python の .bats がある）。
+# 候補のいずれかが追跡されていれば、その実装は「テストを持つ」として
+# 一覧から除く。対応する候補が無い .bats（e2e-integration.bats、
+# settings-wiring.bats など）は何も除外しない。
 #
 # 一覧は非0では終わらない（このスクリプトが数え上げるものはこの計画の
 # スコープ外のバックログであり、pre-commit の失敗にすると毎回止まって
@@ -39,18 +41,18 @@ is_test_file() {
     return 1
 }
 
-# test ファイル（*.test.sh / test_*.sh / *.bats）から
-# `# mutation-target: <path>` 宣言を読む。無ければ何も出力しない。
-# 対象が "none" の宣言（対象を指さない）は除外に数えない。
-read_mutation_target() {
-    local file="$1"
-    local line target
-    line=$(grep -m1 '^# mutation-target: ' -- "$file" 2>/dev/null) || return 0
-    target=${line#"# mutation-target: "}
-    target=${target%% *}
-    [ -z "$target" ] && return 0
-    [ "$target" = "none" ] && return 0
-    printf '%s\n' "$target"
+# .bats ファイル1本について、命名規約が導く対象候補を列挙する。
+# 存在確認はしない（呼び出し側が追跡ファイル集合と突き合わせる）。
+bats_target_candidates() {
+    local batspath="$1"
+    local dir name
+    dir=$(dirname -- "$batspath")
+    name=$(basename -- "$batspath" .bats)
+    printf '%s\n' \
+        "$dir/$name.sh" \
+        "$dir/$name.py" \
+        "$dir/executable_$name.sh" \
+        "$dir/executable_$name.py"
 }
 
 process_repo() {
@@ -67,25 +69,25 @@ process_repo() {
         [ -n "$p" ] && all_bats+=("$p")
     done < <(git -C "$repo_abs" ls-files '*.bats')
 
-    # ステップ2: mutation-target 宣言が指す対象を集める
-    # （*.test.sh / test_*.sh と .bats の両方を走査する）。
+    # 追跡ファイル集合（.sh と .py）。.bats の対象候補がここに
+    # あるかどうかで「テストを持つか」を判定する。
+    local -A tracked=()
+    while IFS= read -r p; do
+        [ -n "$p" ] && tracked["$p"]=1
+    done < <(git -C "$repo_abs" ls-files '*.sh' '*.py')
+
+    # ステップ2: .bats の命名規約から対象候補を導き、追跡されている
+    # ものだけを除外対象に数える。
     local -A excluded=()
     local t
-    for p in "${all_sh[@]}"; do
-        if is_test_file "$p"; then
-            while IFS= read -r t; do
-                [ -n "$t" ] && excluded["$t"]=1
-            done < <(read_mutation_target "$repo_abs/$p")
-        fi
-    done
     for p in "${all_bats[@]}"; do
         while IFS= read -r t; do
-            [ -n "$t" ] && excluded["$t"]=1
-        done < <(read_mutation_target "$repo_abs/$p")
+            [ -n "$t" ] && [ -n "${tracked[$t]+x}" ] && excluded["$t"]=1
+        done < <(bats_target_candidates "$p")
     done
 
     # ステップ1・3: 追跡 .sh からテストファイル自身を除き、さらに
-    # mutation-target が指す対象を除いたものが「テストが無い実装」。
+    # .bats の命名規約が指す対象を除いたものが「テストが無い実装」。
     for p in "${all_sh[@]}"; do
         is_test_file "$p" && continue
         [ -n "${excluded[$p]+x}" ] && continue
