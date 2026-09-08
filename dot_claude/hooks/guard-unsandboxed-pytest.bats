@@ -21,9 +21,11 @@ expect() {
         "$(printf '%s' "$cwd" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" \
         | bash "$SCRIPT")
   if [ "$want" = deny ]; then
-    grep -q '"permissionDecision":"deny"' <<<"$out"
+    grep -q '"permissionDecision":"deny"' <<<"$out" \
+      || { echo "deny を期待したが違った / want=$want cwd=$cwd 入力: $cmd / out=[$out]" >&2; return 1; }
   else
-    ! grep -q '"permissionDecision":"deny"' <<<"$out"
+    ! grep -q '"permissionDecision":"deny"' <<<"$out" \
+      || { echo "allow を期待したが違った / want=$want cwd=$cwd 入力: $cmd / out=[$out]" >&2; return 1; }
   fi
 }
 
@@ -108,6 +110,6 @@ teardown() {
              git@github.com:haoblackj/penguinEx.git; do
         a=$(verify-tests --selftest-normalize "$u" 2>/dev/null)
         b=$(printf '%s' "$u" | sed -E 's#^[a-z]+://##; s#^[^@]*@##; s#^[^/:]+[:/]##; s#\.git$##; s#/$##')
-        [ "$a" = "$b" ]
+        [ "$a" = "$b" ] || { echo "正規化が不一致: u=$u tool=[$a] hook=[$b]" >&2; return 1; }
     done
 }
