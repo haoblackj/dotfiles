@@ -21,6 +21,10 @@
 /.claude/hooks/*.test.sh
 # 層4a で .bats へ移行した後も同じ理由（配置先の命名規則が合わない）で対象外。
 /.claude/hooks/*.bats
+# compact-plus-backend の単体テストも同じ理由で対象外。
+# 配置先ではソース名（executable_ 接頭辞つき）が解決せず、何も検証しない複製になるため。
+/.claude/compact-plus-backend/*.test.sh
+/.claude/compact-plus-backend/*.bats
 
 {{- if eq (env "REMOTE_CONTAINERS") "true" }}
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi aplly の対象から外す
