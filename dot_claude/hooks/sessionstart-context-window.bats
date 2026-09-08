@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_claude/hooks/executable_sessionstart-context-window.sh
 # sessionstart-context-window.sh のユニットテスト。
 set -u
 

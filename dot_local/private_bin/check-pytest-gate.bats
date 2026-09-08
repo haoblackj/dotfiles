@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_local/private_bin/executable_check-pytest-gate.sh
 # check-pytest-gate.sh が sp-repo-review の PP3xx だけを見て、
 # 1件でも fail があれば非0で落ちることを確かめる。
 # 詳細は penguinEx の docs/superpowers/plans/2026-09-07-test-foundation-layer3.md。

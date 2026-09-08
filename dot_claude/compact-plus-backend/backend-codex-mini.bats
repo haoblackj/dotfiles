@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_claude/compact-plus-backend/executable_backend-codex-mini.sh
 # backend-codex-mini.sh のユニットテスト。
 set -u
 

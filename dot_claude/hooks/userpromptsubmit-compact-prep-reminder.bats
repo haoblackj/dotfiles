@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_claude/hooks/executable_userpromptsubmit-compact-prep-reminder.sh
 # userpromptsubmit-compact-prep-reminder.sh のユニットテスト。
 bats_require_minimum_version 1.5.0
 set -u

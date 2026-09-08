@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_claude/hooks/executable_claude-private-sync.sh
 # claude-private-sync.sh push処理のユニットテスト。
 #   A. コミットメッセージのdrain機構
 #   B. 自動コミット対象を memory 配下へ絞り込む挙動

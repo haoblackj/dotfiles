@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: none (対象が配置先の成果物と本番のトランスクリプト。隔離下では動かない。issue #20 / #21)
 # compact-plus 両取り E2E: producer→plugin③→backend guard→plugin PostCompact→plugin② を
 # live実体(deployed producer/backend + plugin cache hooks)で通す。codex は呼ばない(guard経路のみ)。
 set -u

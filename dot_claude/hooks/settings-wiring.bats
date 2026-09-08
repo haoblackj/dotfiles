@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: none (対象が private_settings.json という設定ファイルでスクリプトではない)
 # compact-plus 両取り統合の settings.json 配線検証(source private_settings.json 対象)。
 #
 # 元は10件のassertを1つのpython3プロセス内で直列実行しており、最初の失敗で

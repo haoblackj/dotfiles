@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_claude/hooks/executable_notify-workdir-change.sh
 # notify-workdir-change.sh のユニットテスト。
 #
 # run_hook_socket() だけは bats の run に置き換えていない（裁定1）。stdin を

@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# mutation-target: dot_local/private_bin/executable_run-isolated.sh
 # run-isolated.sh の骨格を確かめるテスト。
 # 詳細は penguinEx の
 # .superpowers/sdd/2026-09-06-test-foundation-layer1-2/ を参照。
