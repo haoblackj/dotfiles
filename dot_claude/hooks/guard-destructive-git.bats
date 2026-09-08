@@ -39,7 +39,7 @@ setup() {
         'git status; git reset --hard' \
         '/usr/bin/git reset --hard'; do
         run decide "$cmd"
-        [ "$output" = "deny" ]
+        [ "$output" = "deny" ] || { echo "deny を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -54,7 +54,7 @@ setup() {
         'git -C /tmp/x push --force' \
         'git push --force-with-lease --force'; do
         run decide "$cmd"
-        [ "$output" = "deny" ]
+        [ "$output" = "deny" ] || { echo "deny を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -69,7 +69,7 @@ setup() {
         'git -C /tmp/x clean --force' \
         'git --git-dir=/tmp/x/.git clean -f'; do
         run decide "$cmd"
-        [ "$output" = "deny" ]
+        [ "$output" = "deny" ] || { echo "deny を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -83,7 +83,7 @@ setup() {
         'git branch --delete -f feature' \
         'git -C /tmp/x branch --delete --force feature'; do
         run decide "$cmd"
-        [ "$output" = "deny" ]
+        [ "$output" = "deny" ] || { echo "deny を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -95,7 +95,7 @@ setup() {
         'git checkout HEAD -- src/file.txt' \
         'git -C /tmp/x checkout -- .'; do
         run decide "$cmd"
-        [ "$output" = "deny" ]
+        [ "$output" = "deny" ] || { echo "deny を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -107,7 +107,7 @@ setup() {
         'git push --force-with-lease --force-if-includes' \
         'git -C /tmp/x push --force-with-lease origin main'; do
         run decide "$cmd"
-        [ "$output" = "allow" ]
+        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -120,7 +120,7 @@ setup() {
         'git clean -xdn' \
         'git clean --dry-run --force'; do
         run decide "$cmd"
-        [ "$output" = "allow" ]
+        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -146,7 +146,7 @@ setup() {
         'git worktree list' \
         'ls -la'; do
         run decide "$cmd"
-        [ "$output" = "allow" ]
+        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
@@ -158,6 +158,6 @@ setup() {
         'grep -n "git clean -f" docs/rules.md' \
         'git config --global alias.nuke "reset --hard"'; do
         run decide "$cmd"
-        [ "$output" = "allow" ]
+        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
