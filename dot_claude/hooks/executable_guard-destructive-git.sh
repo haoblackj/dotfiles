@@ -24,7 +24,7 @@
 #   - `--force-with-lease` は `--force` と別物として扱う（トークン完全一致で判定）。
 #   - `git clean` は `-n` / `--dry-run` があれば消えないので通す。
 #
-# 検証は guard-destructive-git.test.sh で行う。判定対象の文字列を Bash ツールの
+# 検証は guard-destructive-git.bats で行う。判定対象の文字列を Bash ツールの
 # コマンドに載せるとこのフック自身が弾くので、必ずテスト経由で確かめること。
 
 set -uo pipefail
