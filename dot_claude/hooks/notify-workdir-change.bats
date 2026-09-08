@@ -1,100 +1,38 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bats
 # mutation-target: dot_claude/hooks/executable_notify-workdir-change.sh
 # notify-workdir-change.sh のユニットテスト。
 #
-# フック本体の名前は置き場所で変わる。chezmoi のソース側では
-# executable_notify-workdir-change.sh、ターゲット（~/.claude/hooks/）では
-# notify-workdir-change.sh。どちらでも動くよう両方を試す。
-# 既存のテストはこれを怠って配置先で exit 127 になり、何も検証していなかった前例がある。
+# run_hook_socket() だけは bats の run に置き換えていない（裁定1）。stdin を
+# python3 の socket.socketpair() でソケット越しに渡す検査で、run はパイプで
+# stdin を渡すためこれを再現できない。トップレベルのヘルパーとして残し、
+# 該当の @test の中では生の subprocess 呼び出しとして扱い、出力を自分で
+# 変数へ受ける。層4b の中で run を使わない唯一の箇所。
 #
-# 実運用の状態ファイルには触らない。XDG_STATE_HOME を一時ディレクトリへ向ける。
-set -uo pipefail
+# 実運用の状態ファイルには触らない。XDG_STATE_HOME を @test ごとに新しい
+# 一時ディレクトリへ向ける（setup()）。
+set -u
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOOK=""
-for cand in "$HERE/notify-workdir-change.sh" "$HERE/executable_notify-workdir-change.sh"; do
-  if [ -f "$cand" ]; then HOOK="$cand"; break; fi
-done
-if [ -z "$HOOK" ]; then
-  echo "フック本体が見つからない: $HERE/notify-workdir-change.sh も executable_notify-workdir-change.sh も無い" >&2
-  exit 1
-fi
-
-pass=0
-fail=0
-
-WORK="$(mktemp -d)"
-cleanup() { rm -rf "$WORK"; }
-trap cleanup EXIT
-export XDG_STATE_HOME="$WORK/state"
-
-# --- ヘルパー ---------------------------------------------------------------
-
-# フックを1回呼び、標準出力をそのまま返す。
-# run_hook <session> <agent> <tool> <cwd> [file_path]
-run_hook() {
-  local session="$1" agent="$2" tool="$3" cwd="$4" fp="${5-}" payload
-  payload=$(jq -nc --arg s "$session" --arg a "$agent" --arg t "$tool" --arg c "$cwd" --arg f "$fp" '
+# ペイロード JSON を組む。build_payload <session> <agent> <tool> <cwd> [file_path]
+build_payload() {
+  local session="$1" agent="$2" tool="$3" cwd="$4" fp="${5-}"
+  jq -nc --arg s "$session" --arg a "$agent" --arg t "$tool" --arg c "$cwd" --arg f "$fp" '
     {session_id: $s, hook_event_name: "PreToolUse", tool_name: $t, cwd: $c}
     + (if $a == "" then {} else {agent_id: $a} end)
-    + (if $f == "" then {tool_input: {}} else {tool_input: {file_path: $f}} end)')
-  printf '%s' "$payload" | bash "$HOOK" 2>/dev/null
+    + (if $f == "" then {tool_input: {}} else {tool_input: {file_path: $f}} end)'
 }
 
-# フックの出力から additionalContext を取り出す。出力が無ければ空。
+# フックを1回呼び、標準出力をそのまま返す。call_hook <session> <agent> <tool> <cwd> [file_path]
+call_hook() {
+  local session="$1" agent="$2" tool="$3" cwd="$4" fp="${5-}" payload
+  payload=$(build_payload "$session" "$agent" "$tool" "$cwd" "$fp")
+  printf '%s' "$payload" | bash "$SCRIPT" 2>/dev/null
+}
+
+# フックの出力(additionalContext を含む JSON)から文面だけを取り出す。無ければ空。
 context_of() {
   local out="$1"
   [ -z "$out" ] && { printf ''; return; }
   printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null
-}
-
-expect_silent() {
-  local what="$1" out="$2"
-  if [ -z "$out" ]; then
-    pass=$((pass + 1)); printf 'ok   - silent   : %s\n' "$what"
-  else
-    fail=$((fail + 1)); printf 'FAIL - silent   : %s\n   出力: [%s]\n' "$what" "$out"
-  fi
-}
-
-expect_contains() {
-  local what="$1" out="$2" needle="$3" ctx
-  ctx=$(context_of "$out")
-  case "$ctx" in
-    *"$needle"*) pass=$((pass + 1)); printf 'ok   - contains : %s\n' "$what" ;;
-    *) fail=$((fail + 1)); printf 'FAIL - contains : %s\n   期待に含む: [%s]\n   実際:       [%s]\n' "$what" "$needle" "$ctx" ;;
-  esac
-}
-
-expect_not_contains() {
-  local what="$1" out="$2" needle="$3" ctx
-  ctx=$(context_of "$out")
-  case "$ctx" in
-    *"$needle"*) fail=$((fail + 1)); printf 'FAIL - excludes : %s\n   含んではいけない: [%s]\n   実際:             [%s]\n' "$what" "$needle" "$ctx" ;;
-    *) pass=$((pass + 1)); printf 'ok   - excludes : %s\n' "$what" ;;
-  esac
-}
-
-# フックを1回呼び、終了コードだけを返す。標準出力・標準エラーは捨てる（Important 3）。
-# run_hook と同じ引数だが、こちらは $(...) に包まず直接呼ぶこと。command substitution の
-# 中は別プロセスになるので、その中で $? を見ても呼び出し元には伝わらない。
-run_hook_rc() {
-  local session="$1" agent="$2" tool="$3" cwd="$4" fp="${5-}" payload
-  payload=$(jq -nc --arg s "$session" --arg a "$agent" --arg t "$tool" --arg c "$cwd" --arg f "$fp" '
-    {session_id: $s, hook_event_name: "PreToolUse", tool_name: $t, cwd: $c}
-    + (if $a == "" then {} else {agent_id: $a} end)
-    + (if $f == "" then {tool_input: {}} else {tool_input: {file_path: $f}} end)')
-  printf '%s' "$payload" | bash "$HOOK" >/dev/null 2>/dev/null
-  return $?
-}
-
-expect_exit0() {
-  local what="$1" rc="$2"
-  if [ "$rc" -eq 0 ]; then
-    pass=$((pass + 1)); printf 'ok   - exit0    : %s\n' "$what"
-  else
-    fail=$((fail + 1)); printf 'FAIL - exit0    : %s\n   終了コード: %s\n' "$what" "$rc"
-  fi
 }
 
 # 一時的な git リポジトリを作る。既定でブランチ main、初期コミットあり。
@@ -113,11 +51,11 @@ make_repo() {
   fi
 }
 
-# stdin をソケットで与えてフックを呼ぶ。Claude Code は実際にソケットで渡すので、
-# パイプだけの検証では bash の読み方の違いを見逃す。
+# stdin をソケットで与えてフックを呼ぶ（裁定1）。Claude Code は実際にソケットで
+# 渡すので、パイプだけの検証では bash の読み方の違いを見逃す。
 run_hook_socket() {
   local payload="$1"
-  python3 - "$HOOK" "$payload" <<'PY'
+  python3 - "$SCRIPT" "$payload" <<'PY'
 import socket, subprocess, sys
 hook, payload = sys.argv[1], sys.argv[2]
 parent, child = socket.socketpair()
@@ -132,245 +70,325 @@ sys.stdout.write(out.decode())
 PY
 }
 
-# --- テスト -----------------------------------------------------------------
+setup() {
+    SCRIPT="$BATS_TEST_DIRNAME/executable_notify-workdir-change.sh"
+    WORK="$(mktemp -d)"
+    export XDG_STATE_HOME="$WORK/state"
+}
 
-make_repo "$WORK/r1"
+teardown() {
+    rm -rf -- "$WORK"
+}
 
-# 16. 対象外の tool_name では何もしない。
-out=$(run_hook s1 "" Read "$WORK/r1")
-expect_silent "tool_name が Read なら無音" "$out"
-if [ -d "$XDG_STATE_HOME/claude-workdir-notice" ] && [ -n "$(ls -A "$XDG_STATE_HOME/claude-workdir-notice" 2>/dev/null)" ]; then
-  fail=$((fail + 1)); printf 'FAIL - 対象外の tool_name で状態ファイルが作られた\n'
-else
-  pass=$((pass + 1)); printf 'ok   - 対象外の tool_name で状態ファイルを作らない\n'
-fi
+# 元 "16."
+@test "tool_name が Read なら無音で状態ファイルも作らない" {
+    make_repo "$WORK/r1"
+    run call_hook sess-read "" Read "$WORK/r1"
+    [ -z "$output" ] || { echo "対象外の tool_name なのに出力があった: [$output]" >&2; return 1; }
+    local sd="$XDG_STATE_HOME/claude-workdir-notice"
+    if [ -d "$sd" ] && [ -n "$(ls -A "$sd" 2>/dev/null)" ]; then
+        echo "対象外の tool_name で状態ファイルが作られた: $(ls -A "$sd")" >&2
+        return 1
+    fi
+}
 
-# 20. 出力の形。additionalContext を持ち permissionDecision を持たない。
-out=$(run_hook s2 "" Bash "$WORK/r1")
-ev=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName // ""' 2>/dev/null)
-if [ "$ev" = "PreToolUse" ]; then
-  pass=$((pass + 1)); printf 'ok   - hookEventName が PreToolUse\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - hookEventName が PreToolUse でない: [%s]\n' "$ev"
-fi
-pd=$(printf '%s' "$out" | jq -r 'if (.hookSpecificOutput | has("permissionDecision")) then "ある" else "ない" end' 2>/dev/null)
-if [ "$pd" = "ない" ]; then
-  pass=$((pass + 1)); printf 'ok   - permissionDecision を返さない\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - permissionDecision を返している\n'
-fi
+# 元 "20."
+@test "出力の形: additionalContext を持ち permissionDecision を持たない" {
+    make_repo "$WORK/r1"
+    run call_hook sess-shape "" Bash "$WORK/r1"
+    local ev pd
+    ev=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName // ""' 2>/dev/null)
+    [ "$ev" = "PreToolUse" ] || { echo "hookEventName が PreToolUse でない: [$ev]" >&2; return 1; }
+    pd=$(printf '%s' "$output" | jq -r 'if (.hookSpecificOutput | has("permissionDecision")) then "ある" else "ない" end' 2>/dev/null)
+    [ "$pd" = "ない" ] || { echo "permissionDecision を返している" >&2; return 1; }
+}
 
-# 21. stdin をソケットで与えても動く。
-payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"s3", hook_event_name:"PreToolUse", tool_name:"Bash", cwd:$c, tool_input:{}}')
-out=$(run_hook_socket "$payload")
-expect_contains "ソケット stdin でも通知が出る" "$out" "$WORK/r1"
+# 元 "21."（裁定1: run を使わない唯一の箇所）
+@test "ソケット stdin でも通知が出る" {
+    make_repo "$WORK/r1"
+    local payload out ctx
+    payload=$(build_payload sess-socket "" Bash "$WORK/r1")
+    out=$(run_hook_socket "$payload")
+    ctx=$(context_of "$out")
+    [[ "$ctx" == *"$WORK/r1"* ]] || { echo "ソケット stdin で通知が出なかった: [$ctx]" >&2; return 1; }
+}
 
-make_repo "$WORK/r2"
-make_repo "$WORK/fresh" --no-commit
-mkdir -p "$WORK/r1/sub"
-git -C "$WORK/r1" worktree add -q -b feat/wt "$WORK/wt1"
-git -C "$WORK/r1" branch -q other
-S=sess-shell
+# 元 "1."
+@test "shell レーンの初回で通知が出る" {
+    make_repo "$WORK/r1"
+    run call_hook sess-first "" Bash "$WORK/r1"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r1"* ]] || { echo "トップレベルが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"ブランチ main"* ]] || { echo "ブランチが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"このセッションの"* ]] || { echo "初回の文言でない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" != *"直前は"* ]] || { echo "初回なのに直前が書かれている: [$ctx]" >&2; return 1; }
+}
 
-# 1. shell レーンの初回で通知が出る。
-out=$(run_hook "$S" "" Bash "$WORK/r1")
-expect_contains "初回はトップレベルを出す"   "$out" "$WORK/r1"
-expect_contains "初回はブランチを出す"       "$out" "ブランチ main"
-expect_contains "初回は「このセッションの」で始まる" "$out" "このセッションの"
-expect_not_contains "初回は直前を書かない"   "$out" "直前は"
+# 元 "2."（裁定2: まず記録してから検査する）
+@test "同じ作業先の2回目は無音" {
+    make_repo "$WORK/r1"
+    run call_hook sess-same "" Bash "$WORK/r1"   # まず記録
+    run call_hook sess-same "" Bash "$WORK/r1"
+    [ -z "$output" ] || { echo "同じ作業先の2回目で出力があった: [$output]" >&2; return 1; }
+}
 
-# 2. 同じ作業先の2回目は無音。
-out=$(run_hook "$S" "" Bash "$WORK/r1")
-expect_silent "同じ作業先の2回目" "$out"
+# 元 "6."（裁定2: まず記録してから検査する）
+@test "同じリポジトリのサブディレクトリでも無音" {
+    make_repo "$WORK/r1"
+    mkdir -p "$WORK/r1/sub"
+    run call_hook sess-sub "" Bash "$WORK/r1"   # まず記録
+    run call_hook sess-sub "" Bash "$WORK/r1/sub"
+    [ -z "$output" ] || { echo "サブディレクトリで出力があった: [$output]" >&2; return 1; }
+}
 
-# 6. 同じリポジトリのサブディレクトリでも無音（トップレベルへ畳まれる）。
-out=$(run_hook "$S" "" Bash "$WORK/r1/sub")
-expect_silent "同じリポジトリのサブディレクトリ" "$out"
+# 元 "3."（裁定2: まず記録してから検査する）
+@test "別のリポジトリへ移ると通知が出て直前が文面に入る" {
+    make_repo "$WORK/r1"
+    make_repo "$WORK/r2"
+    run call_hook sess-switch "" Bash "$WORK/r1"   # まず記録
+    run call_hook sess-switch "" Bash "$WORK/r2"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r2"* ]] || { echo "現在のトップレベルが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"直前は $WORK/r1（ブランチ main）でした"* ]] || { echo "直前が出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"意図した作業先か確かめてから続けてください"* ]] || { echo "確認を促す一文がない: [$ctx]" >&2; return 1; }
+}
 
-# 3. 別のリポジトリへ移ると通知が出て、直前が文面に入る。
-out=$(run_hook "$S" "" Bash "$WORK/r2")
-expect_contains "別リポジトリで現在を出す" "$out" "$WORK/r2"
-expect_contains "別リポジトリで直前を出す" "$out" "直前は $WORK/r1（ブランチ main）でした"
-expect_contains "確認を促す一文が入る"     "$out" "意図した作業先か確かめてから続けてください"
+# 元 "4."
+@test "同一リポジトリの別ワークツリーへ移ると通知が出る" {
+    make_repo "$WORK/r1"
+    git -C "$WORK/r1" worktree add -q -b feat/wt "$WORK/wt1"
+    run call_hook sess-wt "" Bash "$WORK/wt1"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/wt1"* ]] || { echo "ワークツリーのパスが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"ブランチ feat/wt"* ]] || { echo "ワークツリーのブランチが出ていない: [$ctx]" >&2; return 1; }
+}
 
-# 4. 同一リポジトリの別ワークツリーへ移ると通知が出る。
-out=$(run_hook "$S" "" Bash "$WORK/wt1")
-expect_contains "ワークツリーのパスを出す"   "$out" "$WORK/wt1"
-expect_contains "ワークツリーのブランチを出す" "$out" "ブランチ feat/wt"
+# 元 "5."（裁定2: まず記録してから検査する）
+@test "トップレベルが同じでブランチだけ変わると通知が出る" {
+    make_repo "$WORK/r1"
+    git -C "$WORK/r1" branch -q other
+    run call_hook sess-branch "" Bash "$WORK/r1"   # まず記録(main)
+    git -C "$WORK/r1" checkout -q other
+    run call_hook sess-branch "" Bash "$WORK/r1"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"ブランチ other"* ]] || { echo "変化後のブランチが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"直前は $WORK/r1（ブランチ main）でした"* ]] || { echo "直前のブランチが出ていない: [$ctx]" >&2; return 1; }
+}
 
-# 5. トップレベルが同じでブランチだけ変わると通知が出る。
-out=$(run_hook "$S" "" Bash "$WORK/r1")   # r1 へ戻す（main）
-git -C "$WORK/r1" checkout -q other
-out=$(run_hook "$S" "" Bash "$WORK/r1")
-expect_contains "ブランチだけの変化でも鳴る" "$out" "ブランチ other"
-expect_contains "直前のブランチを出す"       "$out" "直前は $WORK/r1（ブランチ main）でした"
-git -C "$WORK/r1" checkout -q main
+# 元 "18."
+@test "コミットが1つも無いリポジトリを管理外と誤判定しない" {
+    make_repo "$WORK/fresh" --no-commit
+    run call_hook sess-fresh "" Bash "$WORK/fresh"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/fresh"* ]] || { echo "トップレベルが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" != *"管理外"* ]] || { echo "コミット無しを管理外にした: [$ctx]" >&2; return 1; }
+}
 
-# 18. コミットが1つも無いリポジトリを管理外と誤判定しない。
-out=$(run_hook sess-fresh "" Bash "$WORK/fresh")
-expect_contains "コミット無しでもトップレベルを出す" "$out" "$WORK/fresh"
-expect_not_contains "コミット無しを管理外にしない"   "$out" "管理外"
+# 元 "11."
+@test "絶対パスの file_path は cwd を無視して解決する" {
+    make_repo "$WORK/r1"
+    make_repo "$WORK/r2"
+    run call_hook sess-write-abs "" Write "$WORK/r2" "$WORK/r1/a.txt"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"書き込み先 $WORK/r1/a.txt"* ]] || { echo "書き込み先パスが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"$WORK/r1（ブランチ main）の中です"* ]] || { echo "書き込み先のリポジトリが出ていない: [$ctx]" >&2; return 1; }
+}
 
-# --- write レーン ---
-W=sess-write
+# 元 "10."
+@test "相対パスの file_path は cwd を前置して解決する" {
+    make_repo "$WORK/r2"
+    run call_hook sess-write-rel "" Write "$WORK/r2" "b.txt"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"書き込み先 $WORK/r2/b.txt"* ]] || { echo "相対パスが cwd で解決されていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"$WORK/r2（ブランチ main）の中です"* ]] || { echo "解決先のリポジトリが出ていない: [$ctx]" >&2; return 1; }
+}
 
-# 11. 絶対パスの file_path は cwd を無視して解決する。
-out=$(run_hook "$W" "" Write "$WORK/r2" "$WORK/r1/a.txt")
-expect_contains "書き込み先のパスを出す"     "$out" "書き込み先 $WORK/r1/a.txt"
-expect_contains "書き込み先のリポジトリを出す" "$out" "$WORK/r1（ブランチ main）の中です"
+# 元 "15."
+@test "親ディレクトリが存在しないときは存在する祖先まで遡る" {
+    make_repo "$WORK/r1"
+    run call_hook sess-write-anc "" Write "$WORK/r1" "$WORK/r1/no/such/dir/c.txt"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r1（ブランチ main）の中です"* ]] || { echo "存在する祖先で解決されていない: [$ctx]" >&2; return 1; }
+}
 
-# 10. 相対パスの file_path は cwd を前置して解決する。
-out=$(run_hook "$W" "" Write "$WORK/r2" "b.txt")
-expect_contains "相対パスを cwd で解決する" "$out" "書き込み先 $WORK/r2/b.txt"
-expect_contains "解決先のリポジトリを出す"   "$out" "$WORK/r2（ブランチ main）の中です"
+# 元 "12."
+@test "レーン分離: shell と write が互いを上書きしない" {
+    make_repo "$WORK/r1"
+    make_repo "$WORK/r2"
+    local L=sess-lanes ctx
+    run call_hook "$L" "" Bash "$WORK/r1"
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r1"* ]] || { echo "レーン分離: shell 初回が鳴らない: [$ctx]" >&2; return 1; }
+    run call_hook "$L" "" Write "$WORK/r1" "$WORK/r2/d.txt"
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r2"* ]] || { echo "レーン分離: write 初回が鳴らない: [$ctx]" >&2; return 1; }
+    run call_hook "$L" "" Bash "$WORK/r1"
+    [ -z "$output" ] || { echo "レーン分離: shell 2回目で出力があった: [$output]" >&2; return 1; }
+    run call_hook "$L" "" Write "$WORK/r1" "$WORK/r2/e.txt"
+    [ -z "$output" ] || { echo "レーン分離: write 2回目で出力があった: [$output]" >&2; return 1; }
+}
 
-# 15. 親ディレクトリが存在しないときは存在する祖先まで遡る。
-out=$(run_hook "$W" "" Write "$WORK/r1" "$WORK/r1/no/such/dir/c.txt")
-expect_contains "存在しない親でも祖先で解決する" "$out" "$WORK/r1（ブランチ main）の中です"
+# 元 "Edit は write レーンを共有する"（裁定2: まず記録してから検査する）
+@test "Edit は write レーンを共有する" {
+    make_repo "$WORK/r1"
+    make_repo "$WORK/r2"
+    local L=sess-lanes-edit ctx
+    run call_hook "$L" "" Write "$WORK/r1" "$WORK/r2/x.txt"   # まず記録(write現在=r2)
+    run call_hook "$L" "" Edit "$WORK/r1" "$WORK/r2/f.txt"
+    [ -z "$output" ] || { echo "同じ作業先への Edit で出力があった: [$output]" >&2; return 1; }
+    run call_hook "$L" "" Edit "$WORK/r1" "$WORK/r1/g.txt"
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r1（ブランチ main）"* ]] || { echo "別の作業先への Edit で通知が出ない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"直前は $WORK/r2（ブランチ main）でした"* ]] || { echo "別の作業先への Edit で直前が出ない: [$ctx]" >&2; return 1; }
+}
 
-# 12. shell レーンと write レーンが互いを上書きしない。
-L=sess-lanes
-out=$(run_hook "$L" "" Bash "$WORK/r1");                 expect_contains "レーン分離: shell 初回" "$out" "$WORK/r1"
-out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/d.txt"); expect_contains "レーン分離: write 初回" "$out" "$WORK/r2"
-out=$(run_hook "$L" "" Bash "$WORK/r1");                 expect_silent   "レーン分離: shell 2回目は無音" "$out"
-out=$(run_hook "$L" "" Write "$WORK/r1" "$WORK/r2/e.txt"); expect_silent   "レーン分離: write 2回目は無音" "$out"
+# 元 "7."（裁定2: この手順はすでに「まず記録してから検査する」の形でコード化されている）
+@test "管理外で通知が出て、管理外である旨と基準ディレクトリが文面に入る" {
+    make_repo "$WORK/r1"
+    mkdir -p "$WORK/plain/x"
+    run call_hook sess-nogit "" Bash "$WORK/r1"   # まずリポジトリを記録
+    run call_hook sess-nogit "" Bash "$WORK/plain/x"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"git 管理外のディレクトリ"* ]] || { echo "管理外である旨が出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"作業ディレクトリ $WORK/plain/x は"* ]] || { echo "基準ディレクトリが出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"直前は $WORK/r1（ブランチ main）でした"* ]] || { echo "直前が出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" != *"ブランチ main）です"* ]] || { echo "管理外なのにブランチを書いた: [$ctx]" >&2; return 1; }
+}
 
-# Edit は write レーンを共有する。「同じ作業先への Edit で無音」という判定だけでは、
-# Edit を lane 判定から完全に外した実装（tool_name が Bash/Write/Edit のいずれでも
-# ないので早期に exit 0 になる分岐に落ちる）でも同じ結果になり、判別力が無い
-# （Important 2）。別の作業先への Edit で実際に通知が出ることまで確かめて初めて、
-# Edit が write レーンの一員として扱われていることを検証したことになる。
-out=$(run_hook "$L" "" Edit "$WORK/r1" "$WORK/r2/f.txt")
-expect_silent "同じ作業先への Edit は無音" "$out"
-out=$(run_hook "$L" "" Edit "$WORK/r1" "$WORK/r1/g.txt")
-expect_contains "別の作業先への Edit で通知が出る" "$out" "$WORK/r1（ブランチ main）"
-expect_contains "別の作業先への Edit で直前を出す" "$out" "直前は $WORK/r2（ブランチ main）でした"
+# 元 "8."（裁定2: まず記録してから検査する）
+@test "管理外どうしの移動は2回目無音" {
+    mkdir -p "$WORK/plain/x" "$WORK/plain/y"
+    run call_hook sess-nogit2 "" Bash "$WORK/plain/x"   # まず記録
+    run call_hook sess-nogit2 "" Bash "$WORK/plain/y"
+    [ -z "$output" ] || { echo "管理外どうしの移動で出力があった: [$output]" >&2; return 1; }
+}
 
-# --- git 管理外 ---
-mkdir -p "$WORK/plain/x" "$WORK/plain/y"
-N=sess-nogit
+# 元 "9. と 19."（裁定2: まず記録してから検査する）
+@test "管理外から戻ると鳴り、直前は管理外のディレクトリと出てパスを含まない" {
+    make_repo "$WORK/r2"
+    mkdir -p "$WORK/plain/x"
+    run call_hook sess-nogit3 "" Bash "$WORK/plain/x"   # まず記録
+    run call_hook sess-nogit3 "" Bash "$WORK/r2"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r2（ブランチ main）"* ]] || { echo "管理外から戻っても鳴らない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" == *"直前は git 管理外のディレクトリでした"* ]] || { echo "直前が管理外と出ていない: [$ctx]" >&2; return 1; }
+    [[ "$ctx" != *"$WORK/plain"* ]] || { echo "直前に plain のパスが出た: [$ctx]" >&2; return 1; }
+}
 
-# 7. 管理外で通知が出て、管理外である旨と基準ディレクトリが文面に入る。
-out=$(run_hook "$N" "" Bash "$WORK/r1")   # まずリポジトリを記録
-out=$(run_hook "$N" "" Bash "$WORK/plain/x")
-expect_contains "管理外である旨を出す"     "$out" "git 管理外のディレクトリ"
-expect_contains "管理外では基準ディレクトリを出す" "$out" "作業ディレクトリ $WORK/plain/x は"
-expect_contains "管理外でも直前を出す"     "$out" "直前は $WORK/r1（ブランチ main）でした"
-expect_not_contains "管理外でブランチを書かない" "$out" "ブランチ main）です"
+# 元 "write レーンの管理外の文面"
+@test "write レーンの管理外の文面" {
+    mkdir -p "$WORK/plain/x"
+    run call_hook sess-nogit-w "" Write "$WORK/plain/x" "$WORK/plain/x/z.txt"
+    local ctx
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"書き込み先 $WORK/plain/x/z.txt は git 管理外のディレクトリです"* ]] || { echo "管理外への書き込み先の文面が違う: [$ctx]" >&2; return 1; }
+}
 
-# 8. 管理外の別ディレクトリへ移っても2回目は無音（!nogit へ畳まれている）。
-out=$(run_hook "$N" "" Bash "$WORK/plain/y")
-expect_silent "管理外どうしの移動" "$out"
+# 元 "13."
+@test "session_id にパストラバーサルを入れると何も書かず何も出さない" {
+    make_repo "$WORK/r1"
+    local sd="$XDG_STATE_HOME/claude-workdir-notice" before after
+    before=$(find "$sd" -type f 2>/dev/null | wc -l)
+    run call_hook "../escape" "" Bash "$WORK/r1"
+    [ -z "$output" ] || { echo "session_id にパストラバーサルで出力があった: [$output]" >&2; return 1; }
+    after=$(find "$sd" -type f 2>/dev/null | wc -l)
+    [ "$before" = "$after" ] || { echo "パストラバーサルでファイルが増えた: $before -> $after" >&2; return 1; }
+    [ ! -e "$XDG_STATE_HOME/escape.state" ] || { echo "状態ディレクトリの外へ書けた" >&2; return 1; }
+}
 
-# 9 と 19. 管理外からリポジトリへ戻ると鳴り、直前はパスを含まない。
-out=$(run_hook "$N" "" Bash "$WORK/r2")
-expect_contains "管理外から戻ると鳴る"           "$out" "$WORK/r2（ブランチ main）"
-expect_contains "直前が管理外ならパスを書かない" "$out" "直前は git 管理外のディレクトリでした"
-expect_not_contains "直前に plain のパスを出さない" "$out" "$WORK/plain"
+# 元 "agent_id にパストラバーサル"
+@test "agent_id にパストラバーサルを入れると外へ書けない" {
+    make_repo "$WORK/r1"
+    local sd="$XDG_STATE_HOME/claude-workdir-notice"
+    mkdir -p "$sd/ok-esc"
+    run call_hook ok "esc/../../escaped" Bash "$WORK/r1"
+    [ -z "$output" ] || { echo "agent_id にパストラバーサルで出力があった: [$output]" >&2; return 1; }
+    [ ! -e "$XDG_STATE_HOME/escaped.state" ] || { echo "agent_id 経由で状態ディレクトリの外へ書けた" >&2; return 1; }
+}
 
-# write レーンの管理外の文面。
-out=$(run_hook sess-nogit-w "" Write "$WORK/plain/x" "$WORK/plain/x/z.txt")
-expect_contains "管理外への書き込み先を出す" "$out" "書き込み先 $WORK/plain/x/z.txt は git 管理外のディレクトリです"
+# 元 "14."
+@test "agent_id の有無で別の状態ファイルを使う" {
+    make_repo "$WORK/r1"
+    local sd="$XDG_STATE_HOME/claude-workdir-notice" ctx
+    run call_hook sess-ag ""    Bash "$WORK/r1"
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r1"* ]] || { echo "親: 初回が鳴らない: [$ctx]" >&2; return 1; }
+    run call_hook sess-ag ""    Bash "$WORK/r1"
+    [ -z "$output" ] || { echo "親: 2回目に出力があった: [$output]" >&2; return 1; }
+    run call_hook sess-ag agent Bash "$WORK/r1"
+    ctx=$(context_of "$output")
+    [[ "$ctx" == *"$WORK/r1"* ]] || { echo "子: 別ファイルなのに初回として鳴らない: [$ctx]" >&2; return 1; }
+    { [ -f "$sd/sess-ag.state" ] && [ -f "$sd/sess-ag-agent.state" ]; } \
+        || { echo "agent_id で状態ファイルが分かれていない" >&2; return 1; }
+}
 
-# --- 鍵の検証と掃除 ---
-SD="$XDG_STATE_HOME/claude-workdir-notice"
+# 元 "17."（前半: 新規作成のときの掃除。ループはブリーフの裁定3どおり診断つきで保つ）
+@test "新規作成のときに7日を超えた *.state だけ消える" {
+    make_repo "$WORK/r1"
+    local sd="$XDG_STATE_HOME/claude-workdir-notice"
+    mkdir -p "$sd/keepdir"
+    : > "$sd/old.state";    touch -d '8 days ago' "$sd/old.state"
+    : > "$sd/recent.state"; touch -d '2 days ago' "$sd/recent.state"
+    : > "$sd/other.log";    touch -d '8 days ago' "$sd/other.log"
+    run call_hook sess-sweep "" Bash "$WORK/r1"
+    [ ! -e "$sd/old.state" ] || { echo "7日超の .state が残った" >&2; return 1; }
+    local keep
+    for keep in "$sd/recent.state" "$sd/other.log" "$sd/keepdir"; do
+        [ -e "$keep" ] || { echo "消してはいけないものが消えた: $keep" >&2; return 1; }
+    done
+}
 
-# 13. session_id にパストラバーサルを入れると何も書かず何も出さない。
-before=$(find "$SD" -type f 2>/dev/null | wc -l)
-payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"../escape", hook_event_name:"PreToolUse", tool_name:"Bash", cwd:$c, tool_input:{}}')
-out=$(printf '%s' "$payload" | bash "$HOOK" 2>/dev/null)
-expect_silent "session_id にパストラバーサル" "$out"
-after=$(find "$SD" -type f 2>/dev/null | wc -l)
-if [ "$before" = "$after" ]; then
-  pass=$((pass + 1)); printf 'ok   - パストラバーサルでファイルを作らない\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - パストラバーサルでファイルが増えた: %s -> %s\n' "$before" "$after"
-fi
-if [ -e "$XDG_STATE_HOME/escape.state" ]; then
-  fail=$((fail + 1)); printf 'FAIL - 状態ディレクトリの外へ書けた\n'
-else
-  pass=$((pass + 1)); printf 'ok   - 状態ディレクトリの外へ書けない\n'
-fi
+# 元 "17."（後半: 更新時は掃除しない、裁定2: まず記録してから検査する）
+@test "既存の状態ファイルを更新するだけのときは掃除しない" {
+    make_repo "$WORK/r1"
+    make_repo "$WORK/r2"
+    local sd="$XDG_STATE_HOME/claude-workdir-notice"
+    run call_hook sess-sweep-upd "" Bash "$WORK/r1"   # まず記録して state_file を作る
+    : > "$sd/old2.state"; touch -d '8 days ago' "$sd/old2.state"
+    run call_hook sess-sweep-upd "" Bash "$WORK/r2"
+    [ -e "$sd/old2.state" ] || { echo "更新のときにも掃除した" >&2; return 1; }
+}
 
-# agent_id 側も同じ。ただし agent_id は "<session>-" の後ろに付くので、素朴に "../x" を
-# 与えても先頭の成分（"ok-.."）が存在せず、検証が無くても書き込みが失敗して同じ「無音」に
-# なる。それでは検証の有無を区別できないので、traversal の起点になるディレクトリを先に
-# 作っておく。検証が無ければ $XDG_STATE_HOME/escaped.state がディレクトリの外に生まれる。
-mkdir -p "$SD/ok-esc"
-payload=$(jq -nc --arg c "$WORK/r1" '{session_id:"ok", agent_id:"esc/../../escaped", hook_event_name:"PreToolUse", tool_name:"Bash", cwd:$c, tool_input:{}}')
-out=$(printf '%s' "$payload" | bash "$HOOK" 2>/dev/null)
-expect_silent "agent_id にパストラバーサル" "$out"
-if [ -e "$XDG_STATE_HOME/escaped.state" ]; then
-  fail=$((fail + 1)); printf 'FAIL - agent_id 経由で状態ディレクトリの外へ書けた\n'
-else
-  pass=$((pass + 1)); printf 'ok   - agent_id 経由でも外へ書けない\n'
-fi
+# 元 "一時ファイルを残さない"
+@test "一時ファイルを残さない" {
+    make_repo "$WORK/r1"
+    local sd="$XDG_STATE_HOME/claude-workdir-notice" leftovers
+    run call_hook sess-tmp "" Bash "$WORK/r1"
+    leftovers=$(find "$sd" -maxdepth 1 -name '*.tmp.*' 2>/dev/null | wc -l)
+    [ "$leftovers" = "0" ] || { echo "一時ファイルが $leftovers 個残っている" >&2; return 1; }
+}
 
-# 14. agent_id の有無で別の状態ファイルを使う。
-out=$(run_hook sess-ag ""    Bash "$WORK/r1"); expect_contains "親: 初回は鳴る" "$out" "$WORK/r1"
-out=$(run_hook sess-ag ""    Bash "$WORK/r1"); expect_silent   "親: 2回目は無音" "$out"
-out=$(run_hook sess-ag agent Bash "$WORK/r1"); expect_contains "子: 別ファイルなので初回として鳴る" "$out" "$WORK/r1"
-if [ -f "$SD/sess-ag.state" ] && [ -f "$SD/sess-ag-agent.state" ]; then
-  pass=$((pass + 1)); printf 'ok   - agent_id ありと無しで別ファイル\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - agent_id で状態ファイルが分かれていない\n'
-fi
+# 元 "Important 3: exit 0 を守っているかの検査"
+@test "4つの経路すべてで exit 0 を守る" {
+    make_repo "$WORK/r1"
+    run call_hook sess-ec "" Bash "$WORK/r1"
+    [ "$status" -eq 0 ] || { echo "通知が出る経路で exit $status" >&2; return 1; }
+    run call_hook sess-ec "" Bash "$WORK/r1"
+    [ "$status" -eq 0 ] || { echo "無音の経路(同じ作業先)で exit $status" >&2; return 1; }
+    run call_hook "../escape-exitcode" "" Bash "$WORK/r1"
+    [ "$status" -eq 0 ] || { echo "鍵が不正な経路(session_id にパストラバーサル)で exit $status" >&2; return 1; }
+    run call_hook sess-ec "" Read "$WORK/r1"
+    [ "$status" -eq 0 ] || { echo "対象外の tool_name(Read)で exit $status" >&2; return 1; }
+}
 
-# 17. 新規作成のときに7日を超えた *.state だけ消える。
-mkdir -p "$SD/keepdir"
-: > "$SD/old.state";    touch -d '8 days ago' "$SD/old.state"
-: > "$SD/recent.state"; touch -d '2 days ago' "$SD/recent.state"
-: > "$SD/other.log";    touch -d '8 days ago' "$SD/other.log"
-out=$(run_hook sess-sweep "" Bash "$WORK/r1")
-if [ ! -e "$SD/old.state" ]; then
-  pass=$((pass + 1)); printf 'ok   - 7日超の .state は消える\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - 7日超の .state が残った\n'
-fi
-for keep in "$SD/recent.state" "$SD/other.log" "$SD/keepdir"; do
-  if [ -e "$keep" ]; then
-    pass=$((pass + 1)); printf 'ok   - 残るべきものが残る: %s\n' "$(basename "$keep")"
-  else
-    fail=$((fail + 1)); printf 'FAIL - 消してはいけないものが消えた: %s\n' "$(basename "$keep")"
-  fi
-done
-
-# 既存の状態ファイルを更新するだけのときは掃除しない。
-: > "$SD/old2.state"; touch -d '8 days ago' "$SD/old2.state"
-out=$(run_hook sess-sweep "" Bash "$WORK/r2")
-if [ -e "$SD/old2.state" ]; then
-  pass=$((pass + 1)); printf 'ok   - 更新のときは掃除しない\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - 更新のときにも掃除した\n'
-fi
-
-# 一時ファイルを残さない。
-leftovers=$(find "$SD" -maxdepth 1 -name '*.tmp.*' 2>/dev/null | wc -l)
-if [ "$leftovers" = "0" ]; then
-  pass=$((pass + 1)); printf 'ok   - 一時ファイルを残さない\n'
-else
-  fail=$((fail + 1)); printf 'FAIL - 一時ファイルが %s 個残っている\n' "$leftovers"
-fi
-
-# --- Important 3: exit 0 を守っているかの検査 --------------------------------
-# 通知が出る経路・無音の経路・鍵が不正な経路・対象外の tool_name の4経路すべてで
-# 終了コードが0であることを確かめる。PreToolUse の exit 2 はツール呼び出しそのものを
-# ブロックするため、フック自身のヘッダが約束する最重要の性質だが、これまで一件も
-# 検査が無かった。
-EC=sess-exitcode
-run_hook_rc "$EC" "" Bash "$WORK/r1";          expect_exit0 "通知が出る経路"                 "$?"
-run_hook_rc "$EC" "" Bash "$WORK/r1";          expect_exit0 "無音の経路（同じ作業先）"       "$?"
-run_hook_rc "../escape-exitcode" "" Bash "$WORK/r1"; expect_exit0 "鍵が不正な経路（session_id にパストラバーサル）" "$?"
-run_hook_rc "$EC" "" Read "$WORK/r1";          expect_exit0 "対象外の tool_name（Read）"     "$?"
-
-# --- 配線 ---
-# 検証の対象は chezmoi ソース側。ターゲットだけ見ると「配線したが re-add していない」
-# 状態を合格にしてしまう。既存の executable_settings-wiring.test.sh と同じ理由。
-SRC_SETTINGS="$HOME/.local/share/chezmoi/dot_claude/private_settings.json"
-if [ ! -f "$SRC_SETTINGS" ]; then
-  fail=$((fail + 1)); printf 'FAIL - chezmoi ソース側の settings が無い: %s\n' "$SRC_SETTINGS"
-else
-  wiring=$(python3 - "$SRC_SETTINGS" <<'PY'
+# 元 "配線"。検証の対象は chezmoi ソース側。ターゲットだけ見ると「配線したが
+# re-add していない」状態を合格にしてしまう(既存の settings-wiring.bats と同じ理由)。
+# bats test_tags=production-asset
+@test "PreToolUse の Bash と Write|Edit に配線されている" {
+    local settings="$HOME/.local/share/chezmoi/dot_claude/private_settings.json"
+    [ -f "$settings" ] || { echo "chezmoi ソース側の settings が無い: $settings" >&2; return 1; }
+    local wiring
+    wiring=$(python3 - "$settings" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 pre = d.get("hooks", {}).get("PreToolUse", [])
@@ -386,14 +404,5 @@ missing = [m for m in ("Bash", "Write|Edit") if not wired(m)]
 print("ok" if not missing else "missing:" + ",".join(missing))
 PY
 )
-  if [ "$wiring" = "ok" ]; then
-    pass=$((pass + 1)); printf 'ok   - PreToolUse の Bash と Write|Edit に配線されている\n'
-  else
-    fail=$((fail + 1)); printf 'FAIL - 配線が足りない: %s\n' "$wiring"
-  fi
-fi
-
-# --- 集計 -------------------------------------------------------------------
-
-printf '\n%s件成功 / %s件失敗\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+    [ "$wiring" = "ok" ] || { echo "配線が足りない: $wiring" >&2; return 1; }
+}
