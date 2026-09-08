@@ -290,7 +290,6 @@ teardown() {
     NOLIB_DIR="$(mktemp -d)"
     cp "$SCRIPT" "$NOLIB_DIR/"
     run --separate-stderr bash "$NOLIB_DIR/$(basename "$SCRIPT")" <<< '{"session_id":"sess-nolib","transcript_path":"/no/such/file"}'
-    rm -rf -- "$NOLIB_DIR"
     [ "$output" = "" ]
     [ "$status" -eq 0 ]
 }
