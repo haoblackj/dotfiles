@@ -82,6 +82,14 @@ setup() {
     # 対応する実装（check-issues.sh・check-repo.sh・
     # guard-destructive-git.sh）が命名規約の対応づけで一覧から正しく
     # 除かれていることも確かめ、空振りにしない。
+    # 上記に加えて、いまは list-untested-shell.sh が git ls-files '*.sh'
+    # からしか候補を採らないため、".bats" という文字列自体が出力に
+    # 出ようがない（all_bats は除外集合の計算にしか使われない）。
+    # つまり次の3行は実装が正しくても間違っていても常に通り、
+    # 構造的に落ちない。それでも消さずに残しているのは、層5が
+    # テストの門を .bats も拾う形へ変えたとき、この3行が生きた
+    # 検査へ戻るため。この下に続く、直下の .sh を見る3行が、
+    # 現時点で実際に判別している側。
     [[ "$output" != *"check-issues.bats"* ]]
     [[ "$output" != *"check-repo.bats"* ]]
     [[ "$output" != *"guard-destructive-git.bats"* ]]
