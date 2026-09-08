@@ -68,7 +68,7 @@ excluded-modules = [
 # **PATH 解決に頼らない。**`python` が PATH に無いだけで212件全部が `INCOMPETENT` に
 # なった実例がある。venv の絶対パスは `verify-tests` の `MUTATE_VENV` と同じもので、
 # 食い違いは penguinEx の tests/test_verify_tests.py が検査する。
-test-command = "/bin/sh -c '/home/yagu001/.local/share/verify-tests-venv/bin/python -m pytest -x -q -p no:cacheprovider && /bin/bash dot_claude/hooks/executable_stop-fabricated-turn-guard.test.sh'"
+test-command = "/bin/sh -c '/home/yagu001/.local/share/verify-tests-venv/bin/python -m pytest -x -q -p no:cacheprovider && /home/linuxbrew/.linuxbrew/bin/bats dot_claude/hooks/stop-fabricated-turn-guard.bats'"
 
 [cosmic-ray.distributor]
 name = "local"
