@@ -87,5 +87,5 @@ setup() {
     [[ "$output" != *"guard-destructive-git.bats"* ]]
     [[ "$output" != *"/check-issues.sh"* ]]
     [[ "$output" != *"/check-repo.sh"* ]]
-    [[ "$output" != *"/guard-destructive-git.sh"* ]]
+    [[ "$output" != *"/executable_guard-destructive-git.sh"* ]]
 }
