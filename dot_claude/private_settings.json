@@ -140,6 +140,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/guard-agent-model-unspecified.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
