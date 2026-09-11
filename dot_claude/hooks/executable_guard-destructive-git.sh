@@ -112,6 +112,10 @@ analyze() {
       fi
       ;;
     push)
+      # リフスペック先頭の `+`（`push origin +main`、`+main:main` など）による強制 push は
+      # 意図して対象外にしている（2026-09-03、penguinEx issue #31 で再確認）。
+      # 理由: CLAUDE.md の列挙5件の外で、ブランチ名との誤検知リスクがある。
+      # 塞ぐかどうかは、この形を踏んだ記録が出たときに改めて決める。
       if has_long "--force" "${rest[@]}" || has_short f "${rest[@]}"; then
         echo "git push --force"; return 0
       fi
