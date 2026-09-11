@@ -43,6 +43,17 @@ LOG_GENERATIONS = 3
 LOCK_PATH = LOG_PATH + ".lock"
 LOCK_STALE_SEC = 60
 CACHE_NAME = ".embeddings.json"
+# キャッシュの commit ロック（issue #13）。複数セッションが同じメモリ領域の
+# 索引を更新するので、保存は「ロック内で最新を読み直して自分の差分を merge」の
+# 形にする。API 呼び出しはロックの外。ロックの中で行うのはキャッシュの読み込み・
+# merge・書き戻しだけで、219 件 × 1024 次元（実運用の規模、約 2.4MB）の合成
+# キャッシュで実測 140ms、300 件で 200ms。待ちの上限 0.5 秒はその 2〜3 回分で、
+# フック全体の締め切り DEADLINE_SEC = 4.2 秒の約 12%。想起の出力は commit より
+# 前に済んでいるので、この待ちが伸ばすのは想起ではなく次の発言までの待ち時間。
+# 上限に達したら保存を諦めて次の発言へ持ち越す（ハッシュが合わないので再索引される）。
+# 古いロックの扱いは退避ロックと同じ LOCK_STALE_SEC（60 秒）で奪う。
+COMMIT_LOCK_WAIT_SEC = 0.5
+COMMIT_LOCK_POLL_SEC = 0.02
 EXCLUDE = {"MEMORY.md"}
 
 
@@ -56,24 +67,35 @@ def log_generations():
     return [p for p in paths if os.path.exists(p)]
 
 
-def acquire_rotate_lock():
-    """退避用のロックを取る。取れなければ False。古いロックは奪う。"""
-    for attempt in (1, 2):
+def acquire_lock(path, stale_sec, wait_sec=0.0):
+    """O_CREAT | O_EXCL でロックファイルを作る。取れれば True。
+
+    wait_sec の間は COMMIT_LOCK_POLL_SEC ごとに試し直す。0 なら一度きり。
+    stale_sec より古いロックは消してから作り直す。消してから作るまでの間に
+    別のプロセスが先に作れば O_EXCL が失敗し、通常の待ちへ戻る。
+    """
+    give_up = time.monotonic() + wait_sec
+    while True:
         try:
-            os.close(os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
             return True
         except FileExistsError:
-            if attempt == 2:
-                return False
             try:
-                if time.time() - os.path.getmtime(LOCK_PATH) <= LOCK_STALE_SEC:
-                    return False
-                os.remove(LOCK_PATH)
+                if time.time() - os.path.getmtime(path) > stale_sec:
+                    os.remove(path)
+                    continue
             except OSError:
+                pass  # 消えた直後。次の試行で取れる
+            if time.monotonic() >= give_up:
                 return False
+            time.sleep(COMMIT_LOCK_POLL_SEC)
         except OSError:
             return False
-    return False
+
+
+def acquire_rotate_lock():
+    """退避用のロックを取る。取れなければ False。古いロックは奪う。"""
+    return acquire_lock(LOCK_PATH, LOCK_STALE_SEC)
 
 
 def rotate_log_if_needed():
@@ -201,11 +223,104 @@ def load_cache(memory_dir):
 
 
 def save_cache(memory_dir, cache):
+    """キャッシュを原子的に置き換える。呼び出し側が commit ロックを持つこと。"""
     path = os.path.join(memory_dir, CACHE_NAME)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(cache, f, ensure_ascii=False)
-    os.replace(tmp, path)
+    # 一時ファイルはプロセスごとに分ける。古いロックの奪い合いで2つが同時に
+    # ここへ入っても、互いの書きかけを置き換え先へ運ばない。
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(cache, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def cache_lock_path(memory_dir):
+    return os.path.join(memory_dir, CACHE_NAME + ".lock")
+
+
+def file_hash(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def commit_cache(memory_dir, delta, deleted):
+    """自分の差分を最新のキャッシュへ merge して保存する（optimistic commit）。
+
+    delta は確定した項目 {name: entry}、deleted は snapshot 時点で実ファイルの
+    無かった項目名。ロックの中でディスクを読み直し、そこへ差分だけを当てる。
+    snapshot をそのまま書き戻すと、別セッションがその間に確定した項目を消す
+    （issue #13 の後勝ち）。
+
+    merge の規則:
+      削除   commit 時点でも実ファイルが無いときだけ取り除く。戻っていたら残す。
+      追加   commit 時点の実ファイルのハッシュと合う項目だけ載せる。ファイルが
+             消えていれば載せない（実体の無い項目を作らない）。変わっていれば
+             捨てる（次の発言で作り直す）。
+      同内容 ディスクの項目と同じハッシュなら先の commit を残す。同じ内容の
+             埋め込みは同じベクトルになるので上書きに意味が無く、規則を1つに
+             固定しておくと勝者が決定論的になる。
+
+    返り値は merge 後のキャッシュ。ロックが取れなければ None（保存しない）。
+    書き込みの失敗は OSError のまま呼び出し側へ返す。
+    """
+    lock = cache_lock_path(memory_dir)
+    if not acquire_lock(lock, LOCK_STALE_SEC, COMMIT_LOCK_WAIT_SEC):
+        return None
+    try:
+        latest, _reason, _prev = load_cache(memory_dir)
+        files_now = list_memory_files(memory_dir)
+        entries = latest["entries"]
+        for name in deleted:
+            if name not in files_now:
+                entries.pop(name, None)
+        for name, entry in delta.items():
+            path = files_now.get(name)
+            if path is None:
+                continue
+            current = entries.get(name)
+            if current is not None and current.get("hash") == entry["hash"]:
+                continue
+            try:
+                if file_hash(path) != entry["hash"]:
+                    continue
+            except OSError:
+                continue
+            entries[name] = entry
+        save_cache(memory_dir, latest)
+        return latest
+    finally:
+        try:
+            os.remove(lock)
+        except OSError:
+            pass
+
+
+def reset_stale_cache(memory_dir):
+    """捨てると判断したキャッシュを、ディスク上でまだ捨てる状態のときだけ空にする。
+
+    (wrote, latest) を返す。wrote が None ならロックが取れず何もしていない。
+    別セッションが先に空へ戻して項目を確定していれば、その進捗を空で上書き
+    せず、ディスクの内容をそのまま返す（作り直しの進捗の巻き戻りを防ぐ）。
+    """
+    lock = cache_lock_path(memory_dir)
+    if not acquire_lock(lock, LOCK_STALE_SEC, COMMIT_LOCK_WAIT_SEC):
+        return None, None
+    try:
+        latest, reason, _prev = load_cache(memory_dir)
+        if reason in ("unreadable", "model_mismatch"):
+            save_cache(memory_dir, latest)
+            return True, latest
+        return False, latest
+    finally:
+        try:
+            os.remove(lock)
+        except OSError:
+            pass
 
 
 def load_secrets(path=SECRETS_PATH):
@@ -384,13 +499,11 @@ def update_index(memory_dir, cache, cfg, deadline):
     """索引を更新する。確定はファイル単位で、全断片が揃ったものだけ書き込む。"""
     files = list_memory_files(memory_dir)
     entries = cache["entries"]
-    changed = False
 
+    # snapshot（cache）はここでは書き換えない。消えたファイルと確定した項目は
+    # 差分として集め、最後に commit_cache がロックの中で最新へ当てる。
     # 消えたファイルの項目を取り除く。これだけでも保存する経路になる。
-    for name in list(entries):
-        if name not in files:
-            del entries[name]
-            changed = True
+    deleted = {name for name in entries if name not in files}
 
     pending = []
     for name, path in files.items():
@@ -443,29 +556,37 @@ def update_index(memory_dir, cache, cfg, deadline):
 
     # 全断片が揃ったファイルだけを確定する。
     # 欠けたまま平均を保存すると、ハッシュが一致するせいで二度と直らない。
-    written = 0
+    delta = {}
     for name, got in collected.items():
         info = meta[name]
         if len(got) != len(info["frags"]):
             continue
         vectors = [got[i] for i in sorted(got)]
         weights = [len(f) for f in info["frags"]]
-        entries[name] = {"hash": info["hash"], "description": info["description"],
-                         "vector": weighted_average(vectors, weights)}
-        changed = True
-        written += 1
+        delta[name] = {"hash": info["hash"], "description": info["description"],
+                       "vector": weighted_average(vectors, weights)}
+    written = len(delta)
 
     if hit_deadline:
         log({"kind": "partial", "done": written,
              "pending": len(pending) - written})
 
-    if changed:
+    if delta or deleted:
         try:
-            save_cache(memory_dir, cache)
+            merged = commit_cache(memory_dir, delta, deleted)
         except OSError as e:
             log({"stage": "index", "kind": "local", "target": CACHE_NAME,
                  "message": f"cache save failed: {e}"})
             return False
+        if merged is None:
+            # 別セッションが commit 中で待ちの上限に達した。今回の埋め込みは
+            # 捨て、次の発言で（ハッシュが合わないので）作り直す。
+            log({"stage": "index", "kind": "local", "target": CACHE_NAME,
+                 "message": "cache commit lock busy; carried over"})
+            return False
+        # 呼び出し側の cache を merge 後の内容へ揃える。
+        cache["model"] = merged["model"]
+        cache["entries"] = merged["entries"]
     return not (hit_deadline or stopped) and written == len(pending)
 
 
@@ -518,10 +639,18 @@ def main():
         except OSError:
             pending_count = None
         try:
-            save_cache(memory_dir, cache)
-            if reason == "model_mismatch":
-                log({"kind": "migration", "from": previous_model, "to": CACHE_MODEL,
-                     "pending": pending_count})
+            # ロックの中でディスクを読み直し、まだ捨てる状態のときだけ空で書く。
+            # 別セッションが先に作り直しを進めていれば、その内容を引き継ぐ。
+            wrote, latest = reset_stale_cache(memory_dir)
+            if wrote is None:
+                log({"stage": "startup", "kind": "local", "target": CACHE_NAME,
+                     "message": "cache commit lock busy; carried over"})
+            elif wrote:
+                if reason == "model_mismatch":
+                    log({"kind": "migration", "from": previous_model, "to": CACHE_MODEL,
+                         "pending": pending_count})
+            else:
+                cache = latest
         except OSError as e:
             # 保存に失敗しても想起は止めない（目標1）
             log({"stage": "startup", "kind": "local", "target": CACHE_NAME,

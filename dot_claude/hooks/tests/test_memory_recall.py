@@ -1,7 +1,9 @@
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
+import multiprocessing
 import os
 import sys
 import tempfile
@@ -984,6 +986,258 @@ class TestIsolation(unittest.TestCase):
             mod.process_batch(batch, {}, time.monotonic() + 10, collected)
         self.assertEqual(sizes, [5, 2, 3])
         self.assertEqual(len(collected), 5)
+
+
+# fork を名指しする。Python 3.14 の Linux 既定は forkserver で、子が importlib で
+# 読み込んだ mod と patch を引き継げない。
+_MP = multiprocessing.get_context("fork")
+
+
+def _session(memory_dir, log_path, barrier, opts, out_q):
+    """1セッション相当の子プロセス。snapshot を読み、barrier のあとで索引を更新する。
+
+    opts の鍵:
+      vec            この session の偽 embed が返すベクトル
+      fail_on        本文にこの文字列を含む断片を api で落とす（session ごとの delta を分ける）
+      wait_index     update_index に入る前に待つ Event
+      delete_first   update_index に入る直前にディスクから消すファイル名
+      set_on_embed   最初の埋め込みで立てる Event（ファイル一覧の列挙が済んだ印）
+      wait_on_embed  埋め込みの前に待つ Event（commit の順序を決める）
+    """
+    patches = [patch.object(mod, "LOG_PATH", log_path),
+               patch.object(mod, "LOCK_PATH", log_path + ".lock"),
+               patch.object(mod, "BATCH_SIZE", 1)]
+    for p in patches:
+        p.start()
+    try:
+        cache, _reason, _prev = mod.load_cache(memory_dir)   # snapshot
+        barrier.wait(timeout=10)                             # 両方が同じ snapshot を持つ
+        if opts.get("wait_index"):
+            opts["wait_index"].wait(timeout=10)
+        if opts.get("delete_first"):
+            os.unlink(os.path.join(memory_dir, opts["delete_first"]))
+
+        def fake(texts, cfg, timeout=None):
+            if opts.get("set_on_embed"):
+                opts["set_on_embed"].set()
+            if opts.get("wait_on_embed"):
+                opts["wait_on_embed"].wait(timeout=10)
+            if opts.get("fail_on") and any(opts["fail_on"] in t for t in texts):
+                raise mod.EmbedError("api", {"message": "this session skips it"})
+            return [list(opts["vec"]) for _ in texts]
+
+        with patch.object(mod, "embed_texts", fake):
+            t0 = time.monotonic()
+            ok = mod.update_index(memory_dir, cache, {}, time.monotonic() + 10)
+            out_q.put({"ok": ok, "elapsed": time.monotonic() - t0,
+                       "entries": sorted(cache["entries"])})
+    except BaseException as e:  # 子の失敗は親へ運ぶ。黙って死ぶと join だけが通る。
+        out_q.put({"error": f"{type(e).__name__}: {e}"})
+
+
+class TestConcurrentCommit(unittest.TestCase):
+    """2セッションが同じ snapshot から別々に索引を更新する（issue #13）。
+
+    順序は Event で固定する。A が commit を終えてから B の埋め込みを進めるので、
+    B は必ず A より後に commit し、かつ A の commit より前に読んだ snapshot を持つ。
+    これが issue の「後勝ち」を作る最小の条件で、順序が決まっているので
+    落ちるときは毎回落ちる。
+    """
+
+    A_VEC = (1.0, 0.0, 0.0, 0.0)
+    B_VEC = (0.0, 1.0, 0.0, 0.0)
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+        self.log_path = os.path.join(self.dir, "log")
+        self.p = [patch.object(mod, "LOG_PATH", self.log_path),
+                  patch.object(mod, "LOCK_PATH", self.log_path + ".lock")]
+        for p in self.p:
+            p.start()
+
+    def tearDown(self):
+        for p in self.p:
+            p.stop()
+        self.tmp.cleanup()
+
+    def write(self, name, text):
+        with open(os.path.join(self.dir, name), "w") as f:
+            f.write(text)
+
+    def indexed_entry(self, name, vec=(1.0, 0.0, 0.0, 0.0)):
+        with open(os.path.join(self.dir, name), "rb") as f:
+            h = hashlib.sha256(f.read()).hexdigest()
+        return {"hash": h, "description": name, "vector": list(vec)}
+
+    def write_cache(self, entries):
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            json.dump({"model": mod.CACHE_MODEL, "entries": entries}, f)
+
+    def disk_entries(self):
+        with open(os.path.join(self.dir, mod.CACHE_NAME)) as f:
+            return json.load(f)["entries"]
+
+    def run_a_then_b(self, a_opts, b_opts):
+        """A と B を同じ snapshot から走らせ、A の commit のあとで B の埋め込みを進める。"""
+        barrier = _MP.Barrier(2)
+        go_b = _MP.Event()
+        out_q = _MP.Queue()
+        b_opts = dict(b_opts, wait_on_embed=go_b)
+        procs = [_MP.Process(target=_session,
+                             args=(self.dir, self.log_path, barrier, o, out_q))
+                 for o in (a_opts, b_opts)]
+        a, b = procs
+        b.start()
+        a.start()
+        a.join(timeout=20)
+        go_b.set()
+        b.join(timeout=20)
+        results = [out_q.get(timeout=5) for _ in procs]
+        for r in results:
+            self.assertNotIn("error", r, r)
+        self.assertEqual([a.exitcode, b.exitcode], [0, 0])
+        return results
+
+    def test_both_sessions_additions_survive(self):
+        """(1) 別々の項目を足した2つの session の結果が両方残る。"""
+        self.write("x.md", "内容X")
+        self.write("y.md", "内容Y")
+        self.write_cache({})
+        self.run_a_then_b({"vec": self.A_VEC, "fail_on": "内容Y"},
+                          {"vec": self.B_VEC, "fail_on": "内容X"})
+        got = self.disk_entries()
+        self.assertEqual(sorted(got), ["x.md", "y.md"])
+        self.assertEqual(got["x.md"]["vector"], list(self.A_VEC))
+        self.assertEqual(got["y.md"]["vector"], list(self.B_VEC))
+
+    def test_deleted_entry_is_not_resurrected_by_a_stale_snapshot(self):
+        """(2) A が消した項目を、削除前の snapshot を持つ B の保存が復活させない。"""
+        self.write("gone.md", "消える")
+        self.write("y.md", "内容Y")
+        self.write_cache({"gone.md": self.indexed_entry("gone.md")})
+        listed_b = _MP.Event()
+        # B は gone.md がまだ在る状態でファイル一覧を取り、埋め込みで止まる。
+        # A はその印を待ってから gone.md を消し、項目を取り除いて commit する。
+        self.run_a_then_b({"vec": self.A_VEC, "fail_on": "内容Y",
+                           "wait_index": listed_b, "delete_first": "gone.md"},
+                          {"vec": self.B_VEC, "set_on_embed": listed_b})
+        got = self.disk_entries()
+        self.assertNotIn("gone.md", got)
+        self.assertIn("y.md", got)
+
+    def test_same_entry_first_commit_wins_for_identical_content(self):
+        """(3) 同じ内容を両方が埋め込んだら、先に commit した側のベクトルが残る。
+
+        規則: ハッシュが同じ項目は先の commit を残す（後から同じ内容を埋め込み
+        直しても上書きしない）。順序を入れ替えれば勝者も入れ替わることまで見る。
+        片方だけ見ると「常に A」という別の規則と区別がつかない。
+        """
+        self.write("s.md", "同じ内容")
+        self.write_cache({})
+        self.run_a_then_b({"vec": self.A_VEC}, {"vec": self.B_VEC})
+        self.assertEqual(self.disk_entries()["s.md"]["vector"], list(self.A_VEC))
+
+        self.write_cache({})
+        self.run_a_then_b({"vec": self.B_VEC}, {"vec": self.A_VEC})
+        self.assertEqual(self.disk_entries()["s.md"]["vector"], list(self.B_VEC))
+
+    def test_commit_waits_a_bounded_time_and_carries_over(self):
+        """(4) commit ロックが取れないとき、待ちに上限があり、保存を諦めて持ち越す。"""
+        self.write("x.md", "内容X")
+        lock = os.path.join(self.dir, mod.CACHE_NAME + ".lock")
+        open(lock, "w").close()   # 別 session が commit 中の体
+        cache = {"model": mod.CACHE_MODEL, "entries": {}}
+        with patch.object(mod, "embed_texts", const_embed()):
+            t0 = time.monotonic()
+            ok = mod.update_index(self.dir, cache, {}, time.monotonic() + 10)
+            elapsed = time.monotonic() - t0
+        self.assertFalse(ok)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, mod.CACHE_NAME)))
+        # 上限は締め切り 4.2 秒の一部に収まる。ここを超えると発言のたびに
+        # ロック待ちで想起の応答が目に見えて遅れる。
+        self.assertLessEqual(mod.COMMIT_LOCK_WAIT_SEC, mod.DEADLINE_SEC * 0.15)
+        self.assertLess(elapsed, mod.COMMIT_LOCK_WAIT_SEC + 0.5)
+        self.assertGreaterEqual(elapsed, mod.COMMIT_LOCK_WAIT_SEC * 0.8)
+        with open(self.log_path) as f:
+            rows = [json.loads(x) for x in f if x.strip()]
+        self.assertTrue(any(r.get("target") == mod.CACHE_NAME and r.get("kind") == "local"
+                            for r in rows))
+        # ロックが解けた次の回で保存される（持ち越し）
+        os.remove(lock)
+        with patch.object(mod, "embed_texts", const_embed()):
+            self.assertTrue(mod.update_index(self.dir, cache, {}, time.monotonic() + 10))
+        self.assertIn("x.md", self.disk_entries())
+
+    def test_stale_commit_lock_is_stolen(self):
+        self.write("x.md", "内容X")
+        lock = os.path.join(self.dir, mod.CACHE_NAME + ".lock")
+        open(lock, "w").close()
+        os.utime(lock, (time.time() - 999, time.time() - 999))
+        cache = {"model": mod.CACHE_MODEL, "entries": {}}
+        with patch.object(mod, "embed_texts", const_embed()):
+            self.assertTrue(mod.update_index(self.dir, cache, {}, time.monotonic() + 10))
+        self.assertIn("x.md", self.disk_entries())
+        self.assertFalse(os.path.exists(lock))
+
+    def test_commit_drops_a_delta_whose_file_changed_meanwhile(self):
+        """commit 時点のファイルと合わないハッシュの項目は書かない。次の発言で作り直す。"""
+        self.write("s.md", "旧い内容")
+        stale = self.indexed_entry("s.md", self.A_VEC)
+        self.write("s.md", "新しい内容")
+        merged = mod.commit_cache(self.dir, {"s.md": stale}, set())
+        self.assertEqual(merged["entries"], {})
+        self.assertEqual(self.disk_entries(), {})
+
+    def test_commit_drops_a_delta_whose_file_is_gone(self):
+        """埋め込みの最中に消えたファイルの項目を、実体なしのまま載せない。"""
+        self.write("s.md", "内容")
+        entry = self.indexed_entry("s.md", self.A_VEC)
+        os.unlink(os.path.join(self.dir, "s.md"))
+        merged = mod.commit_cache(self.dir, {"s.md": entry}, set())
+        self.assertEqual(merged["entries"], {})
+
+    def test_commit_keeps_an_entry_whose_file_came_back(self):
+        """snapshot で消えていたファイルが commit 時点で戻っていたら削除しない。"""
+        self.write("s.md", "内容")
+        entry = self.indexed_entry("s.md", self.A_VEC)
+        self.write_cache({"s.md": entry})
+        merged = mod.commit_cache(self.dir, {}, {"s.md"})
+        self.assertIn("s.md", merged["entries"])
+        self.assertIn("s.md", self.disk_entries())
+
+    def test_commit_replaces_an_entry_whose_hash_is_stale_on_disk(self):
+        """ディスクの項目が古いハッシュなら、現在の内容に合う側が勝つ。"""
+        self.write("s.md", "旧い内容")
+        old = self.indexed_entry("s.md", self.A_VEC)
+        self.write_cache({"s.md": old})
+        self.write("s.md", "新しい内容")
+        new = self.indexed_entry("s.md", self.B_VEC)
+        merged = mod.commit_cache(self.dir, {"s.md": new}, set())
+        self.assertEqual(merged["entries"]["s.md"]["vector"], list(self.B_VEC))
+
+    def test_reset_does_not_wipe_a_cache_another_session_already_rebuilt(self):
+        """版の印の作り直し中に、別 session が確定した進捗を空で上書きしない。
+
+        A が old-model を読んで捨てる判断をしたあと、B が先に空へ戻して
+        項目を確定していた場合、A の「空で保存」は B の進捗を消す。
+        commit と同じロックの中でディスクを読み直し、まだ古いときだけ書く。
+        """
+        self.write("s.md", "内容")
+        # A が読んだ時点では old-model だったが、いまは B が作り直したあと
+        self.write_cache({"s.md": self.indexed_entry("s.md")})
+        wrote, latest = mod.reset_stale_cache(self.dir)
+        self.assertFalse(wrote)
+        self.assertIn("s.md", latest["entries"])
+        self.assertIn("s.md", self.disk_entries())
+
+    def test_reset_writes_the_empty_cache_when_the_disk_is_still_stale(self):
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            json.dump({"model": "old-model", "entries": {"s.md": {}}}, f)
+        wrote, latest = mod.reset_stale_cache(self.dir)
+        self.assertTrue(wrote)
+        self.assertEqual(latest["entries"], {})
+        self.assertEqual(self.disk_entries(), {})
 
 
 if __name__ == "__main__":
