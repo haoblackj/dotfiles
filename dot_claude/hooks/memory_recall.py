@@ -48,8 +48,10 @@ CACHE_NAME = ".embeddings.json"
 # 形にする。API 呼び出しはロックの外。ロックの中で行うのはキャッシュの読み込み・
 # merge・書き戻しだけで、219 件 × 1024 次元（実運用の規模、約 2.4MB）の合成
 # キャッシュで実測 140ms、300 件で 200ms。待ちの上限 0.5 秒はその 2〜3 回分で、
-# フック全体の締め切り DEADLINE_SEC = 4.2 秒の約 12%。想起の出力は commit より
-# 前に済んでいるので、この待ちが伸ばすのは想起ではなく次の発言までの待ち時間。
+# フック全体の締め切り DEADLINE_SEC = 4.2 秒の約 12%。commit_cache の待ちは
+# 想起（手順4）より後（手順5）なので、この待ちが伸ばすのは想起ではなく次の発言
+# までの待ち時間。ただし reset_stale_cache（手順2）は想起より前で同じロックと
+# 同じ待ちの上限を使うため、そちらの待ちは想起そのものを遅らせる。
 # 上限に達したら保存を諦めて次の発言へ持ち越す（ハッシュが合わないので再索引される）。
 # 古いロックの扱いは退避ロックと同じ LOCK_STALE_SEC（60 秒）で奪う。
 COMMIT_LOCK_WAIT_SEC = 0.5
@@ -71,8 +73,15 @@ def acquire_lock(path, stale_sec, wait_sec=0.0):
     """O_CREAT | O_EXCL でロックファイルを作る。取れれば True。
 
     wait_sec の間は COMMIT_LOCK_POLL_SEC ごとに試し直す。0 なら一度きり。
-    stale_sec より古いロックは消してから作り直す。消してから作るまでの間に
-    別のプロセスが先に作れば O_EXCL が失敗し、通常の待ちへ戻る。
+    stale_sec より古いロックは奪う。mtime を見てから消すまでの間に別プロセスが
+    同じ path へ新しいロックを作り直していると、その新しいロックを誤って
+    消してしまい、2プロセスが同時に O_EXCL を通ってしまう（check-then-remove
+    が原子的でない）。os.rename で一意な名前へ移してから判定することで、
+    「そこにあった実体を動かす」操作と「動かした実体が古いかを見る」判定を
+    1プロセスに閉じる。rename に失敗すれば、別プロセスが先に奪ったか消した
+    ということなので、自分は奪わずに通常の待ちへ戻る。rename が成功しても、
+    移した先の mtime が古くなければ（＝奪ったのが実は新しいロックだった）
+    元の場所へ戻す。
     """
     give_up = time.monotonic() + wait_sec
     while True:
@@ -82,8 +91,21 @@ def acquire_lock(path, stale_sec, wait_sec=0.0):
         except FileExistsError:
             try:
                 if time.time() - os.path.getmtime(path) > stale_sec:
-                    os.remove(path)
-                    continue
+                    stolen = f"{path}.{os.getpid()}.stale"
+                    try:
+                        os.rename(path, stolen)
+                    except OSError:
+                        pass  # 別プロセスが先に奪った・消した。自分は奪えなかった
+                    else:
+                        try:
+                            if time.time() - os.path.getmtime(stolen) > stale_sec:
+                                os.remove(stolen)
+                                continue
+                            # 奪った先が古くなかった。別プロセスが作り直した
+                            # 直後の新しいロックを誤って奪ったので、元へ戻す。
+                            os.rename(stolen, path)
+                        except OSError:
+                            pass
             except OSError:
                 pass  # 消えた直後。次の試行で取れる
             if time.monotonic() >= give_up:
@@ -496,7 +518,16 @@ def process_batch(batch, cfg, deadline, collected):
 
 
 def update_index(memory_dir, cache, cfg, deadline):
-    """索引を更新する。確定はファイル単位で、全断片が揃ったものだけ書き込む。"""
+    """索引を更新する。確定はファイル単位で、全断片が揃ったものだけ書き込む。
+
+    返り値は「締め切り・auth 停止が無く、埋め込みに成功した件数が pending の
+    件数と一致したか」であって、commit が実際にディスクへ保存できたかは見ない。
+    commit_cache はロック内でファイルのハッシュを照合し直すため、ここで
+    written に数えた項目でも、commit 時点でファイルが消えている・変わっている
+    と判明すれば保存されずに捨てられることがある。呼び出し元の main() は
+    この返り値を使っていないので実害は無いが、真偽の意味としては「保存できた」
+    ではなく「埋め込みまでは成功した」である。
+    """
     files = list_memory_files(memory_dir)
     entries = cache["entries"]
 

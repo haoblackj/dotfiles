@@ -603,6 +603,52 @@ class TestMainOrder(unittest.TestCase):
             self.run_main()
         self.assertNotIn("migration", [r["kind"] for r in self.rows()])
 
+    def test_main_uses_a_cache_already_rebuilt_by_another_session(self):
+        """main の手順2は reset_stale_cache を経由し、ロックの中でディスクを
+        読み直す。手順1（main の最初の読み）と手順2（ロック内の読み直し）の
+        間に別セッション(B)が先に作り直して項目を確定していれば、その進捗を
+        空で上書きせず、想起にも使う（issue #59 レビューの major 指摘）。
+
+        手順2を旧経路 save_cache(memory_dir, cache) に戻す変異では
+        reset_stale_cache が呼ばれず、load_cache の2回目の呼び出しそのものが
+        起きない。その場合 B の進捗を再現するタイミングが無く、cache は
+        手順1で得た空の雛形のまま上書き保存され、想起も出ない。
+        """
+        calls = {"n": 0}
+        real_load_cache = mod.load_cache
+        fresh_vec = [1.0, 0.0, 0.0, 0.0]
+
+        def racy_load_cache(memory_dir):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                # 手順1と手順2の間に B が版の印を直して a.md を確定させた体
+                with open(os.path.join(memory_dir, "a.md"), "rb") as f:
+                    h = hashlib.sha256(f.read()).hexdigest()
+                fresh = {"model": mod.CACHE_MODEL,
+                         "entries": {"a.md": {"hash": h, "description": "あるメモ",
+                                              "vector": fresh_vec}}}
+                with open(os.path.join(memory_dir, mod.CACHE_NAME), "w") as f2:
+                    json.dump(fresh, f2)
+            return real_load_cache(memory_dir)
+
+        with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
+            json.dump({"model": "old-model", "entries": {}}, f)
+
+        def fake_embed(texts, cfg, timeout=None):
+            return [fresh_vec for _ in texts]
+
+        with patch.object(mod, "load_cache", racy_load_cache), \
+             patch.object(mod, "embed_texts", fake_embed), \
+             patch.object(mod, "update_index", lambda *a, **k: None):
+            out = self.run_main("あるメモについて詳しく教えてほしい")
+
+        self.assertEqual(calls["n"], 2)
+        with open(os.path.join(self.dir, mod.CACHE_NAME)) as f:
+            saved = json.load(f)
+        self.assertIn("a.md", saved["entries"])  # B の進捗が空で上書きされていない
+        self.assertIn("[memory-recall]", out)    # 想起にも使われている
+        self.assertIn("a.md", out)
+
     def test_recall_proceeds_when_the_empty_cache_cannot_be_saved(self):
         """手順2の保存が失敗しても想起は止めない（目標1）。"""
         with open(os.path.join(self.dir, mod.CACHE_NAME), "w") as f:
@@ -1168,6 +1214,29 @@ class TestConcurrentCommit(unittest.TestCase):
         with patch.object(mod, "embed_texts", const_embed()):
             self.assertTrue(mod.update_index(self.dir, cache, {}, time.monotonic() + 10))
         self.assertIn("x.md", self.disk_entries())
+
+    def test_stale_lock_theft_restores_a_lock_found_fresh_after_rename(self):
+        """mtime のチェックと rename の間に別プロセスが同じ path へ新しい
+        ロックを作り直していたら、奪った先の mtime で気づいて元へ戻す
+        （レビュー #59 の minor race 指摘: check-then-remove の非原子性）。
+        """
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "x.lock")
+            open(path, "w").close()
+            calls = {"n": 0}
+            real_getmtime = os.path.getmtime
+
+            def racy_getmtime(p):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    return time.time() - 999  # 最初のチェックでは古く見える
+                return time.time()  # 奪った直後の再チェックでは新しい
+            with patch.object(mod.os.path, "getmtime", racy_getmtime):
+                got = mod.acquire_lock(path, stale_sec=60, wait_sec=0)
+            self.assertFalse(got)
+            self.assertTrue(os.path.exists(path))  # 元へ戻されている
+            leftovers = [f for f in os.listdir(d) if f != "x.lock"]
+            self.assertEqual(leftovers, [])  # 退避ファイルが残っていない
 
     def test_stale_commit_lock_is_stolen(self):
         self.write("x.md", "内容X")
