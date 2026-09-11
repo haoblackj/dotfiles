@@ -11,7 +11,7 @@ repos:
         verbose: true
         entry: >-
           bash -c 'command -v verify-tests >/dev/null 2>&1 ||
-          { echo "verify-tests が PATH にありません（検査を飛ばしました）"; exit 0; };
+          { echo "verify-tests が PATH にありません。道具が無いので門を通せません"; exit 1; };
           verify-tests "$(git rev-parse --show-toplevel)" --strict'
       - id: check-coverage-sources
         name: check-coverage-sources
@@ -33,7 +33,7 @@ repos:
         verbose: true
         entry: >-
           bash -c 'command -v list-untested-shell.sh >/dev/null 2>&1 ||
-          { echo "list-untested-shell.sh が PATH にありません"; exit 0; };
+          { echo "list-untested-shell.sh が PATH にありません。道具が無いので一覧を確認できませんでした（一覧が空だったのではない）"; exit 1; };
           list-untested-shell.sh "$(git rev-parse --show-toplevel)" "$HOME/repo/github.com/haoblackj/penguinEx"'
       - id: check-pytest-gate
         name: check-pytest-gate
