@@ -18,21 +18,24 @@ decide() { # <JSON payload>
 
 # 名前付き subagent の定義は HOME と cwd の .claude/agents/ から探すので、本番の
 # $HOME に定義があるかどうかで結果が変わらないよう、偽の HOME と cwd を毎回作る。
+# 偽のプロジェクトは git リポジトリにする(フックが cwd から親方向へ歩く上限を
+# git のルートで決めるため)。
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/guard-agent-model-unspecified.sh"
     WORK="$(mktemp -d)"
     export HOME="$WORK/home"
     CWD="$WORK/project"
     mkdir -p "$HOME/.claude/agents" "$CWD/.claude/agents"
+    git init -q "$CWD"
 }
 
 teardown() {
     rm -rf -- "$WORK"
 }
 
-# 名前付き subagent の起動 payload。cwd は偽のプロジェクトを指す。
-named() { # <subagent_type> [<extra JSON fields for tool_input>]
-  printf '{"tool_name":"Agent","cwd":"%s","tool_input":{"subagent_type":"%s"%s}}' "$CWD" "$1" "${2:-}"
+# 名前付き subagent の起動 payload。cwd は省略時は偽のプロジェクトを指す。
+named() { # <subagent_type> [<extra JSON fields for tool_input>] [<cwd>]
+  printf '{"tool_name":"Agent","cwd":"%s","tool_input":{"subagent_type":"%s"%s}}' "${3:-$CWD}" "$1" "${2:-}"
 }
 
 # frontmatter に model を持つ定義を書く。
@@ -102,6 +105,79 @@ define_without_model() { # <dir> <name>
     define_without_model "$HOME/.claude/agents" reviewer
     run decide "$(named reviewer)"
     [ "$output" = "deny" ]
+}
+
+# 同名の定義が HOME と cwd の両方にあるとき、Claude Code は project 側(cwd)を使う。
+# フックも cwd 側だけを見なければ、実際に起動される定義の model の有無を見誤る。
+@test "名前付き・優先順: HOME に model あり・cwd に model なしなら cwd 側が使われるので deny" {
+    define_with_model "$HOME/.claude/agents" reviewer
+    define_without_model "$CWD/.claude/agents" reviewer
+    run decide "$(named reviewer)"
+    [ "$output" = "deny" ]
+}
+
+@test "名前付き・優先順: cwd に model あり・HOME に model なしなら cwd 側が使われるので素通り" {
+    define_without_model "$HOME/.claude/agents" reviewer
+    define_with_model "$CWD/.claude/agents" reviewer
+    run decide "$(named reviewer)"
+    [ "$output" = "allow" ]
+}
+
+# 定義の識別子は frontmatter の name 欄で、ファイル名は一致しなくてよい。
+@test "名前付き・name 欄: ファイル名と name が異なる定義(model なし)は name で見つけて deny" {
+    printf -- '---\nname: reviewer\ndescription: x\n---\n' > "$CWD/.claude/agents/other-file.md"
+    run decide "$(named reviewer)"
+    [ "$output" = "deny" ]
+}
+
+@test "名前付き・name 欄: 引用符つきの name でも一致させて(model なし)deny" {
+    printf -- '---\nname: "reviewer"\ndescription: x\n---\n' > "$CWD/.claude/agents/quoted.md"
+    run decide "$(named reviewer)"
+    [ "$output" = "deny" ]
+}
+
+@test "名前付き・name 欄: ファイル名だけ一致して name が別の定義は別の agent なので素通り" {
+    printf -- '---\nname: someone-else\ndescription: x\n---\n' > "$CWD/.claude/agents/reviewer.md"
+    run decide "$(named reviewer)"
+    [ "$output" = "allow" ]
+}
+
+# .claude/agents/ はサブフォルダまで再帰的に読まれる。
+@test "名前付き・サブフォルダ: review/ 配下の定義(model なし)も見つけて deny" {
+    mkdir -p "$CWD/.claude/agents/review"
+    define_without_model "$CWD/.claude/agents/review" reviewer
+    run decide "$(named reviewer)"
+    [ "$output" = "deny" ]
+}
+
+# project の定義は cwd からリポジトリのルートまで親方向に歩いて探される。
+@test "名前付き・親方向: cwd がプロジェクトのサブディレクトリでも親の定義(model なし)を見て deny" {
+    mkdir -p "$CWD/sub/dir"
+    define_without_model "$CWD/.claude/agents" reviewer
+    run decide "$(named reviewer '' "$CWD/sub/dir")"
+    [ "$output" = "deny" ]
+}
+
+@test "名前付き・親方向: 入れ子の定義は cwd に近い側が使われる(近い側に model あり)ので素通り" {
+    mkdir -p "$CWD/sub/.claude/agents"
+    define_without_model "$CWD/.claude/agents" reviewer
+    define_with_model "$CWD/sub/.claude/agents" reviewer
+    run decide "$(named reviewer '' "$CWD/sub")"
+    [ "$output" = "allow" ]
+}
+
+@test "名前付き・親方向: リポジトリのルートより上の定義は見ない(定義なしとして素通り)" {
+    mkdir -p "$WORK/.claude/agents"
+    define_without_model "$WORK/.claude/agents" reviewer
+    run decide "$(named reviewer)"
+    [ "$output" = "allow" ]
+}
+
+# `model: inherit` は結果こそセッション既定の継承と同じだが明示した選択なので止めない。
+@test "名前付き・model inherit: 明示した inherit は素通り" {
+    printf -- '---\nname: reviewer\ndescription: x\nmodel: inherit\n---\n' > "$CWD/.claude/agents/reviewer.md"
+    run decide "$(named reviewer)"
+    [ "$output" = "allow" ]
 }
 
 @test "名前付き・model なし: 起動側が model を渡していれば定義に無くても素通り" {
