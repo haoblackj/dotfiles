@@ -13,9 +13,26 @@
 #   - TAP のプラン行と ok / not ok の合計が食い違えば非0（途中で bats が
 #     死んだ、あるいは出力を読めていない）
 #   - skip は ok と分けて数えて出す（skip だけの本が緑に見えないように）
+#   - bats が非0で終われば、ok / not ok に現れていなくても非0
 #
-# 終了コード: 0 全部通った / 1 落ちた・道具無し・対象0本・集計不整合 /
-# 2 使い方の誤り・リポジトリでない
+# 要約行の契約（この行だけを読む機械のために決めてある）:
+#
+#   run-bats-gate.sh: shell files=N tests=N ok=N skip=N fail=N status=ok|fail jobs=N
+#
+#   - jobs= は並行で走らせた本数（1 なら直列）。判定には関わらない情報で、
+#     所要が説明できるように出している。**必ず status= の後ろに置く**
+#     （前へ入れると status= までを部分一致で読む消費側が壊れる）。
+#   - bats を走らせた経路では必ずこの1行を出す。**status= が判定そのもので、
+#     status=ok は終了コード0と、status=fail は非0と必ず一致する。**件数だけを
+#     見ると、bats が非0で終わった経路やプラン行を読めなかった経路が
+#     「files=1 tests=1 ok=1 skip=0 fail=0」の全緑に見えてしまう。
+#   - bats を走らせる前に落ちる経路（道具が無い・対象0本・使い方の誤り・
+#     リポジトリでない）は、要約行を出さずに非0で終わる。**消費側は
+#     「要約行が無い」を失敗として扱うこと。**件数が取れないことと
+#     「0件で通った」を混同しない。
+#
+# 終了コード: 0 全部通った / 1 落ちた・道具無し・対象0本・集計不整合・
+# bats が非0 / 2 使い方の誤り・リポジトリでない
 set -uo pipefail
 
 # git がフックへ渡す GIT_* を落とす。**この門は pre-push フックとして走る。**
@@ -65,8 +82,45 @@ if [ "${#files[@]}" -eq 0 ]; then
     exit 1
 fi
 
+# 並行実行の本数を決める。bats --jobs は GNU parallel と flock を要求し、
+# どちらも欠けると bats 自身がエラーで止まる（この門はそれを status=fail で
+# 拾うが、走らないよりは直列で走るほうがよい）。**道具が無いときに直列へ
+# 落ちるのは「検査を飛ばす」ことではない。**走る .bats も判定も同じで、
+# 変わるのは所要だけ。どちらで走ったかは要約行の jobs= に出す。
+#
+# **並行はファイル単位までで、ファイルの中は直列に保つ**
+# （--no-parallelize-within-files）。**この suite はファイル内の並行に耐えない。**
+# chezmoi の dot_claude/hooks/stop-fabricated-turn-guard.bats は
+# $TMPDIR/stop-fabricated-turn-guard-test/guard.log という固定パスを
+# ファイル内の全 @test で共有していて、ファイル内を並行にすると
+# 「素通り時はログに書かない」が他の @test の書き込みを読んで落ちる（実測）。
+# 直すには既存テストの中身を書き換えることになり、層5 の計画が
+# 「扱わないもの」と定めている（ideas/bugs へ記録済み）。
+#
+# 実測（2026-09-12、16コアの WSL）:
+#   penguinEx 25本 494件  直列 300秒 / ファイル内も並行 69秒（ただし上記で赤）
+#                         / ファイル単位のみ 207秒（緑）
+#   chezmoi   17本 238件  直列 22秒 / ファイル単位のみ 10秒（緑）
+# 上限を8にしているのはこの実測値の設定。
+jobs=1
+if command -v parallel >/dev/null 2>&1 && command -v flock >/dev/null 2>&1; then
+    cpus=$(nproc 2>/dev/null || echo 1)
+    case "$cpus" in
+        ''|*[!0-9]*) cpus=1 ;;
+    esac
+    if [ "$cpus" -gt 8 ]; then
+        cpus=8
+    fi
+    jobs=$cpus
+fi
+
 # 端末に繋がっていると bats は pretty 形式を選ぶので、数えるために TAP を明示する。
-tap=$(cd "$repo" && bats --formatter tap "${files[@]}" 2>&1)
+if [ "$jobs" -gt 1 ]; then
+    tap=$(cd "$repo" && bats --formatter tap --jobs "$jobs" \
+        --no-parallelize-within-files "${files[@]}" 2>&1)
+else
+    tap=$(cd "$repo" && bats --formatter tap "${files[@]}" 2>&1)
+fi
 bats_rc=$?
 printf '%s\n' "$tap"
 
@@ -76,20 +130,31 @@ skipped=$(printf '%s\n' "$tap" | grep -cE '^ok [0-9]+ .*# skip')
 failed=$(printf '%s\n' "$tap" | grep -cE '^not ok [0-9]+')
 passed=$((ok_total - skipped))
 
-echo "run-bats-gate.sh: shell files=${#files[@]} tests=${plan:-?} ok=$passed skip=$skipped fail=$failed"
-
+# 判定を先に出し切ってから要約行を出す。先に要約行を出すと、落ちる経路でも
+# 「fail=0」の全緑に見える行が残る（要約行だけを読む消費側がそれを成功と読む）。
+gate_status=ok
+reason=""
 if [ -z "$plan" ]; then
-    echo "run-bats-gate.sh: TAP のプラン行（1..N）が読めない。bats の出力を数えられません" >&2
-    exit 1
+    gate_status=fail
+    reason="TAP のプラン行（1..N）が読めない。bats の出力を数えられません"
+elif [ "$((ok_total + failed))" -ne "$plan" ]; then
+    gate_status=fail
+    reason="集計が合わない: プラン $plan 件に対し ok $ok_total + not ok $failed"
+elif [ "$failed" -ne 0 ]; then
+    # not ok がある経路。bats が非0を返さなくてもここで落とす。
+    reason="not ok が $failed 件ある"
+    gate_status=fail
+elif [ "$bats_rc" -ne 0 ]; then
+    # ok / not ok には現れないのに bats が非0を返した経路（起動できなかった、
+    # 途中で死んだ、など）。件数の整合だけを見ていると全緑に見える。
+    gate_status=fail
+    reason="bats が非0（rc=$bats_rc）で終わった。ok / not ok に現れない失敗がある"
 fi
-if [ "$((ok_total + failed))" -ne "$plan" ]; then
-    echo "run-bats-gate.sh: 集計が合わない: プラン $plan 件に対し ok $ok_total + not ok $failed" >&2
-    exit 1
-fi
-if [ "$bats_rc" -ne 0 ]; then
-    exit 1
-fi
-if [ "$failed" -ne 0 ]; then
+
+echo "run-bats-gate.sh: shell files=${#files[@]} tests=${plan:-?} ok=$passed skip=$skipped fail=$failed status=$gate_status jobs=$jobs"
+
+if [ "$gate_status" != ok ]; then
+    echo "run-bats-gate.sh: $reason" >&2
     exit 1
 fi
 exit 0

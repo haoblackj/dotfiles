@@ -2,6 +2,15 @@
 # list-untested-shell.sh が、追跡 .sh のうちテストを持たないものを
 # 正しく列挙することを確かめる。詳細は penguinEx の
 # .superpowers/sdd/2026-09-06-test-foundation-layer1-2/ を参照。
+#
+# 判別は使い捨てのリポジトリ（mktemp -d）で行う。**2つの実リポジトリの現況を
+# 実数やファイル名で断言しない。**以前はここに「全部で15本、penguinEx は
+# diet/scripts/init_env.sh の1本」と書いていたが、層5 Task 2 でこの .bats が
+# pre-push の門へ恒久的に載ったため、penguinEx に .sh が1本増えるか
+# init_env.sh に .bats が付くだけで chezmoi への push が全面的に止まる
+# （テストを足すという正しい行為が門を赤にする）形になっていた。
+# 実リポジトリを見るのは最後の1件だけで、断言は終了コードと
+# 「1本以上出る」「出た行が実在する」までに留める。
 
 # 対象の名前は置き場所で変わる。chezmoi のソース側では
 # executable_list-untested-shell.sh、配置先（~/.local/bin/）では
@@ -22,102 +31,139 @@ resolve_target() {
 
 setup() {
     LIST="$(resolve_target list-untested-shell.sh)"
-    # issue #16 用のワークツリーは作業が終われば消える一時的な存在。
-    # 消えた瞬間にこの絶対パスを固定していると exit 2 になり全件が
-    # 恒久的に赤くなるので、存在すればワークツリー、無ければ main の
-    # チェックアウトへ自動で落とす。ただし main へ単純に向け替えるだけ
-    # では直らない: このブランチがまだ main へマージされていない間は
-    # main 側の一覧が19本ではなく25本になる（超過6本は
-    # check-repo.sh・check-gpu-tdr.sh・check-issues.sh・
-    # memory-triage-scan.sh・check_claude_hooks.sh・check_claude_md.sh
-    # の mutation-target 宣言コミットがまだ main に無いため、実測済み）。
-    # 両方の状態で赤くならないよう、存在チェックで切り替える。
-    # マージ後にワークツリーが消えれば main は19本になっているはず。
-    # PENGUINEX_REPO_OVERRIDE で明示的に上書きもできる（切り替えの
-    # 手動確認・デバッグ用）。
-    local worktree="/home/yagu001/repo/github.com/haoblackj/penguinEx/.claude/worktrees/issue-16-mutation"
-    local main_checkout="$HOME/repo/github.com/haoblackj/penguinEx"
-    if [ -n "${PENGUINEX_REPO_OVERRIDE:-}" ]; then
-        PENGUINEX_REPO="$PENGUINEX_REPO_OVERRIDE"
-    elif [ -d "$worktree" ]; then
-        PENGUINEX_REPO="$worktree"
-    else
-        PENGUINEX_REPO="$main_checkout"
-    fi
-    CHEZMOI_REPO="$HOME/.local/share/chezmoi"
+    REPO_DIR="$(mktemp -d -t list-untested-shell-test-repo.XXXXXX)"
+    git -C "$REPO_DIR" init -q
 }
 
-@test "テストを持たない実装が一覧に出る" {
-    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
-    [ "$status" -eq 0 ]
-    # check-memory-drift.sh は 2026-09-11 に check-memory-drift.bats を得て
-    # 一覧から消えた。いま penguinEx 側で唯一テストを持たないのは
-    # diet/scripts/init_env.sh（層5 Task 2 で実測）。
-    [[ "$output" == *"diet/scripts/init_env.sh"* ]]
-    [[ "$output" == *"/install.sh"* ]]
+teardown() {
+    rm -rf -- "$REPO_DIR"
 }
 
-@test "実測で15本になる(penguinEx 1、chezmoi 14)" {
-    # 層4b 時点の19本（penguinEx 5）は、その後 penguinEx の4本
-    # （check-memory-drift.sh・check-releases.sh・scan-repos.sh・
-    # apply_mulmoterminal_themes.sh、2026-09-11 のコミット d20c229・7387974）
-    # が .bats を得て 15本（penguinEx 1）になった（2026-09-11 実測）。
-    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
-    [ "$status" -eq 0 ]
-    total="$(printf '%s\n' "$output" | grep -c .)"
-    [ "$total" -eq 15 ]
-
-    penguinex_count="$(printf '%s\n' "$output" | grep -c -F -- "$PENGUINEX_REPO/")"
-    chezmoi_count="$(printf '%s\n' "$output" | grep -c -F -- "$CHEZMOI_REPO/")"
-    [ "$penguinex_count" -eq 1 ]
-    [ "$chezmoi_count" -eq 14 ]
+# 使い捨てリポジトリへ追跡ファイルを1本置く。中身は判定に使われないので
+# 名前だけが意味を持つ。
+track() {
+    local rel="$1"
+    mkdir -p "$REPO_DIR/$(dirname -- "$rel")"
+    printf '#!/usr/bin/env bash\n:\n' > "$REPO_DIR/$rel"
+    git -C "$REPO_DIR" add -- "$rel"
 }
 
-@test "本番のフックに配線済みの2本が一覧に含まれる" {
-    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+@test "テストを持たない .sh は一覧に出る" {
+    track hooks/lonely.sh
+    run bash "$LIST" "$REPO_DIR"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"dot_claude/hooks/route-deletes-to-trash.sh"* ]]
-    [[ "$output" == *"dot_claude/hooks/executable_chezmoi-auto-apply.sh"* ]]
+    [[ "$output" == *"$REPO_DIR/hooks/lonely.sh"* ]]
 }
 
-@test "テストを持つ実装は一覧に出ない" {
-    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+@test "同じ名前の .bats を持つ .sh は一覧に出ない" {
+    track hooks/tested.sh
+    track hooks/tested.bats
+    track hooks/lonely.sh
+    run bash "$LIST" "$REPO_DIR"
     [ "$status" -eq 0 ]
-    [[ "$output" != *"/check-issues.sh"* ]]
-    [[ "$output" != *"executable_guard-destructive-git.sh"* ]]
-    # この計画がchezmoiへ足した3本自身も、命名規約(<name>.bats ↔
-    # executable_<name>.sh)でテストを持つと認識されるはず。ここが漏れる
-    # と一覧が22本に戻る（Step 4）。
-    [[ "$output" != *"executable_run-isolated.sh"* ]]
-    [[ "$output" != *"executable_check-coverage-sources.sh"* ]]
-    [[ "$output" != *"executable_list-untested-shell.sh"* ]]
+    # 除外できていることと、除外し過ぎていないことを同時に見る。
+    # 片方だけだと「何も出さない壊れた実装」でも通ってしまう。
+    [[ "$output" != *"hooks/tested.sh"* ]]
+    [[ "$output" == *"hooks/lonely.sh"* ]]
+}
+
+@test "executable_ 接頭辞の .sh も、接頭辞の無い .bats に対応づく" {
+    # chezmoi のソースツリーの形。配置先では接頭辞が外れる。
+    track hooks/executable_tested.sh
+    track hooks/tested.bats
+    track hooks/executable_lonely.sh
+    run bash "$LIST" "$REPO_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"executable_tested.sh"* ]]
+    [[ "$output" == *"executable_lonely.sh"* ]]
+}
+
+@test "対応する実装の無い .bats は何も除外しない" {
+    # e2e-integration.bats のように、命名規約の指す .sh も .py も無い .bats。
+    track hooks/orphan.bats
+    track hooks/lonely.sh
+    run bash "$LIST" "$REPO_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hooks/lonely.sh"* ]]
+}
+
+@test "別のディレクトリにある同名の .bats では除外されない" {
+    # 対応づけはディレクトリを跨がない。跨ぐと、よそのテストを根拠に
+    # 「テストがある」と数えてしまう。
+    track hooks/lonely.sh
+    track other/lonely.bats
+    run bash "$LIST" "$REPO_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hooks/lonely.sh"* ]]
 }
 
 @test "テストファイル自身は一覧に出ない" {
-    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+    track hooks/foo.test.sh
+    track hooks/test_bar.sh
+    track hooks/lonely.sh
+    run bash "$LIST" "$REPO_DIR"
     [ "$status" -eq 0 ]
-    # 層4b Task 9 で判定を .bats の命名規約へ切り替えた。以前の
-    # フィクスチャ名（check-issues.test.sh・test_check_repo.sh・
-    # executable_guard-destructive-git.test.sh）は層4a/Task 6/Task 2の
-    # 移行でとうに存在しなくなっており、「存在しない名前が出ないこと」
-    # を確かめるだけの空振りになっていた。移行後の実名へ差し替える。
-    # .bats は git ls-files '*.sh' の候補集合に入らないため一覧へは
-    # 構造的に出ない。ここでは名前が実在するファイルであることに加え、
-    # 対応する実装（check-issues.sh・check-repo.sh・
-    # guard-destructive-git.sh）が命名規約の対応づけで一覧から正しく
-    # 除かれていることも確かめ、空振りにしない。
-    # 上記に加えて、いまは list-untested-shell.sh が git ls-files '*.sh'
-    # からしか候補を採らないため、".bats" という文字列自体が出力に
-    # 出ようがない（all_bats は除外集合の計算にしか使われない）。
-    # つまり次の3行は実装が正しくても間違っていても常に通り、
-    # 構造的に落ちない。それでも消さずに残しているのは、層5が
-    # テストの門を .bats も拾う形へ変えたとき、この3行が生きた
-    # 検査へ戻るため。この下に続く、直下の .sh を見る3行が、
-    # 現時点で実際に判別している側。
-    [[ "$output" != *"check-issues.bats"* ]]
-    [[ "$output" != *"check-repo.bats"* ]]
-    [[ "$output" != *"guard-destructive-git.bats"* ]]
-    [[ "$output" != *"/check-issues.sh"* ]]
-    [[ "$output" != *"/check-repo.sh"* ]]
-    [[ "$output" != *"/executable_guard-destructive-git.sh"* ]]
+    [[ "$output" != *"foo.test.sh"* ]]
+    [[ "$output" != *"test_bar.sh"* ]]
+    [[ "$output" == *"hooks/lonely.sh"* ]]
+}
+
+@test "追跡されていない .sh は一覧に出ない" {
+    track hooks/lonely.sh
+    printf '#!/usr/bin/env bash\n:\n' > "$REPO_DIR/hooks/untracked.sh"
+    run bash "$LIST" "$REPO_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"untracked.sh"* ]]
+    [[ "$output" == *"hooks/lonely.sh"* ]]
+}
+
+@test "複数のリポジトリを1つの一覧にまとめ、同じリポジトリは1回しか数えない" {
+    track hooks/lonely.sh
+    local second
+    second="$(mktemp -d -t list-untested-shell-test-repo2.XXXXXX)"
+    git -C "$second" init -q
+    mkdir -p "$second/bin"
+    printf '#!/usr/bin/env bash\n:\n' > "$second/bin/other.sh"
+    git -C "$second" add -- bin/other.sh
+
+    run bash "$LIST" "$REPO_DIR" "$second" "$REPO_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"$REPO_DIR/hooks/lonely.sh"* ]]
+    [[ "$output" == *"$second/bin/other.sh"* ]]
+    # 同じリポジトリを2回渡しても重複しない。
+    local hits
+    hits="$(printf '%s\n' "$output" | grep -c -F -- "$REPO_DIR/hooks/lonely.sh")"
+    [ "$hits" -eq 1 ]
+
+    rm -rf -- "$second"
+}
+
+@test "引数が無ければ使い方を出して 2 で落ちる" {
+    run bash "$LIST"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"使い方"* ]]
+}
+
+@test "存在しないディレクトリを渡すと 2 で落ちる（黙って空の一覧にしない）" {
+    run bash "$LIST" "$REPO_DIR/no-such-dir"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"リポジトリが見つかりません"* ]]
+}
+
+@test "実リポジトリでも 0 で終わり、出た行が実在するパスになっている" {
+    # **実数も特定のファイル名も断言しない。**ここで現況を固定すると、
+    # .sh を1本足す／.bats を1本足すという正しい行為で門が赤くなる。
+    # PENGUINEX_REPO_OVERRIDE は切り替えの手動確認・デバッグ用。
+    local penguinex="${PENGUINEX_REPO_OVERRIDE:-$HOME/repo/github.com/haoblackj/penguinEx}"
+    local chezmoi="$HOME/.local/share/chezmoi"
+    run bash "$LIST" "$penguinex" "$chezmoi"
+    [ "$status" -eq 0 ]
+    local count
+    count="$(printf '%s\n' "$output" | grep -c .)"
+    [ "$count" -ge 1 ]
+    local line
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        [ -f "$line" ]
+    done <<< "$output"
 }
