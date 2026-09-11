@@ -146,6 +146,49 @@ EOF
     [[ "$output" == *"shell files=1 tests=1 ok=1 skip=0 fail=0"* ]]
 }
 
+@test "GIT_DIR が渡ってきてもテストの中の git 操作へ漏らさない" {
+    # ワークツリーから push すると git は pre-push フックへ GIT_DIR を渡す
+    # （実測）。落とさないと、テストが作る使い捨てリポジトリへの git 操作が
+    # 別のリポジトリを触りに行く。実際に penguinEx の 11件がこれで落ちた。
+    make_repo "$TMP/repo"
+    cat > "$TMP/repo/nested.bats" <<'EOF'
+@test "使い捨てリポジトリで commit できる" {
+    d="$(mktemp -d)"
+    git init -q "$d"
+    git -C "$d" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+    rc=$?
+    rm -rf -- "$d"
+    [ "$rc" -eq 0 ]
+    # GIT_DIR が残っていないこと自体も見る（rc だけだと、たまたま
+    # 通ってしまう経路と区別できない）。
+    [ -z "${GIT_DIR:-}" ]
+}
+EOF
+    git -C "$TMP/repo" add nested.bats
+
+    # 別のリポジトリの gitdir を指す GIT_DIR を渡す。
+    make_repo "$TMP/other"
+    run env GIT_DIR="$TMP/other/.git" bash "$GATE" "$TMP/repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"shell files=1 tests=1 ok=1 skip=0 fail=0"* ]]
+}
+
+@test "GIT_DIR が渡ってきても対象のリポジトリはコマンドライン引数で決まる" {
+    # GIT_DIR を落とさないと rev-parse も ls-files も GIT_DIR の側を見るので、
+    # 引数のリポジトリではなく別のリポジトリの .bats を走らせてしまう。
+    make_repo "$TMP/repo"
+    write_passing_bats "$TMP/repo/a.bats"
+    git -C "$TMP/repo" add a.bats
+    make_repo "$TMP/other"
+    write_failing_bats "$TMP/other/b.bats"
+    git -C "$TMP/other" add b.bats
+
+    run env GIT_DIR="$TMP/other/.git" bash "$GATE" "$TMP/repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"shell files=1 tests=1 ok=1 skip=0 fail=0"* ]]
+    [[ "$output" != *"落ちる"* ]]
+}
+
 @test "bats の出力にプラン行が無ければ 1 で落ちる（数えられないのに緑にしない）" {
     make_repo "$TMP/repo"
     write_passing_bats "$TMP/repo/a.bats"

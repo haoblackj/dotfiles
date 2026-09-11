@@ -18,6 +18,23 @@
 # 2 使い方の誤り・リポジトリでない
 set -uo pipefail
 
+# git がフックへ渡す GIT_* を落とす。**この門は pre-push フックとして走る。**
+# ワークツリーから push すると git は GIT_DIR をフックへ渡し（実測。通常の
+# チェックアウトからの push では渡らない）、それがテストの中の使い捨て
+# リポジトリへの git 操作まで届いて、別のリポジトリを触りに行く。実際に
+# 11件が「そんな設定ファイルは無い」で落ちた。
+# 残す名前は pre-commit の no_git_env（pre_commit/git.py）に合わせた。
+# これらは git の場所や認証の設定で、リポジトリの場所を指さない。
+for _var in $(env | sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    case "$_var" in
+        GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_SSL_CAINFO|GIT_SSL_NO_VERIFY) ;;
+        GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) ;;
+        GIT_HTTP_PROXY_AUTHMETHOD|GIT_ALLOW_PROTOCOL|GIT_ASKPASS) ;;
+        *) unset "$_var" ;;
+    esac
+done
+unset _var
+
 usage() {
     echo "使い方: run-bats-gate.sh <repo>" >&2
 }
