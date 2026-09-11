@@ -3,8 +3,24 @@
 # 詳細は penguinEx の
 # .superpowers/sdd/2026-09-06-test-foundation-layer1-2/ を参照。
 
+# 対象の名前は置き場所で変わる。chezmoi のソース側では executable_run-isolated.sh、
+# 配置先（~/.local/bin/）では run-isolated.sh。pre-push の門はコミットされた
+# ものを検査するためソースツリーで走らせるので、両方を試す。どちらも無ければ
+# 落とす（黙って素通りさせない）。ソース側には実行ビットが無いので bash 経由で呼ぶ。
+resolve_target() {
+    local cand
+    for cand in "$BATS_TEST_DIRNAME/$1" "$BATS_TEST_DIRNAME/executable_$1"; do
+        if [ -f "$cand" ]; then
+            printf '%s\n' "$cand"
+            return 0
+        fi
+    done
+    echo "対象が見つからない: $BATS_TEST_DIRNAME/$1 も executable_$1 も無い" >&2
+    return 1
+}
+
 setup() {
-    RUN_ISOLATED="$BATS_TEST_DIRNAME/run-isolated.sh"
+    RUN_ISOLATED="$(resolve_target run-isolated.sh)"
     REPO_DIR="$(mktemp -d -t run-isolated-test-repo.XXXXXX)"
 }
 
@@ -13,12 +29,12 @@ teardown() {
 }
 
 @test "true の終了コード0が外へ伝わる" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- true
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- true
     [ "$status" -eq 0 ]
 }
 
 @test "false の終了コード1が外へ伝わる" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- false
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- false
     # false 自身の終了コード（1）とちょうど一致することを見る。
     # 「非0」だけで判定すると、スクリプトが未実装で「コマンドが見つからない」
     # （127）になった場合も通ってしまい、Step 2 の「6件とも落ちる」を裏切る。
@@ -28,7 +44,7 @@ teardown() {
 @test "隔離の中の HOME に本番の HOME のファイルが見えない" {
     marker="$HOME/.run-isolated-visibility-marker-$$"
     : > "$marker"
-    run "$RUN_ISOLATED" "$REPO_DIR" -- test -e "$marker"
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- test -e "$marker"
     rm -f -- "$marker"
     # test -e が「無い」と判定したときの終了コード（1）とちょうど一致することを見る。
     [ "$status" -eq 1 ]
@@ -36,13 +52,13 @@ teardown() {
 
 @test "隔離の中で HOME へ書いたものが本番の HOME に残らない" {
     marker_name=".run-isolated-write-marker-$$"
-    run "$RUN_ISOLATED" "$REPO_DIR" -- sh -c "touch \"\$HOME/$marker_name\""
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- sh -c "touch \"\$HOME/$marker_name\""
     [ "$status" -eq 0 ]
     [ ! -e "$HOME/$marker_name" ]
 }
 
 @test "隔離の中からリポジトリへ書こうとすると失敗する" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- sh -c "touch \"$REPO_DIR/should-not-exist\""
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- sh -c "touch \"$REPO_DIR/should-not-exist\""
     # touch が読み取り専用ファイルシステムで失敗したときの終了コード（1）と
     # ちょうど一致することを見る。
     [ "$status" -eq 1 ]
@@ -50,14 +66,14 @@ teardown() {
 }
 
 @test "-- が無い呼び出しを拒否する" {
-    run "$RUN_ISOLATED" "$REPO_DIR" true
+    run bash "$RUN_ISOLATED" "$REPO_DIR" true
     # 使い方エラーとして予約した終了コード（2）とちょうど一致することを見る。
     [ "$status" -eq 2 ]
 }
 
 @test "--out で指定したホスト側ディレクトリに、隔離内で書いたファイルが残る" {
     out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
     [ "$status" -eq 0 ]
     [ -e "$out_dir/result.txt" ]
     [ "$(cat "$out_dir/result.txt")" = "hello" ]
@@ -65,7 +81,7 @@ teardown() {
 }
 
 @test "--out を付けない走行では、中で書いたものが残らない" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- sh -c 'touch "$COVERAGE_OUT_DIR/marker" && echo "$COVERAGE_OUT_DIR"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- sh -c 'touch "$COVERAGE_OUT_DIR/marker" && echo "$COVERAGE_OUT_DIR"'
     [ "$status" -eq 0 ]
     # サンドボックス内の COVERAGE_OUT_DIR のパスをそのまま出力させ、
     # 走行後（サンドボックス破棄後）にそのパスがホスト側に存在しないことを見る。
@@ -76,7 +92,7 @@ teardown() {
     base_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
     out_dir="$base_dir/nested/dir"
     [ ! -e "$out_dir" ]
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hi > "$COVERAGE_OUT_DIR/f"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hi > "$COVERAGE_OUT_DIR/f"'
     [ "$status" -eq 0 ]
     [ -d "$out_dir" ]
     [ -e "$out_dir/f" ]
@@ -85,7 +101,7 @@ teardown() {
 
 @test "中のコマンドが失敗しても、それまでに書かれた出力は取り出せる" {
     out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo partial > "$COVERAGE_OUT_DIR/partial.txt"; exit 1'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo partial > "$COVERAGE_OUT_DIR/partial.txt"; exit 1'
     [ "$status" -eq 1 ]
     [ -e "$out_dir/partial.txt" ]
     rm -rf -- "$out_dir"
@@ -94,7 +110,7 @@ teardown() {
 @test "中のコマンドは成功したが --out の指す先が書き込み不可なら警告を出し専用の終了コードで知らせる" {
     out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
     chmod 500 "$out_dir"
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
     chmod 700 "$out_dir"
     # 取り出しの失敗が「正常終了(0)」に化けていないことを見る。
     # 中のコマンド自体は成功しているので、素の 0/1 と衝突しない
@@ -108,7 +124,7 @@ teardown() {
 @test "中のコマンドが失敗し --out の指す先も書き込み不可なら、中のコマンドの終了コードを優先して伝え警告も出す" {
     out_dir="$(mktemp -d -t run-isolated-test-out.XXXXXX)"
     chmod 500 "$out_dir"
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo partial > "$COVERAGE_OUT_DIR/partial.txt"; exit 1'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- sh -c 'echo partial > "$COVERAGE_OUT_DIR/partial.txt"; exit 1'
     chmod 700 "$out_dir"
     # 取り出しにも失敗しているが、中のコマンドの終了コード（1）が
     # 専用コード（3）に上書きされず、そのまま外へ伝わることを見る。
@@ -132,7 +148,7 @@ teardown() {
 @test "監視対象のディレクトリへ --out が書くと報告に出て非0で終わる" {
     watched_dir="$(mktemp -d -t run-isolated-test-watched.XXXXXX)"
     export VERIFY_TESTS_WATCHED="$watched_dir"
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
     unset VERIFY_TESTS_WATCHED
     [ "$status" -eq 4 ]
     [[ "$output" == *"本番へ書いた: $watched_dir/result.txt"* ]]
@@ -148,14 +164,14 @@ teardown() {
     # 「報告が空」が「変化が無かったから」なのか「そもそも監視していない
     # から」なのか区別できない。mtime 差分が実装されていなければ、この
     # ブロックの時点でこのテストは赤くなる。
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
     [ "$status" -eq 4 ]
     [[ "$output" == *"本番へ書いた: $watched_dir/result.txt"* ]]
 
     # 監視が有効だと確かめた上で、改めて何も書き換えない走行を見る。
     # ここでの「報告が空・終了コード0」は、直前のブロックで監視が働いて
     # いることを既に確認済みなので、「変化が無かったから空」だと言える。
-    run "$RUN_ISOLATED" "$REPO_DIR" -- true
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- true
     [ "$status" -eq 0 ]
     [[ "$output" != *"$watched_dir"* ]]
 
@@ -165,7 +181,7 @@ teardown() {
 
 @test "監視の一覧が空なら監視していないと分かる形で報告する" {
     export VERIFY_TESTS_WATCHED=""
-    run "$RUN_ISOLATED" "$REPO_DIR" -- true
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- true
     unset VERIFY_TESTS_WATCHED
     [ "$status" -eq 0 ]
     [[ "$output" == *"監視対象なし"* ]]
@@ -175,7 +191,7 @@ teardown() {
     watched_dir="$(mktemp -d -t run-isolated-test-watched.XXXXXX)"
     export VERIFY_TESTS_WATCHED="$watched_dir"
     export VERIFY_TESTS_WATCHED_EXCLUDE="$watched_dir"
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
     unset VERIFY_TESTS_WATCHED VERIFY_TESTS_WATCHED_EXCLUDE
     [ "$status" -eq 0 ]
     [[ "$output" == *"変化（判定に算入しない）: $watched_dir/result.txt"* ]]
@@ -232,7 +248,7 @@ teardown() {
     # 落ちてもマーカーを本番のパスに残さないよう、存在確認と削除を assert
     # より前で行う。
     original_marker="$HOME/.claude/hooks/.run-isolated-mutation-test-marker-$$"
-    run "$RUN_ISOLATED" "$REPO_DIR" -- touch "$original_marker"
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- touch "$original_marker"
     original_status="$status"
     original_marker_exists=0
     [ -e "$original_marker" ] && original_marker_exists=1
@@ -261,7 +277,7 @@ teardown() {
     rm -f -- "$watched_dir/result.txt"
 
     # 原本: 同じ状況で検出し、専用の終了コード(4)で報告する(緑)。
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$watched_dir" -- sh -c 'echo hello > "$COVERAGE_OUT_DIR/result.txt"'
     [ "$status" -eq 4 ]
     [[ "$output" == *"本番へ書いた: $watched_dir/result.txt"* ]]
 
@@ -286,7 +302,7 @@ teardown() {
     # 原本: 使い捨てHOMEへ差し替わっており、マーカーは見えないはず(緑)。
     # 同じマーカーを両方の走行で使うため、削除は両方の run が終わったあと・
     # assert より前で行う(assert が落ちても本番のHOMEに痕跡を残さない)。
-    run "$RUN_ISOLATED" "$REPO_DIR" -- test -e "$marker"
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- test -e "$marker"
     original_status="$status"
 
     rm -f -- "$marker" "$mutant"
@@ -326,18 +342,18 @@ teardown() {
 # venv の作り方・要求バージョンは test-requirements.txt を参照。
 
 @test "隔離の中でpythonがvenvのものを指す" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import sys; print(sys.executable)'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import sys; print(sys.executable)'
     [ "$status" -eq 0 ]
     [[ "$output" == *"penguinex-test-venv"* ]]
 }
 
 @test "隔離の中でimport coverageが成功する" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import coverage'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import coverage'
     [ "$status" -eq 0 ]
 }
 
 @test "隔離の中でimport pytest_covが成功する" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import pytest_cov'
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- python -c 'import pytest_cov'
     [ "$status" -eq 0 ]
 }
 
@@ -353,7 +369,7 @@ teardown() {
 # どうかは Step 4 で確かめる。要らなければ run-isolated.sh は変えない。
 
 @test "隔離の中でkcov --versionが成功する" {
-    run "$RUN_ISOLATED" "$REPO_DIR" -- kcov --version
+    run bash "$RUN_ISOLATED" "$REPO_DIR" -- kcov --version
     [ "$status" -eq 0 ]
 }
 
@@ -394,7 +410,7 @@ BATSFILE
     # （--bind "$sandbox" "$HOME" で中身だけ差し替わる）、隔離の中からは
     # bind mount 越しに同じ場所を指すため、ホスト側でこの文字列を組み立てて
     # そのまま渡してよい。
-    run "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- \
+    run bash "$RUN_ISOLATED" "$REPO_DIR" --out "$out_dir" -- \
         kcov "$HOME/out/kcov-report" bats "$REPO_DIR/kcov-target.bats"
     [ "$status" -eq 0 ]
 

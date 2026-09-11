@@ -3,8 +3,25 @@
 # 正しく列挙することを確かめる。詳細は penguinEx の
 # .superpowers/sdd/2026-09-06-test-foundation-layer1-2/ を参照。
 
+# 対象の名前は置き場所で変わる。chezmoi のソース側では
+# executable_list-untested-shell.sh、配置先（~/.local/bin/）では
+# list-untested-shell.sh。pre-push の門はコミットされたものを検査するため
+# ソースツリーで走らせるので、両方を試す。どちらも無ければ落とす（黙って
+# 素通りさせない）。ソース側には実行ビットが無いので bash 経由で呼ぶ。
+resolve_target() {
+    local cand
+    for cand in "$BATS_TEST_DIRNAME/$1" "$BATS_TEST_DIRNAME/executable_$1"; do
+        if [ -f "$cand" ]; then
+            printf '%s\n' "$cand"
+            return 0
+        fi
+    done
+    echo "対象が見つからない: $BATS_TEST_DIRNAME/$1 も executable_$1 も無い" >&2
+    return 1
+}
+
 setup() {
-    LIST="$BATS_TEST_DIRNAME/list-untested-shell.sh"
+    LIST="$(resolve_target list-untested-shell.sh)"
     # issue #16 用のワークツリーは作業が終われば消える一時的な存在。
     # 消えた瞬間にこの絶対パスを固定していると exit 2 になり全件が
     # 恒久的に赤くなるので、存在すればワークツリー、無ければ main の
@@ -31,33 +48,40 @@ setup() {
 }
 
 @test "テストを持たない実装が一覧に出る" {
-    run "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
     [ "$status" -eq 0 ]
-    [[ "$output" == *".claude/skills/morning/check-memory-drift.sh"* ]]
+    # check-memory-drift.sh は 2026-09-11 に check-memory-drift.bats を得て
+    # 一覧から消えた。いま penguinEx 側で唯一テストを持たないのは
+    # diet/scripts/init_env.sh（層5 Task 2 で実測）。
+    [[ "$output" == *"diet/scripts/init_env.sh"* ]]
     [[ "$output" == *"/install.sh"* ]]
 }
 
-@test "実測で19本になる(penguinEx 5、chezmoi 14)" {
-    run "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+@test "実測で15本になる(penguinEx 1、chezmoi 14)" {
+    # 層4b 時点の19本（penguinEx 5）は、その後 penguinEx の4本
+    # （check-memory-drift.sh・check-releases.sh・scan-repos.sh・
+    # apply_mulmoterminal_themes.sh、2026-09-11 のコミット d20c229・7387974）
+    # が .bats を得て 15本（penguinEx 1）になった（2026-09-11 実測）。
+    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
     [ "$status" -eq 0 ]
     total="$(printf '%s\n' "$output" | grep -c .)"
-    [ "$total" -eq 19 ]
+    [ "$total" -eq 15 ]
 
     penguinex_count="$(printf '%s\n' "$output" | grep -c -F -- "$PENGUINEX_REPO/")"
     chezmoi_count="$(printf '%s\n' "$output" | grep -c -F -- "$CHEZMOI_REPO/")"
-    [ "$penguinex_count" -eq 5 ]
+    [ "$penguinex_count" -eq 1 ]
     [ "$chezmoi_count" -eq 14 ]
 }
 
 @test "本番のフックに配線済みの2本が一覧に含まれる" {
-    run "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
     [ "$status" -eq 0 ]
     [[ "$output" == *"dot_claude/hooks/route-deletes-to-trash.sh"* ]]
     [[ "$output" == *"dot_claude/hooks/executable_chezmoi-auto-apply.sh"* ]]
 }
 
 @test "テストを持つ実装は一覧に出ない" {
-    run "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
     [ "$status" -eq 0 ]
     [[ "$output" != *"/check-issues.sh"* ]]
     [[ "$output" != *"executable_guard-destructive-git.sh"* ]]
@@ -70,7 +94,7 @@ setup() {
 }
 
 @test "テストファイル自身は一覧に出ない" {
-    run "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
+    run bash "$LIST" "$PENGUINEX_REPO" "$CHEZMOI_REPO"
     [ "$status" -eq 0 ]
     # 層4b Task 9 で判定を .bats の命名規約へ切り替えた。以前の
     # フィクスチャ名（check-issues.test.sh・test_check_repo.sh・

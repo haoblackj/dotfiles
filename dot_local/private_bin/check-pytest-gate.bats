@@ -3,8 +3,24 @@
 # 1件でも fail があれば非0で落ちることを確かめる。
 # 詳細は penguinEx の docs/superpowers/plans/2026-09-07-test-foundation-layer3.md。
 
+# 対象の名前は置き場所で変わる。chezmoi のソース側では executable_check-pytest-gate.sh、
+# 配置先（~/.local/bin/）では check-pytest-gate.sh。pre-push の門はコミットされた
+# ものを検査するためソースツリーで走らせるので、両方を試す。どちらも無ければ
+# 落とす（黙って素通りさせない）。ソース側には実行ビットが無いので bash 経由で呼ぶ。
+resolve_target() {
+    local cand
+    for cand in "$BATS_TEST_DIRNAME/$1" "$BATS_TEST_DIRNAME/executable_$1"; do
+        if [ -f "$cand" ]; then
+            printf '%s\n' "$cand"
+            return 0
+        fi
+    done
+    echo "対象が見つからない: $BATS_TEST_DIRNAME/$1 も executable_$1 も無い" >&2
+    return 1
+}
+
 setup() {
-    GATE="$BATS_TEST_DIRNAME/check-pytest-gate.sh"
+    GATE="$(resolve_target check-pytest-gate.sh)"
     TMP="$(mktemp -d)"
 }
 
@@ -22,7 +38,7 @@ make_repo() {
 
 @test "PP3xx に fail があれば非0で落ちる" {
     make_repo "$TMP/bad"
-    run "$GATE" "$TMP/bad"
+    run bash "$GATE" "$TMP/bad"
     [ "$status" -ne 0 ]
     # どの検査が落ちたかを出すこと（黙って落ちない）。
     [[ "$output" == *"PP30"* ]]
@@ -39,7 +55,7 @@ log_level = "INFO"
 addopts = ["-ra"]
 filterwarnings = ["error"]
 TOML
-    run "$GATE" "$TMP/good"
+    run bash "$GATE" "$TMP/good"
     [ "$status" -eq 0 ]
 }
 
@@ -57,7 +73,7 @@ filterwarnings = ["error"]
 TOML
     # .github が無いので GH100 は必ず fail する。
     [ ! -d "$TMP/nogh/.github" ]
-    run "$GATE" "$TMP/nogh"
+    run bash "$GATE" "$TMP/nogh"
     [ "$status" -eq 0 ]
 }
 
@@ -72,7 +88,7 @@ log_level = "INFO"
 addopts = ["-ra"]
 filterwarnings = ["error"]
 TOML
-    run "$GATE" "$TMP/pp"
+    run bash "$GATE" "$TMP/pp"
     [ "$status" -eq 0 ]
     # 出力に PP002 の名前が出ていないこと（見ていない証拠）。
     # **この最小構成で PP002・PP003・PP006 が実際に fail のまま残ることを
@@ -81,7 +97,7 @@ TOML
 }
 
 @test "リポジトリの指定が無ければ使い方を出して落ちる" {
-    run "$GATE"
+    run bash "$GATE"
     [ "$status" -ne 0 ]
     [[ "$output" == *"使い方"* || "$output" == *"usage"* ]]
 }
@@ -100,7 +116,7 @@ echo "これは JSON ではない"
 FAKE
     chmod +x "$TMP/fakebin/uvx"
 
-    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/broken"
+    run env PATH="$TMP/fakebin:$PATH" bash "$GATE" "$TMP/broken"
     [ "$status" -ne 0 ]
     # 「指摘なし」で通っていないことの証拠。
     [[ "$output" != *"指摘なし"* ]]
@@ -123,7 +139,7 @@ exit 0
 FAKE
     chmod +x "$TMP/fakebin/uvx"
 
-    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/empty"
+    run env PATH="$TMP/fakebin:$PATH" bash "$GATE" "$TMP/empty"
     [ "$status" -ne 0 ]
     # 「指摘なし」で通っていないことの証拠。
     [[ "$output" != *"指摘なし"* ]]
@@ -150,7 +166,7 @@ JSON
 FAKE
     chmod +x "$TMP/fakebin/uvx"
 
-    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/nopp3"
+    run env PATH="$TMP/fakebin:$PATH" bash "$GATE" "$TMP/nopp3"
     [ "$status" -ne 0 ]
     # 「指摘なし」で通っていないことの証拠。
     [[ "$output" != *"指摘なし"* ]]
@@ -181,7 +197,7 @@ JSON
 FAKE
     chmod +x "$TMP/fakebin/uvx"
 
-    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/allskip"
+    run env PATH="$TMP/fakebin:$PATH" bash "$GATE" "$TMP/allskip"
     [ "$status" -ne 0 ]
     # 「指摘なし」で通っていないことの証拠。
     [[ "$output" != *"指摘なし"* ]]
@@ -217,7 +233,7 @@ exit 0
 FAKE
     chmod +x "$TMP/fakebin/python3"
 
-    run env PATH="$TMP/fakebin:$PATH" "$GATE" "$TMP/pp3fail"
+    run env PATH="$TMP/fakebin:$PATH" bash "$GATE" "$TMP/pp3fail"
     [ "$status" -ne 0 ]
     # 「指摘なし」で通っていないことの証拠（PP302 は実際に fail している）。
     [[ "$output" != *"指摘なし"* ]]
@@ -241,7 +257,7 @@ FAKE
     ln -s "$(command -v python3)" "$TMP/bin/python3"
     [ ! -e "$TMP/bin/uvx" ]
 
-    run env PATH="$TMP/bin" "$GATE" "$TMP/nouvx"
+    run env PATH="$TMP/bin" bash "$GATE" "$TMP/nouvx"
     [ "$status" -ne 0 ]
     # 「起動できなかった」ではなく「uvx が無い」で落ちたことの証拠。
     [[ "$output" == *"uvx"* ]]

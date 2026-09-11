@@ -2,17 +2,34 @@ default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: local
     hooks:
-      - id: verify-tests
-        name: verify-tests --strict
+      # Python のテストは run-isolated（bwrap で HOME を差し替え、本番資産の
+      # mtime 差分を見る）の中で走らせる。素の pytest は PreToolUse フック
+      # guard-unsandboxed-pytest.sh が止める。
+      - id: pytest-isolated
+        name: pytest (run-isolated)
         language: system
         stages: [pre-push]
         always_run: true
         pass_filenames: false
         verbose: true
         entry: >-
-          bash -c 'command -v verify-tests >/dev/null 2>&1 ||
-          { echo "verify-tests が PATH にありません。道具が無いので門を通せません"; exit 1; };
-          verify-tests "$(git rev-parse --show-toplevel)" --strict'
+          bash -c 'command -v run-isolated.sh >/dev/null 2>&1 ||
+          { echo "run-isolated.sh が PATH にありません。道具が無いので門を通せません"; exit 1; };
+          run-isolated.sh "$(git rev-parse --show-toplevel)" -- python3 -m pytest
+          -p no:cacheprovider'
+      # 追跡された .bats を全部ソースツリーで走らせる。bats は隔離の外で
+      # 構わない（層4a・4b の運用）。道具が無い・対象0本なら非0で落ちる。
+      - id: bats-gate
+        name: bats (run-bats-gate)
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+        entry: >-
+          bash -c 'command -v run-bats-gate.sh >/dev/null 2>&1 ||
+          { echo "run-bats-gate.sh が PATH にありません。道具が無いので門を通せません"; exit 1; };
+          run-bats-gate.sh "$(git rev-parse --show-toplevel)"'
       - id: check-coverage-sources
         name: check-coverage-sources
         language: system
