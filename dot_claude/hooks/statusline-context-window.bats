@@ -6,6 +6,10 @@ marker_of() { # session_id
     cat "$TMPDIR_TEST/claude-status-context-window/$1" 2>/dev/null || echo ''
 }
 
+usage_marker_of() { # session_id
+    cat "$TMPDIR_TEST/claude-status-context-usage/$1" 2>/dev/null || echo ''
+}
+
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/executable_statusline-context-window.sh"
     TMPDIR_TEST="$(mktemp -d)"
@@ -76,4 +80,40 @@ teardown() {
     [ "$(marker_of 'sess-broken')" = "" ]
     [ "$status" -eq 0 ]
     [ "$output" = "not json at all" ]
+}
+
+@test "used_percentageが数値 -> 使用率マーカーにそのまま書く(整数・小数・0)" {
+    for pct in 25 62.8 0; do
+        input="{\"session_id\":\"sess-u-$pct\",\"context_window\":{\"context_window_size\":1000000,\"used_percentage\":$pct}}"
+        bash "$SCRIPT" <<< "$input" >/dev/null
+        [ "$(usage_marker_of "sess-u-$pct")" = "$pct" ]
+    done
+}
+
+@test "used_percentageがnull(/compact直後) -> 既存の使用率マーカーを消す。窓幅マーカーは残す" {
+    # 2026-09-12 実測: 25% → /compact → null → 次のAPI呼び出しで 7%。
+    # null の間に古い 25 が残ると、圧縮直後に圧縮前の値で警告する退行が再発する。
+    input='{"session_id":"sess-n","context_window":{"context_window_size":1000000,"used_percentage":25}}'
+    bash "$SCRIPT" <<< "$input" >/dev/null
+    [ "$(usage_marker_of sess-n)" = "25" ]
+
+    input='{"session_id":"sess-n","context_window":{"context_window_size":1000000,"used_percentage":null,"current_usage":null}}'
+    bash "$SCRIPT" <<< "$input" >/dev/null
+    [ ! -f "$TMPDIR_TEST/claude-status-context-usage/sess-n" ]
+    [ "$(marker_of sess-n)" = "1000000" ]
+}
+
+@test "used_percentageキー自体が無い -> 使用率マーカー未作成、窓幅マーカーは作る" {
+    input='{"session_id":"sess-nokey","context_window":{"context_window_size":200000}}'
+    bash "$SCRIPT" <<< "$input" >/dev/null
+    [ ! -f "$TMPDIR_TEST/claude-status-context-usage/sess-nokey" ]
+    [ "$(marker_of sess-nokey)" = "200000" ]
+}
+
+@test "used_percentageが非数値 -> 使用率マーカーを作らない" {
+    for bad in '"abc"' '-3' 'true'; do
+        input="{\"session_id\":\"sess-ubad\",\"context_window\":{\"context_window_size\":200000,\"used_percentage\":$bad}}"
+        bash "$SCRIPT" <<< "$input" >/dev/null
+        [ ! -f "$TMPDIR_TEST/claude-status-context-usage/sess-ubad" ]
+    done
 }

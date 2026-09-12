@@ -1,11 +1,15 @@
 #!/bin/bash
-# statusLine hook相当のラッパー。入力JSONの session_id と context_window.context_window_size を
-# ${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID に書き込んでから、
-# 元のJSONをそのまま ccstatusline にパイプして表示を維持する。
+# statusLine hook相当のラッパー。入力JSONの session_id と context_window の2値を
+# マーカーファイルに書き込んでから、元のJSONをそのまま ccstatusline にパイプして表示を維持する。
+#   窓幅:   context_window.context_window_size → ${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID
+#   使用率: context_window.used_percentage     → ${TMPDIR:-/tmp}/claude-status-context-usage/$SESSION_ID
 #
-# UserPromptSubmit hookにはmodelが渡らず、SessionStart hookも/clearではmodelを受け取れない。
-# statusLineコマンドはClaude Code本体が計算した実測値のcontext_window_sizeを直接受け取れるため、
-# モデル名や[1m]サフィックスの解析を経由せず窓幅を得られる代替経路として使う。
+# どちらも Claude Code 本体が計算した値で、公式ドキュメントは statusLine を「assistant の
+# 応答ごと」と「/compact 完了時」に再実行すると定めている。used_percentage は /compact 直後に
+# null になり、次の API 呼び出しで圧縮後の値に戻る（2026-09-12 に 25% → null → 7% を実測）。
+# null のときは使用率マーカーを消す。読む側は「マーカーが無い＝いま測れない」として扱い、
+# 古い値を残さない。transcript を自前で解析すると圧縮前の最後の usage を拾ってしまうため、
+# 使用率の出所はこのマーカーに一本化している（penguinEx issue #73）。
 #
 # fail-open: マーカー書き込みに失敗しても、ccstatusline の実行(=画面表示)は必ず行う。
 # session_id は既存hookと同じ正規表現でパストラバーサル対策する。
@@ -16,10 +20,19 @@ INPUT=$(cat)
 
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 WINDOW_SIZE=$(printf '%s' "$INPUT" | jq -r '.context_window.context_window_size // empty' 2>/dev/null)
+USED_PCT=$(printf '%s' "$INPUT" | jq -r '.context_window.used_percentage // empty' 2>/dev/null)
 
-if [[ -n "$SESSION_ID" && "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ && "$WINDOW_SIZE" =~ ^[1-9][0-9]*$ ]]; then
-  WINDOW_DIR="${TMPDIR:-/tmp}/claude-status-context-window"
-  mkdir -p "$WINDOW_DIR" 2>/dev/null && printf '%s\n' "$WINDOW_SIZE" > "$WINDOW_DIR/$SESSION_ID" 2>/dev/null
+if [[ -n "$SESSION_ID" && "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  if [[ "$WINDOW_SIZE" =~ ^[1-9][0-9]*$ ]]; then
+    WINDOW_DIR="${TMPDIR:-/tmp}/claude-status-context-window"
+    mkdir -p "$WINDOW_DIR" 2>/dev/null && printf '%s\n' "$WINDOW_SIZE" > "$WINDOW_DIR/$SESSION_ID" 2>/dev/null
+  fi
+  USAGE_DIR="${TMPDIR:-/tmp}/claude-status-context-usage"
+  if [[ "$USED_PCT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    mkdir -p "$USAGE_DIR" 2>/dev/null && printf '%s\n' "$USED_PCT" > "$USAGE_DIR/$SESSION_ID" 2>/dev/null
+  else
+    rm -f -- "$USAGE_DIR/$SESSION_ID" 2>/dev/null
+  fi
 fi
 
 # ステータスラインは3行構成（モデル/使用量/思考・文脈）で組んである。
