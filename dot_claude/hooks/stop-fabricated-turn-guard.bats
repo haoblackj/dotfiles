@@ -4,6 +4,14 @@
 # must-not-catch は同じ走査で誤爆した実例を使う。
 set -u
 
+# このファイルの @test は $TMPDIR/stop-fabricated-turn-guard-test/guard.log という固定パスを
+# 共有するので、ファイルの中を並行にすると「素通り時はログに書かない」が他の @test の
+# 書き込みを読んで落ちる（実測）。bats 公式のこの変数で、このファイルだけ直列にする。
+# run-bats-gate.sh は --no-parallelize-within-files を全体には付けない（penguinEx の門は
+# ファイル内並行で 218 秒 → 74 秒になる。2026-09-12 実測）。
+# shellcheck disable=SC2034  # このファイルでは使わない。bats 本体（bats-exec-file）が読む
+BATS_NO_PARALLELIZE_WITHIN_FILE=true
+
 # 応答本文を渡して decision を返す。ブロックなら "block"、素通りなら空。
 verdict() { # message
   python3 -c 'import json,sys; print(json.dumps({"hook_event_name":"Stop","session_id":"t","stop_hook_active":False,"last_assistant_message":sys.argv[1]}))' "$1" \

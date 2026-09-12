@@ -306,7 +306,8 @@ make_minimal_bin() {
     run env PATH="$TMP/bin" bash "$GATE" "$TMP/repo"
     [ "$status" -eq 0 ]
     [[ "$output" == *"status=ok jobs=4"* ]]
-    [[ "$output" == *"argv=[--formatter tap --jobs 4 --no-parallelize-within-files "* ]]
+    [[ "$output" == *"argv=[--formatter tap --jobs 4 "* ]]
+    [[ "$output" != *"--no-parallelize-within-files"* ]]
 }
 
 @test "要約行だけを読んでも成否が分かる" {

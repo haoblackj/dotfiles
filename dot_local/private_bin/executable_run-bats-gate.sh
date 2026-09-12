@@ -113,18 +113,16 @@ fi
 # 落ちるのは「検査を飛ばす」ことではない。**走る .bats も判定も同じで、
 # 変わるのは所要だけ。どちらで走ったかは要約行の jobs= に出す。
 #
-# **並行はファイル単位までで、ファイルの中は直列に保つ**
-# （--no-parallelize-within-files）。**この suite はファイル内の並行に耐えない。**
-# chezmoi の dot_claude/hooks/stop-fabricated-turn-guard.bats は
-# $TMPDIR/stop-fabricated-turn-guard-test/guard.log という固定パスを
-# ファイル内の全 @test で共有していて、ファイル内を並行にすると
-# 「素通り時はログに書かない」が他の @test の書き込みを読んで落ちる（実測）。
-# 直すには既存テストの中身を書き換えることになり、層5 の計画が
-# 「扱わないもの」と定めている（ideas/bugs へ記録済み）。
+# ファイルの中も並行にする（bats --jobs の既定）。ファイル内の並行に耐えない
+# ファイルは、そのファイル自身が bats 公式の BATS_NO_PARALLELIZE_WITHIN_FILE=true を
+# 置いて直列を宣言する（chezmoi の dot_claude/hooks/stop-fabricated-turn-guard.bats が
+# 固定パスの guard.log を共有するため、これを置いている）。以前は
+# --no-parallelize-within-files で全体を直列にしていたが、penguinEx の門は
+# collect-reviews.bats 1本（61件、合計 214 秒）が所要を決めており、ファイル単位の
+# 並行では縮まらなかった。
 #
 # 実測（2026-09-12、16コアの WSL）:
-#   penguinEx 25本 494件  直列 300秒 / ファイル内も並行 69秒（ただし上記で赤）
-#                         / ファイル単位のみ 207秒（緑）
+#   penguinEx 14本 413件  ファイル単位のみ 218秒 / ファイル内も並行 74秒（2回とも緑）
 #   chezmoi   17本 238件  直列 22秒 / ファイル単位のみ 10秒（緑）
 # 上限を8にしているのはこの実測値の設定。
 jobs=1
@@ -141,8 +139,7 @@ fi
 
 # 端末に繋がっていると bats は pretty 形式を選ぶので、数えるために TAP を明示する。
 if [ "$jobs" -gt 1 ]; then
-    tap=$(cd "$repo" && bats --formatter tap --jobs "$jobs" \
-        --no-parallelize-within-files "${files[@]}" 2>&1)
+    tap=$(cd "$repo" && bats --formatter tap --jobs "$jobs" "${files[@]}" 2>&1)
 else
     tap=$(cd "$repo" && bats --formatter tap "${files[@]}" 2>&1)
 fi
