@@ -17,8 +17,9 @@
 #
 # 要約行の契約（この行だけを読む機械のために決めてある）:
 #
-#   run-bats-gate.sh: shell files=N tests=N ok=N skip=N fail=N status=ok|fail jobs=N
+#   run-bats-gate.sh: shell files=N tests=N ok=N skip=N fail=N status=ok|fail jobs=N excluded=N
 #
+#   - excluded= は --exclude で外した本数。files= は外した後の本数。
 #   - jobs= は並行で走らせた本数（1 なら直列）。判定には関わらない情報で、
 #     所要が説明できるように出している。**必ず status= の後ろに置く**
 #     （前へ入れると status= までを部分一致で読む消費側が壊れる）。
@@ -53,14 +54,36 @@ done
 unset _var
 
 usage() {
-    echo "使い方: run-bats-gate.sh <repo>" >&2
+    echo "使い方: run-bats-gate.sh <repo> [--exclude <pathspec>]..." >&2
 }
 
-if [ "$#" -ne 1 ]; then
+# --exclude は git の pathspec（リポジトリのルートからの相対）で、複数回渡せる。
+# pre-push から外して CI へ寄せる .bats を指定する用途（penguinEx #27、2026-09-12）。
+# 除外した本数は要約行の excluded= に出す。全部除外して0本になれば、対象0本と
+# 同じく非0で落ちる（除外で門が空になったことを黙って緑にしない）。
+if [ "$#" -lt 1 ]; then
     usage
     exit 2
 fi
 repo=$1
+shift
+excludes=()
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --exclude)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                usage
+                exit 2
+            fi
+            excludes+=(":(exclude)$2")
+            shift 2
+            ;;
+        *)
+            usage
+            exit 2
+            ;;
+    esac
+done
 
 if ! git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1; then
     echo "run-bats-gate.sh: git リポジトリではない: $repo" >&2
@@ -72,10 +95,12 @@ if ! command -v bats >/dev/null 2>&1; then
     exit 1
 fi
 
+tracked_total=$(git -C "$repo" ls-files -z -- '*.bats' | tr -cd '\0' | wc -c)
 files=()
 while IFS= read -r -d '' f; do
     files+=("$f")
-done < <(git -C "$repo" ls-files -z -- '*.bats')
+done < <(git -C "$repo" ls-files -z -- '*.bats' "${excludes[@]}")
+excluded=$((tracked_total - ${#files[@]}))
 
 if [ "${#files[@]}" -eq 0 ]; then
     echo "run-bats-gate.sh: 追跡された .bats が0本。対象が無いので門を通せません: $repo" >&2
@@ -151,7 +176,7 @@ elif [ "$bats_rc" -ne 0 ]; then
     reason="bats が非0（rc=$bats_rc）で終わった。ok / not ok に現れない失敗がある"
 fi
 
-echo "run-bats-gate.sh: shell files=${#files[@]} tests=${plan:-?} ok=$passed skip=$skipped fail=$failed status=$gate_status jobs=$jobs"
+echo "run-bats-gate.sh: shell files=${#files[@]} tests=${plan:-?} ok=$passed skip=$skipped fail=$failed status=$gate_status jobs=$jobs excluded=$excluded"
 
 if [ "$gate_status" != ok ]; then
     echo "run-bats-gate.sh: $reason" >&2

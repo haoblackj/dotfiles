@@ -342,3 +342,57 @@ make_minimal_bin() {
     [[ "$line" == *"tests=?"* ]]
     [[ "$line" == *"status=fail"* ]]
 }
+
+@test "--exclude で外した .bats は走らず、要約の excluded= に本数が出る" {
+    make_repo "$TMP/repo"
+    mkdir -p "$TMP/repo/ci-only" "$TMP/repo/gate"
+    write_passing_bats "$TMP/repo/gate/a.bats"
+    write_failing_bats "$TMP/repo/ci-only/b.bats"
+    write_failing_bats "$TMP/repo/ci-only/c.bats"
+    git -C "$TMP/repo" add gate/a.bats ci-only/b.bats ci-only/c.bats
+    run bash "$GATE" "$TMP/repo" --exclude ci-only
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"shell files=1 tests=1 ok=1 skip=0 fail=0 status=ok"* ]]
+    [[ "$output" == *"excluded=2"* ]]
+}
+
+@test "--exclude は複数回渡せて、ファイル単位でも指定できる" {
+    make_repo "$TMP/repo"
+    write_passing_bats "$TMP/repo/a.bats"
+    write_failing_bats "$TMP/repo/b.bats"
+    write_failing_bats "$TMP/repo/c.bats"
+    git -C "$TMP/repo" add a.bats b.bats c.bats
+    run bash "$GATE" "$TMP/repo" --exclude b.bats --exclude c.bats
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"files=1 "* ]]
+    [[ "$output" == *"excluded=2"* ]]
+}
+
+@test "--exclude で全部外れて0本になれば 1 で落ちる（除外で門が空になったことを緑にしない）" {
+    make_repo "$TMP/repo"
+    write_passing_bats "$TMP/repo/a.bats"
+    git -C "$TMP/repo" add a.bats
+    run bash "$GATE" "$TMP/repo" --exclude a.bats
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"0本"* ]]
+}
+
+@test "--exclude に値が無い、または知らない引数なら使い方を出して 2 で落ちる" {
+    make_repo "$TMP/repo"
+    write_passing_bats "$TMP/repo/a.bats"
+    git -C "$TMP/repo" add a.bats
+    run bash "$GATE" "$TMP/repo" --exclude
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"使い方"* ]]
+    run bash "$GATE" "$TMP/repo" --bogus
+    [ "$status" -eq 2 ]
+}
+
+@test "--exclude を渡さなければ excluded=0 で従来どおり全部走る" {
+    make_repo "$TMP/repo"
+    write_passing_bats "$TMP/repo/a.bats"
+    git -C "$TMP/repo" add a.bats
+    run bash "$GATE" "$TMP/repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"excluded=0"* ]]
+}
