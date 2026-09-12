@@ -5,7 +5,7 @@
 #   5h / 7d      どちらの制限枠か
 #   形 = 残量    5セルを █/░ で塗る。塗り数は int(残量 / 20)。
 #   色 = ペース  枠の経過率から使用率を引いたポイント差の4段階。
-#   末尾の時間   週間枠のリセットまでの残り。5時間枠は枠が短く回るので出さない。
+#   末尾の時間   各枠のリセットまでの残り。
 #
 # 枠の開始時刻は「リセット時刻 - 枠の長さ」で求める。ccstatusline 内部の
 # buildUsageWindow と同じ式なので、他のwidgetと経過率が食い違わない。
@@ -13,7 +13,7 @@
 # rate_limits はサブスク契約者かつ最初のAPI応答後にしか入らない。欠けている
 # 間は何も出さない。キャッシュに残った古い値を出すより誤解が少ない。
 #
-# 出力例:  5h ████░90% │ 7d ████░97% │ 6d21h
+# 出力例:  5h ████░90% 3h54m │ 7d ████░97% 6d21h
 # 色は自前のANSIで付けるため、widget側に preserveColors: true が要る。
 
 set -uo pipefail
@@ -73,7 +73,8 @@ function gauge(label, used, resets, window,   remain, elapsed, elapsed_pct, diff
 
     diff = elapsed_pct - used
 
-    return LABEL label " " RESET pace_color(diff) bar(remain) int(remain) "%" RESET
+    return LABEL label " " RESET pace_color(diff) bar(remain) int(remain) "%" RESET \
+           " " DIM short_time(resets - now) RESET
 }
 
 BEGIN {
@@ -90,8 +91,7 @@ BEGIN {
     out = ""
     if ($1 != "-" && $2 != "-") out = gauge("5h", $1 + 0, $2 + 0, FIVE_H)
     if ($3 != "-" && $4 != "-") {
-        out = (out == "" ? "" : out BAR) gauge("7d", $3 + 0, $4 + 0, SEVEN_D) \
-              BAR DIM short_time($4 + 0 - now) RESET
+        out = (out == "" ? "" : out BAR) gauge("7d", $3 + 0, $4 + 0, SEVEN_D)
     }
     if (out != "") print out
 }

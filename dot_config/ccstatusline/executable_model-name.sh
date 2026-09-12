@@ -29,6 +29,11 @@ if not name:
 short = re.sub(r"\s*\(.*\)$", "", name).strip()
 # 表示名が無く id へフォールバックしたときの "claude-opus-5[1m]" から重複する印を落とす。
 short = re.sub(r"\[[^\]]*\]$", "", short).strip()
-is_1m = bool(re.search(r"\(\s*1M\b", name, re.I) or re.search(r"\[1m\]", model_id, re.I))
+# 表示名と id の形は版で変わる（2.1.269 で "(1M context)" も "[1m]" も来なくなった）ので、
+# Claude Code 自身が計算した窓幅を第一の判定にする。
+cw = data.get("context_window")
+size = cw.get("context_window_size") if isinstance(cw, dict) else None
+is_1m = (isinstance(size, (int, float)) and size >= 1000000) \
+    or bool(re.search(r"\(\s*1M\b", name, re.I) or re.search(r"\[1m\]", model_id, re.I))
 sys.stdout.write(short + (" [1M]" if is_1m else ""))
 '
