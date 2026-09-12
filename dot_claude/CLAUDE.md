@@ -8,9 +8,6 @@
   次のいずれかならインライン実行（superpowers:executing-plans）へ降格し、降格の理由を一言で示す。
   小さい仕事／前の出力に次が依存する逐次の仕事／同じファイルを複数が触る仕事（Anthropic公式の基準）。
   ユーザーが明示的にインラインを指示した場合も従う。表記揺れ（subagent-driven 等）にかかわらず適用する。
-- `adversarial-review`は自動で回さない。リーダーが「これはレビューを回して」と言ったときだけ回す。
-  回すときの作法はスキル側`~/.claude/skills/adversarial-review/SKILL.md`にある。
-  経緯と見直しの条件はメモリ`reference_adversarial_review_stopping_conventions`。
 - 実装プランのGlobal Constraintsに、既存のグローバルルールと矛盾する制約を自分の判断で書かない。
   後続の実装エージェントがそのまま従う文書になるため、ルール違反がそのまま実行へ伝播する。
   理由: プランのGlobal Constraintsに「作業ブランチはmaster、ワークツリーは使わない」と自分で書き、グローバルルール違反を後続が従う文書として固定した（comfy-batch-runner、2026-08-14）。
