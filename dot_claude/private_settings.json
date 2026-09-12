@@ -5,7 +5,8 @@
     "COMPACT_PLUS_FALLBACK_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
     "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
     "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
-    "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120"
+    "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120",
+    "ENABLE_COMMIT_REVIEW": "0"
   },
   "permissions": {
     "allow": [
@@ -29,7 +30,6 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
   "skillOverrides": {
     "book-to-skill": "off",
     "report-skills": "off"
@@ -196,7 +196,11 @@
     "claude-code-setup@claude-plugins-official": true,
     "compact-plus@compact-plus-local": true,
     "reviewable-html-workbench@reviewable-html-workbench-local": true,
-    "codex@openai-codex": true
+    "codex@openai-codex": true,
+    "code-review@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": false,
+    "pyright-lsp@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "karpathy-skills": {
