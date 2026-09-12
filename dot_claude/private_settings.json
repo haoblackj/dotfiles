@@ -2,7 +2,7 @@
   "cleanupPeriodDays": 36500,
   "env": {
     "CLAUDE_CODE_THRIFTY_SONIC": "0",
-    "COMPACT_PLUS_FALLBACK_BACKEND": "bash \"$HOME/.claude/compact-plus-backend/backend-codex-mini.sh\"",
+    "COMPACT_PLUS_FALLBACK_BACKEND": "tmp=$(mktemp \"${TMPDIR:-/tmp}/compact-plus-codex.XXXXXX\"); { printf \"%s\\n\\n\" \"$SYSTEM_PROMPT\"; cat; } | codex exec --model gpt-5.4-mini --sandbox read-only --skip-git-repo-check --dangerously-bypass-hook-trust --ignore-user-config --ephemeral --output-last-message \"$tmp\" - >/dev/null && cat \"$tmp\"; status=$?; rm -f \"$tmp\"; exit \"$status\"",
     "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
     "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
     "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120",
