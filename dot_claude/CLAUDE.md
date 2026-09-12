@@ -5,9 +5,9 @@
 ## プラン実行方式
 
 - 実装プランの実行は**サブエージェント駆動**（superpowers:subagent-driven-development）をデフォルトとする。
-  インライン実行（superpowers:executing-plans）にするのは、(1) ユーザーが明示的に指示した場合、
-  または (2) 明らかにインラインが適切な場合（タスク1つの極小プラン等）のみ。
-  このルールは言語・表記揺れ（subagent-driven / サブエージェント駆動 等）にかかわらず適用する。
+  次のいずれかならインライン実行（superpowers:executing-plans）へ降格し、降格の理由を一言で示す。
+  小さい仕事／前の出力に次が依存する逐次の仕事／同じファイルを複数が触る仕事（Anthropic公式の基準）。
+  ユーザーが明示的にインラインを指示した場合も従う。表記揺れ（subagent-driven 等）にかかわらず適用する。
 - `adversarial-review`は自動で回さない。リーダーが「これはレビューを回して」と言ったときだけ回す。
   回すときの作法はスキル側`~/.claude/skills/adversarial-review/SKILL.md`にある。
   経緯と見直しの条件はメモリ`reference_adversarial_review_stopping_conventions`。
