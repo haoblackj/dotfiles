@@ -41,7 +41,11 @@ name = "tokyo-night"
 auto_switch = false
 
 [ui.sound]
-enabled = false
+enabled = true
+
+[ui.toast]
+delivery = "herdr"
+delay_seconds = 1
 
 [theme.custom]
 panel_bg = "#1c1e26"
