@@ -1,31 +1,13 @@
 # shellcheck shell=bash
-# コンテキストウィンドウ幅と警告閾値の判定。source して使う共有ライブラリ。
-# sessionstart-context-window.sh と userpromptsubmit-compact-prep-reminder.sh の両方から読む。
-# 実行はしないため shebang も実行権限も持たせない。呼び出し元は両方とも
-# #!/bin/bash なので、shebangの代わりにこのディレクティブで対象shellを明示する。
+# コンテキストの警告閾値の判定。source して使う共有ライブラリ。
+# userpromptsubmit-compact-prep-reminder.sh から読む。
+# 実行はしないため shebang も実行権限も持たせない。呼び出し元は #!/bin/bash なので、
+# shebangの代わりにこのディレクティブで対象shellを明示する。
 #
-# モデル名から標準ウィンドウ幅を判定する:
-#   claude-haiku-4-5* / claude-opus-5*                               → 200,000 tokens
-#   claude-fable-5* / mythos-5* / opus-4-* / sonnet-5* / sonnet-4-6* → 1,000,000 tokens
-#   未知のモデル文字列（旧世代等）                                     → 200,000 tokens（保守的デフォルト）
-#
-# 1Mベータを有効にしたセッションではモデル名に [1m] サフィックスが付く
-# （実測値: claude-opus-5[1m]）。この場合は上の表より優先して 1,000,000 とする。
-
-model_context_window() { # $1 = model name
-  case "$1" in
-    claude-haiku-4-5*|claude-opus-5*) echo 200000 ;;
-    claude-fable-5*|claude-mythos-5*|claude-opus-4-*|claude-sonnet-5*|claude-sonnet-4-6*) echo 1000000 ;;
-    *) echo 200000 ;;
-  esac
-}
-
-context_window_for_model() { # $1 = model name
-  case "$1" in
-    *'[1m]'*) echo 1000000 ;;
-    *) model_context_window "$1" ;;
-  esac
-}
+# 窓幅は statusline-context-window.sh が Claude Code 本体の context_window_size を
+# マーカーに書いたものを使う。モデル名から窓幅を推測する表（claude-opus-5 → 200K 等）は
+# 2026-09-12 に撤去した。推測は /model の切替や新モデルで外れ、外れると
+# 使用率の分母が違う警告を出す。読む側が無くなった sessionstart-context-window.sh も同時に撤去。
 
 default_threshold_for_window() { # $1 = context window tokens
   # 60%は元記事の値。1M context前提なら60%到達時点でもまだ約400Kトークンの余力があり、
