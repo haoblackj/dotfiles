@@ -36,9 +36,9 @@
 
 作業中に、いま直している対象と関係ないバグを見つけたら、その場で調査も修正もせず、`bug-note` スキルで `ideas/bugs/` へ見えたことだけを書いて本題へ戻る。書いたバグにはそのセッションで着手せず、別のクリーンなセッションで直す。その場で直そうとすると Context Window を圧迫し、いま進めている作業の文脈に無関係な調査結果が混ざる。
 
-巻き戻しには `git restore`（必要なら `git reset --soft`）を使う。`git reset --hard`・`git push --force`・`git clean -f`・`git branch -D`・`git checkout --` は、指示の有無にかかわらず提案も実行もしない。理由: 取り消せない操作で、提案のたびに止められてきた。
+破壊的な git 操作（`git reset --hard`、`git push --force`、`git clean -f`、`git branch -D`、`git checkout --`）は、指示の有無にかかわらず提案しない。実行はフックが止める。巻き戻しは `git restore`、必要なら `git reset --soft`。
 
-ファイルを消すときは `rm` ではなく `trash-put` を使う。間違えても `trash-restore` で戻せる。一覧は `trash-list`。理由: cwd を取り違えたまま掃除のつもりで実行し、別の作業の記録ごと消した事故がある。
+ファイルを消すときは `trash-put` を使う（`rm` はフックが止める）。戻すのは `trash-restore`。
 
 ## 本番データの保護
 
