@@ -11,8 +11,12 @@ title = "Open issue / PR of current branch"
 contexts = ["workspace"]
 command = ["bash", "open.sh"]
 
+# popup は画面を割らずに浮く一時ペイン（overlay はズームした全画面になる）。
+# 寸法はセル数か割合。候補は最大2行なので高さは小さくてよい。
 [[panes]]
 id = "picker"
 title = "Open GitHub"
-placement = "overlay"
+placement = "popup"
+width = "80%"
+height = 10
 command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/picker.sh\""]
