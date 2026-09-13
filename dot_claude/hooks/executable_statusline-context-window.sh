@@ -77,7 +77,9 @@ fi
 printf '%s\n' "$OUTPUT" | python3 -c '
 import re, sys, unicodedata
 
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# 色（CSI ... m）と OSC（\x1b] ... BEL または ESC \）。OSC 8 のリンクは URL が
+# 画面に出ないので、幅に数えると1行目が実際より長く見えて畳む判定が外れる。
+ANSI = re.compile(r"\x1b\[[0-9;]*m|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 
 def visible_width(s):
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1

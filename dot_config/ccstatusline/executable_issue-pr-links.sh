@@ -4,8 +4,7 @@
 #   - Issue 番号はブランチ名から取る（記事は `#123` の形。ここでは `issue-62` / `issue/10` も拾う）
 #   - PR は stdin JSON の pr.number / pr.url（Claude Code が現在ブランチの open な PR を入れる）
 #   - リンク先の URL は同じ JSON の workspace.repo（host / owner / name）から組む
-#   - リンク化は OSC 8。色は実バイトで持ち、出力は %s に統一する
-#     （%b に通すと OSC 8 終端の \\ の解釈がぶつかってリンクが壊れる）
+#   - リンク化は OSC 8（終端は BEL）。色は実バイトで持ち、出力は %s に統一する
 # ccstatusline の custom-command から呼ぶ。preserveColors を有効にしないと OSC 8 ごと剥がされる。
 set -euo pipefail
 
@@ -45,10 +44,9 @@ issue_number_from_branch() {
 }
 
 osc8_link() {
-  # 記事の形をそのまま使う。'\033\\' は ESC とバックスラッシュ（OSC 8 の終端 ST）で、
-  # シングルクォートのエスケープではない。
-  # shellcheck disable=SC1003
-  printf '\033]8;;%s\033\\%s\033]8;;\033\\' "$1" "$2"
+  # 終端は BEL（\a）。記事は ST（ESC \）だが、Claude Code 公式の statusLine の例は BEL で、
+  # ST 終端では文字だけ残ってリンクにならなかった（herdr 0.9.0、2026-09-13 実機）。
+  printf '\033]8;;%s\a%s\033]8;;\a' "$1" "$2"
 }
 
 color=$'\033[38;2;238;100;172m'
@@ -57,7 +55,7 @@ out=()
 
 issue="$(issue_number_from_branch "$branch")"
 if [[ -n "$issue" && -n "$host" && -n "$owner" && -n "$name" ]]; then
-  out+=("$(osc8_link "https://$host/$owner/$name/issues/$issue" "#$issue")")
+  out+=("$(osc8_link "https://$host/$owner/$name/issues/$issue" "Issue#$issue")")
 fi
 
 if [[ -n "$pr_number" && -n "$pr_url" ]]; then
