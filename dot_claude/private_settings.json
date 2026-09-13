@@ -150,20 +150,6 @@
     "command": "bash ~/.claude/hooks/statusline-context-window.sh",
     "padding": 0
   },
-  "footerLinksRegexes": [
-    {
-      "type": "regex",
-      "pattern": "✓ (?:Closed|Reopened|Merged|Created) (?:issue|pull request) (?<owner>[A-Za-z0-9_.-]+)/(?<repo>[A-Za-z0-9_.-]+)#(?<n>[0-9]+)",
-      "url": "https://github.com/{owner}/{repo}/issues/{n}",
-      "label": "{repo}#{n}"
-    },
-    {
-      "type": "regex",
-      "pattern": "https://github\\.com/(?<owner>[A-Za-z0-9_.-]+)/(?<repo>[A-Za-z0-9_.-]+)/(?:pull|issues)/(?<n>[0-9]+)",
-      "url": "https://github.com/{owner}/{repo}/issues/{n}",
-      "label": "{repo}#{n}"
-    }
-  ],
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true,
     "andrej-karpathy-skills@karpathy-skills": false,
