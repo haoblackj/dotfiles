@@ -148,7 +148,8 @@
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/hooks/statusline-context-window.sh",
-    "padding": 0
+    "padding": 0,
+    "refreshInterval": 30
   },
   "enabledPlugins": {
     "skill-creator@claude-plugins-official": true,

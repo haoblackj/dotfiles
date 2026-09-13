@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "lines": [
     [
       {
@@ -64,6 +64,14 @@
         "commandPath": "/home/yagu001/.config/ccstatusline/issue-pr-links.sh",
         "timeout": 1000,
         "color": "hex:ee64ac"
+      },
+      {
+        "id": "git-ci-status",
+        "type": "git-ci-status",
+        "color": "hex:ee64ac",
+        "metadata": {
+          "hide": "no-git,no-data"
+        }
       },
       {
         "id": "git-status-counts",
