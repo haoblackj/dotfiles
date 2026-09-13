@@ -39,9 +39,8 @@ if [[ -z "$host" && -n "$cwd" ]]; then
   fi
 fi
 
-issue_number_from_branch() {
-  printf '%s' "$1" | sed -n -e 's/.*#\([0-9][0-9]*\).*/\1/p' -e 's,.*issue[-/_]\([0-9][0-9]*\).*,\1,p' | head -n1
-}
+# shellcheck source=/dev/null
+. "$(dirname "$0")/github-refs.sh"
 
 osc8_link() {
   # 終端は BEL（\a）。記事は ST（ESC \）だが、Claude Code 公式の statusLine の例は BEL で、

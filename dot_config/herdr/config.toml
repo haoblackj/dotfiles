@@ -36,6 +36,14 @@ type = "plugin_action"
 command = "local.open-project.open"
 description = "プロジェクトを選んで新規ワークスペースでClaude起動"
 
+# Claude Code のステータスラインの Issue#N / PR#N はリンクにならない（fullscreen が OSC 8 を
+# 剥がす）ので、開くのはこのキーで。fzf のオーバーレイで issue か PR を選ぶ。
+[[keys.command]]
+key = "prefix+g"
+type = "plugin_action"
+command = "local.open-github.open"
+description = "現在ブランチの issue / PR を選んでブラウザで開く"
+
 [theme]
 name = "tokyo-night"
 auto_switch = false
