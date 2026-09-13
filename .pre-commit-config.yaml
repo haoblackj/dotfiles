@@ -2,34 +2,28 @@ default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: local
     hooks:
-      # Python のテストは run-isolated（bwrap で HOME を差し替え、本番資産の
-      # mtime 差分を見る）の中で走らせる。素の pytest は PreToolUse フック
-      # guard-unsandboxed-pytest.sh が止める。
-      - id: pytest-isolated
-        name: pytest (run-isolated)
+      # Python のテスト。bwrap の隔離（run-isolated）は 2026-09-13 に撤去した。
+      - id: pytest
+        name: pytest
         language: system
         stages: [pre-push]
         always_run: true
         pass_filenames: false
         verbose: true
         entry: >-
-          bash -c 'command -v run-isolated.sh >/dev/null 2>&1 ||
-          { echo "run-isolated.sh が PATH にありません。道具が無いので門を通せません"; exit 1; };
-          run-isolated.sh "$(git rev-parse --show-toplevel)" -- python3 -m pytest
-          -p no:cacheprovider'
-      # 追跡された .bats を全部ソースツリーで走らせる。bats は隔離の外で
-      # 構わない（層4a・4b の運用）。道具が無い・対象0本なら非0で落ちる。
-      - id: bats-gate
-        name: bats (run-bats-gate)
+          bash -c 'cd "$(git rev-parse --show-toplevel)" &&
+          python3 -m pytest -p no:cacheprovider'
+      # 追跡された .bats をソースツリーで走らせる。bats を直接呼ぶ
+      # （自作の run-bats-gate は 2026-09-13 に撤去）。
+      - id: bats
+        name: bats
         language: system
         stages: [pre-push]
         always_run: true
         pass_filenames: false
         verbose: true
         entry: >-
-          bash -c 'command -v run-bats-gate.sh >/dev/null 2>&1 ||
-          { echo "run-bats-gate.sh が PATH にありません。道具が無いので門を通せません"; exit 1; };
-          run-bats-gate.sh "$(git rev-parse --show-toplevel)"'
+          bash -c 'cd "$(git rev-parse --show-toplevel)" && bats -r .'
       - id: check-coverage-sources
         name: check-coverage-sources
         language: system
@@ -52,17 +46,6 @@ repos:
           bash -c 'command -v list-untested-shell.sh >/dev/null 2>&1 ||
           { echo "list-untested-shell.sh が PATH にありません。道具が無いので一覧を確認できませんでした（一覧が空だったのではない）"; exit 1; };
           list-untested-shell.sh "$(git rev-parse --show-toplevel)" "$HOME/repo/github.com/haoblackj/penguinEx"'
-      - id: check-pytest-gate
-        name: check-pytest-gate
-        language: system
-        stages: [pre-push]
-        always_run: true
-        pass_filenames: false
-        verbose: true
-        entry: >-
-          bash -c 'command -v check-pytest-gate.sh >/dev/null 2>&1 ||
-          { echo "check-pytest-gate.sh が PATH にありません"; exit 1; };
-          check-pytest-gate.sh "$(git rev-parse --show-toplevel)"'
       # ShellCheck の除外規則 -e SC2015,SC2016,SC2030,SC2031 の理由
       # （両リポジトリで同一内容。自己完結させるため）。
       # SC2015（`A && B || C` は if-then-else ではない）:
@@ -89,3 +72,12 @@ repos:
           cd "$(git rev-parse --show-toplevel)" || exit 1;
           git ls-files -z "*.sh" "*.bats" |
           xargs -0 -r shellcheck -P SCRIPTDIR -e SC2015,SC2016,SC2030,SC2031'
+  # pytest の設定検査（PP3xx）。公式の sp-repo-review フックを ID 指定で絞る
+  # （--select は完全一致か族名で、PP3 の接頭辞では効かない。2026-09-13 実測）。
+  # 自作の check-pytest-gate は同日に撤去。
+  - repo: https://github.com/scientific-python/cookie
+    rev: 2026.08.14
+    hooks:
+      - id: sp-repo-review
+        stages: [pre-push]
+        args: [--select, "PP301,PP302,PP303,PP304,PP305,PP306,PP307,PP308,PP309", --show=err]
