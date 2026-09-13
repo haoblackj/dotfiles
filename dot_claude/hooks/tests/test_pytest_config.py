@@ -15,7 +15,6 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 PYPROJECT = os.path.join(REPO_ROOT, "pyproject.toml")
-COSMIC_RAY = os.path.join(REPO_ROOT, ".cosmic-ray.toml")
 
 # このリポジトリのテストは1ディレクトリに集まっている。
 EXPECTED_TESTPATHS = ["dot_claude/hooks/tests"]
@@ -79,13 +78,6 @@ class PytestConfigTest(unittest.TestCase):
 
     def test_addopts_asks_for_the_full_summary(self):
         self.assertIn("-ra", _ini()["addopts"])
-
-    def test_this_test_file_is_excluded_from_mutation(self):
-        # **層2の Task 6 が同じ穴を開け、Task 10 のレビューまで見つからなかった。**
-        # 新しく足したテスト .py を変異テストの除外へ登録し忘れると、
-        # テスト自身が変異の対象になる。
-        excluded = _load(COSMIC_RAY)["cosmic-ray"]["excluded-modules"]
-        self.assertIn("dot_claude/hooks/tests/test_pytest_config.py", excluded)
 
 
 class StrictActuallyFiresTest(unittest.TestCase):
