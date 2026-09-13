@@ -63,7 +63,7 @@
         "type": "custom-command",
         "commandPath": "/home/yagu001/.config/ccstatusline/issue-pr-links.sh",
         "timeout": 1000,
-        "preserveColors": true
+        "color": "hex:ee64ac"
       },
       {
         "id": "git-status-counts",
