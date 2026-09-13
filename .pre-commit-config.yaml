@@ -3,16 +3,17 @@ repos:
   - repo: local
     hooks:
       # Python のテスト。bwrap の隔離（run-isolated）は 2026-09-13 に撤去した。
+      # pre-commit 自身の venv に pytest を入れる（language: python）。PATH 先頭の
+      # python3 に依存しない（uvx 経由だと uv の python が先に来て pytest が無い。実測）。
       - id: pytest
         name: pytest
-        language: system
+        language: python
+        additional_dependencies: ["pytest==9.0.3"]
         stages: [pre-push]
         always_run: true
         pass_filenames: false
         verbose: true
-        entry: >-
-          bash -c 'cd "$(git rev-parse --show-toplevel)" &&
-          python3 -m pytest -p no:cacheprovider'
+        entry: pytest -p no:cacheprovider
       # 追跡された .bats をソースツリーで走らせる。bats を直接呼ぶ
       # （自作の run-bats-gate は 2026-09-13 に撤去）。
       - id: bats

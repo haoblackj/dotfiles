@@ -97,12 +97,15 @@ PY
 }
 
 # bats test_tags=production-asset
-@test "env.COMPACT_PLUS_FALLBACK_BACKENDがbackend-codex-mini.shを指す" {
+@test "env.COMPACT_PLUS_FALLBACK_BACKENDがcodex execの一行（gpt-5.4-mini）になっている" {
+    # 自作の backend-codex-mini.sh は 2026-09-13 に撤去し、compact-plus の README が
+    # 示す env 一行の形へ寄せた（chezmoi e077ce8）。
     python3 - "$S" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1]))
-e=d.get("env",{})
-assert "backend-codex-mini.sh" in e.get("COMPACT_PLUS_FALLBACK_BACKEND",""), "fallback backend env 未設定"
+v=d.get("env",{}).get("COMPACT_PLUS_FALLBACK_BACKEND","")
+assert "codex exec" in v and "gpt-5.4-mini" in v, "fallback backend env 未設定"
+assert "backend-codex-mini.sh" not in v, "撤去済みの自作ラッパーを指している"
 print("PASS")
 PY
 }
