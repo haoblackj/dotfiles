@@ -153,7 +153,7 @@
   "footerLinksRegexes": [
     {
       "type": "regex",
-      "pattern": "\\b(?<owner>[A-Za-z0-9_.-]+)/(?<repo>[A-Za-z0-9_.-]+)#(?<n>[0-9]+)\\b",
+      "pattern": "✓ (?:Closed|Reopened|Merged|Created) (?:issue|pull request) (?<owner>[A-Za-z0-9_.-]+)/(?<repo>[A-Za-z0-9_.-]+)#(?<n>[0-9]+)",
       "url": "https://github.com/{owner}/{repo}/issues/{n}",
       "label": "{repo}#{n}"
     },
