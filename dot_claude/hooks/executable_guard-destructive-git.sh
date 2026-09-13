@@ -21,7 +21,7 @@
 #   - サブコマンドの前に挟まるグローバルオプション（`-C <dir>`、`-c k=v`、
 #     `--git-dir=...` など）を読み飛ばしてからサブコマンドを取る。
 #   - 短縮形と長形の両方、および `-fd` のように束ねられた短縮オプションを拾う。
-#   - `--force-with-lease` は `--force` と別物として扱う（トークン完全一致で判定）。
+#   - `--force-with-lease`（`=<ref>` 付きも）は `--force` と同じく止める。
 #   - `git clean` は `-n` / `--dry-run` があれば消えないので通す。
 #
 # 検証は guard-destructive-git.bats で行う。判定対象の文字列を Bash ツールの
@@ -119,6 +119,16 @@ analyze() {
       if has_long "--force" "${rest[@]}" || has_short f "${rest[@]}"; then
         echo "git push --force"; return 0
       fi
+      # `--force-with-lease` は `=<ref>[:<expect>]` を伴うことがあるので前方一致で見る。
+      # 上書きを条件付きにするだけで、リモートの履歴を捨てる点は --force と同じ
+      # （2026-09-13、リーダーの指示で対象に加えた）。
+      local tok
+      for tok in "${rest[@]}"; do
+        [[ "$tok" == "--" ]] && break
+        if [[ "$tok" == --force-with-lease* ]]; then
+          echo "git push --force-with-lease"; return 0
+        fi
+      done
       ;;
     clean)
       # -n / --dry-run があれば実際には消えないので通す。

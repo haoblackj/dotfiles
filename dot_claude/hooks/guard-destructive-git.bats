@@ -98,15 +98,17 @@ setup() {
     done
 }
 
-@test "塞いではいけない形: --force-with-lease" {
+@test "塞ぐべき形: --force-with-lease（2026-09-13 にリーダーの指示で対象へ）" {
+    # 上書きを条件付きにするだけで、リモートの履歴を捨てる点は --force と同じ。
     local cmd
     for cmd in \
         'git push --force-with-lease' \
         'git push --force-with-lease=main:abc1234' \
         'git push --force-with-lease --force-if-includes' \
-        'git -C /tmp/x push --force-with-lease origin main'; do
+        'git -C /tmp/x push --force-with-lease origin main' \
+        'git push origin main --force-with-lease'; do
         run decide "$cmd"
-        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
+        [ "$output" = "deny" ] || { echo "deny を期待したが [$output] / 入力: $cmd" >&2; return 1; }
     done
 }
 
