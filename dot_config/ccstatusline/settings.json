@@ -20,6 +20,15 @@
         "id": "5",
         "type": "git-branch",
         "color": "hex:ee64ac"
+      },
+      {
+        "id": "git-review",
+        "type": "git-review",
+        "color": "hex:ee64ac",
+        "metadata": {
+          "hideNoGit": "true",
+          "hideTitle": "true"
+        }
       }
     ],
     [
