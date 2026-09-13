@@ -62,6 +62,14 @@ selected="$(
 [[ -n "$selected" ]] || exit 0
 
 url="${selected##*	}"
-xdg-open "$url" >/dev/null 2>&1 &
-disown
+
+# 前景で開いてから終わる。バックグラウンドに投げて即 exit すると、ポップアップが閉じる
+# ときにプロセスごと止められて何も開かない（2026-09-13 実機）。xdg-open → wslview は
+# Windows 側へ渡した時点で返るので待っても一瞬。失敗の出力はログへ。
+log="${XDG_STATE_HOME:-$HOME/.local/state}/herdr/open-github.log"
+mkdir -p "$(dirname "$log")"
+if ! setsid xdg-open "$url" >>"$log" 2>&1; then
+  printf '%s xdg-open 失敗: %s\n' "$(date '+%F %T')" "$url" >> "$log"
+  pause_and_exit "開けなかった: $url（$log 参照）"
+fi
 exit 0
