@@ -198,7 +198,7 @@
   "outputStyle": "エクシア（能天使）",
   "effortLevel": "high",
   "askUserQuestionTimeout": "never",
-  "tui": "fullscreen",
+  "tui": "default",
   "skipWorkflowUsageWarning": true,
   "switchModelsOnFlag": true,
   "inputNeededNotifEnabled": true,
