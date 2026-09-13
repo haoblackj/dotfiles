@@ -20,6 +20,13 @@
         "id": "5",
         "type": "git-branch",
         "color": "hex:ee64ac"
+      },
+      {
+        "id": "issue-pr-links",
+        "type": "custom-command",
+        "commandPath": "/home/yagu001/.config/ccstatusline/issue-pr-links.sh",
+        "timeout": 1000,
+        "preserveColors": true
       }
     ],
     [
