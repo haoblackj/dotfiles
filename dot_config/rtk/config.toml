@@ -34,7 +34,10 @@ consent_given = false
 consent_date = "2026-06-21T08:54:45.277418755+00:00"
 
 [hooks]
-exclude_commands = []
+# git を除外する理由: EnterWorktree 中のセッションでは、rtk が git を `rtk git` に
+# 書き換えると Claude Code のワークツリー guard が「git を実行しないと示せない」と
+# して全 git を拒否する（2026-09-14 実測）。代償として git 出力の圧縮は効かない。
+exclude_commands = ["git"]
 transparent_prefixes = []
 
 [limits]
