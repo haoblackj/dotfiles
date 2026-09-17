@@ -45,7 +45,7 @@
         ]
       },
       {
-        "matcher": "*",
+        "matcher": "^(startup|resume|clear|compact|fork)$",
         "hooks": [
           {
             "type": "command",
@@ -197,11 +197,13 @@
     }
   },
   "outputStyle": "エクシア（能天使）",
+  "remoteControlAtStartup": true,
   "effortLevel": "high",
   "askUserQuestionTimeout": "never",
   "tui": "fullscreen",
   "skipWorkflowUsageWarning": true,
   "switchModelsOnFlag": true,
   "inputNeededNotifEnabled": true,
-  "agentPushNotifEnabled": true
+  "agentPushNotifEnabled": true,
+  "feedbackDrafts": "off"
 }
