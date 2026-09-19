@@ -3,6 +3,8 @@
 /LICENSE
 /install.sh
 /docs
+# bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
+/ideas
 /pyproject.toml
 # Pythonテスト実行で生成されるバイトコードとキャッシュはapply対象外
 **/__pycache__
