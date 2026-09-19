@@ -5,6 +5,12 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
+# 非インタラクティブシェルでは .profile が読まれないため brew を PATH に追加。
+# これが無いと brew 導入の herdr が見つからず、Claude Code 統合がスキップされていた。
+if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
 if command -v herdr >/dev/null 2>&1; then
   echo "herdr: Claude Code統合をインストール"
   herdr integration install claude
