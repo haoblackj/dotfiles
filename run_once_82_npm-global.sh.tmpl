@@ -9,6 +9,10 @@ set -eu
 # nvm を明示 source することで、対話シェルでなくても（＝ nvm 導入直後に
 # `source ~/.zshrc` や端末再起動をしなくても）node/npm を使えるようにする。
 # これで従来 README の Manual 手順に頼らず冪等に導入できる。
+# nvm.sh は set -u（未定義変数でエラー終了）に対応しておらず、内部で PROVIDED_VERSION 等を
+# 未定義参照するため、source・実行を set -u 下で行うと落ちる（nvm.sh:3687 実測）。
+# nvm を触る区間だけ -u を外す。-e は維持するので nvm 自体の失敗は引き続き検知する。
+set +u
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh"
 fi
@@ -19,6 +23,7 @@ if ! command -v npm >/dev/null 2>&1 && command -v nvm >/dev/null 2>&1; then
   nvm install --lts
   nvm use --lts
 fi
+set -u
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "npm を用意できなかったため npm グローバル導入をスキップ（nvm/node 未導入）"
