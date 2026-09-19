@@ -73,7 +73,14 @@ chezmoi はターゲットをパス順に処理するので、`.local/share/clau
 systemd が動いていない Ubuntu イメージではここで失敗するので、Windows 側から `wsl --shutdown` して入り直し、同じコマンドを再実行する（`run_once_10` が `/etc/wsl.conf` を `systemd=true` の設定へ symlink 済み）。
 失敗した run_once スクリプトは記録に残らず次回の apply で再実行される（実機で確認済み）。
 
-### 3. external を含めて apply する
+### 3. WSL を入れ直す
+
+Windows 側で `wsl --shutdown` してから再度開く。
+ログインシェルの zsh 化（`run_once_10` の `usermod -s`）と docker グループ（`run_once_70`）は、再ログインしないと効かない。
+DNS は `run_once_10` が `wsl-static-dns.sh` を即実行して公開リゾルバに固定するのでブートストラップ中から効く（恒久化は `wsl-static-dns.service` と `wsl.conf` の `generateResolvConf=false`）。
+再起動後のシェルは zsh が brew を読むので `gh` が PATH に載る。次の external clone がこれを要るので、順序として再起動を先に置く。
+
+### 4. external を含めて apply する
 
 ```sh
 chezmoi apply
@@ -81,14 +88,11 @@ chezmoi apply
 
 `.chezmoiexternal.toml` の 2 つが clone される。
 
-- `~/.claude/skills/book-to-skill`（公開スキル。upstream 追従）
-- `~/.local/share/claude-private`（memory と機密スキル。`gh auth login` 済みなら通る）
+- `~/.claude/skills/book-to-skill`（公開スキル。upstream 追従。認証不要）
+- `~/.local/share/claude-private`（memory と機密スキル）
 
-### 4. WSL を入れ直す
-
-Windows 側で `wsl --shutdown` してから再度開く。
-ログインシェルの zsh 化（`run_once_10` の `usermod -s`）と docker グループ（`run_once_70`）は、再ログインしないと効かない。
-DNS は `run_once_10` が `wsl-static-dns.sh` を即実行して公開リゾルバに固定するのでブートストラップ中から効く（恒久化は `wsl-static-dns.service` と `wsl.conf` の `generateResolvConf=false`）。
+private repo の clone は `.gitconfig` の credential helper 経由で `gh` を呼ぶ。
+再起動前のブートストラップシェルは `gh`（brew 導入）が PATH に無く、helper が `gh: not found` で失敗して `Username for 'https://github.com':` を聞かれるので、必ず手順 3 の再起動を済ませてから行う（急ぐなら `eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"` で `gh` を PATH に載せてから）。
 
 ### 5. 確認
 
