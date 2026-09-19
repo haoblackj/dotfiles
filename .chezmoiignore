@@ -1,11 +1,14 @@
-/README.md
-/CLAUDE.md
-/LICENSE
-/install.sh
-/docs
+# パターンに先頭の / を付けない。chezmoi v2.72.0 以降は絶対パス形のパターンを
+# 「invalid path」として拒否する（internal/chezmoi/relpath.go の NewUntrustedRelPath）。
+# ** を含まないパターンはターゲットのルートからしか一致しないので、/ 無しで同じ意味になる。
+README.md
+CLAUDE.md
+LICENSE
+install.sh
+docs
 # bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
-/ideas
-/pyproject.toml
+ideas
+pyproject.toml
 # Pythonテスト実行で生成されるバイトコードとキャッシュはapply対象外
 **/__pycache__
 **/__pycache__/**
@@ -14,38 +17,38 @@
 
 # herdr integration が自身の更新のたびに上書きするファイル。
 # chezmoi管理下に置くとherdrの更新をchezmoi applyで巻き戻すリスクがあるため対象外。
-/.claude/hooks/herdr-agent-state.sh
+.claude/hooks/herdr-agent-state.sh
 
 # フックの単体テストは chezmoi のソース側を本籍地とし、ターゲットへは配置しない。
 # 配置先のコピーは $HERE/executable_<名前> というソース側の命名規則を参照するため
 # 実行しても exit 127 で落ち、動いている体裁のまま何も検証しない状態になっていた。
 # ソース側（dot_claude/hooks/executable_*.test.sh）で走らせる。
-/.claude/hooks/*.test.sh
+.claude/hooks/*.test.sh
 # 層4a で .bats へ移行した後も同じ理由（配置先の命名規則が合わない）で対象外。
-/.claude/hooks/*.bats
+.claude/hooks/*.bats
 # compact-plus-backend の単体テストも同じ理由で対象外。
 # 配置先ではソース名（executable_ 接頭辞つき）が解決せず、何も検証しない複製になるため。
-/.claude/compact-plus-backend/*.test.sh
-/.claude/compact-plus-backend/*.bats
+.claude/compact-plus-backend/*.test.sh
+.claude/compact-plus-backend/*.bats
 
 {{- if eq (env "REMOTE_CONTAINERS") "true" }}
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi aplly の対象から外す
-/.gitconfig
+.gitconfig
 {{- end }}
 
 {{ if eq .chezmoi.os "windows" -}}
 # Windows マシンのため、下記ファイルは chezmoi apply の対象から外す
-/.bashrc
-/.bash_profile
-/.bash_aliases
-/.zshrc
-/.zshenv
-/.zprofile
-/.profile
-/.czrc
-/.gitignore
-/.gitconfig
-/.inputrc
+.bashrc
+.bash_profile
+.bash_aliases
+.zshrc
+.zshenv
+.zprofile
+.profile
+.czrc
+.gitignore
+.gitconfig
+.inputrc
 fix_wayland.sh
 keyboard.conf
 local.conf
@@ -83,7 +86,7 @@ install-packages.sh
 {{- if ne .chezmoi.os "windows" -}}
 # Linux マシンのため、下記ファイルは chezmoi apply の対象から外す
 # .wslconfig は Windows のユーザーホームに置くファイルで、WSL/Linux 側では読まれない
-/.wslconfig
+.wslconfig
 # run_onchange_after_50_komorebi-fetch-asc.bat.tmpl のターゲット名
 50_komorebi-fetch-asc.bat
 # run_once_after_55_komorebi-zebar-autostart.bat.tmpl のターゲット名
@@ -95,7 +98,7 @@ install-packages.sh
 .config/yasb
 .config/glazewm
 scoop
-/.wezterm.lua
+.wezterm.lua
 AppData/Roaming/alacritty
 ubuntu-(wsl-zsh).ps1
 {{- end }}
