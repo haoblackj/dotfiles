@@ -47,8 +47,14 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin" init haoblackj
 ### 2. external を除いて apply する（run_once スクリプトが走る）
 
 ```sh
+sudo -v && ( while true; do sudo -n true; sleep 60; done ) 2>/dev/null &
 ~/.local/bin/chezmoi apply --exclude=externals
+kill %1
 ```
+
+1 行目は sudo の認証キャッシュを apply の間ずっと延命するためのもの。
+Ubuntu の既定ではキャッシュは 15 分で切れるが、`apt upgrade` や Homebrew と pyenv の導入はそれを超えやすく、素で走らせると長いスクリプトのたびにパスワードを聞かれる。
+`kill %1` で延命ループを止める。
 
 chezmoi はターゲットをパス順に処理するので、`.local/share/claude-private`（private repo の clone）が `10_*.sh` 以降のスクリプトより先に来る。
 この clone は GitHub の認証情報を要求し、認証を担う `gh` は `run_once_80` で入り `run_once_85` でログインする。
@@ -57,7 +63,7 @@ chezmoi はターゲットをパス順に処理するので、`.local/share/clau
 
 途中で手を止める箇所は次の 2 つ。
 
-- `sudo` のパスワード（`run_once_10` 以降の apt 系スクリプト）
+- `sudo` のパスワード（最初の `sudo -v` の 1 回。延命ループを使わないと apt 系スクリプトのたびに聞かれる）
 - `gh auth login -w`（`run_once_85`。ブラウザで device code を入力する）
 
 `run_once_99` は `systemctl --user` を使う。
