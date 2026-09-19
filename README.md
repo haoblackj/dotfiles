@@ -96,11 +96,13 @@ private repo の clone は `.gitconfig` の credential helper 経由で `gh` を
 ### 5. 確認
 
 ```sh
-systemctl --user status bitwarden-ssh-agent   # active なら socat ブリッジが立っている
-ssh-add -l                                     # Bitwarden の鍵が並べば Windows 側まで通っている
-~/.claude/hooks/claude-private-sync.sh pull    # memory/skills の symlink を張る（claude の SessionStart と同じ処理）
+systemctl --user status bitwarden-ssh-agent
+ssh-add -l
+~/.claude/hooks/claude-private-sync.sh pull
 ls -la ~/.claude/projects/*/memory ~/.claude/skills
 ```
+
+`bitwarden-ssh-agent` が active なら socat ブリッジが立っている。`ssh-add -l` に鍵が並べば Windows 側の Bitwarden まで通っている。`claude-private-sync.sh pull` は memory/skills の symlink を張る（`claude` の SessionStart と同じ処理）。
 
 claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`）が `~/.local/share/claude-private` へ clone/pull する。このフックが担うのは、そこへ張る symlink の生成（`~/.claude/projects/<proj>/memory` と機密スキル）で、chezmoi はやらない。フック内の pull は ff-only の念のための同期。symlink の確認はこのフックを直接叩く。`claude` をホーム直下で起動すると、ホーム全体が 1 プロジェクト扱いになって `~/.claude/projects/` にホーム dir のエントリができるため、確認目的では開かない。実際に Claude Code を使うときは対象リポジトリへ `cd` してから起動する。
 
