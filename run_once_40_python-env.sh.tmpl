@@ -11,6 +11,8 @@ if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
 fi
 
 export HOMEBREW_NO_AUTO_UPDATE=1
+# Homebrew 7 以降は依存を伴う brew install が TTY 上で [y/n] を聞く（ask モード）。止める
+export HOMEBREW_NO_ASK=1
 
 {{ $pyenvPath := lookPath "pyenv" }}
 {{ if $pyenvPath }}
