@@ -87,7 +87,8 @@ chezmoi apply
 ### 4. WSL を入れ直す
 
 Windows 側で `wsl --shutdown` してから再度開く。
-ログインシェルの zsh 化（`run_once_10` の `usermod -s`）、docker グループ（`run_once_70`）、`wsl.conf` の `generateResolvConf=false` と `my-settings.service` による `resolv.conf` 上書きは、再ログインしないと効かない。
+ログインシェルの zsh 化（`run_once_10` の `usermod -s`）と docker グループ（`run_once_70`）は、再ログインしないと効かない。
+DNS は `run_once_10` が `wsl-static-dns.sh` を即実行して公開リゾルバに固定するのでブートストラップ中から効く（恒久化は `wsl-static-dns.service` と `wsl.conf` の `generateResolvConf=false`）。
 
 ### 5. 確認
 
@@ -106,21 +107,21 @@ ls -la ~/.claude/projects/*/memory ~/.claude/skills
 
 | スクリプト | 中身 |
 |---|---|
-| `run_once_10_system-base` | `/etc/wsl.conf` `/etc/fonts/local.conf` `/etc/default/keyboard` の symlink、zsh、apt の基本パッケージ、日本語ロケール |
+| `run_once_10_system-base` | 公開 DNS 固定（`wsl-static-dns`）、`/etc/wsl.conf` `/etc/fonts/local.conf` `/etc/default/keyboard` の symlink、zsh、apt の基本パッケージ、日本語ロケール |
 | `run_once_11_system-upgrade` | `apt upgrade` |
 | `run_once_20_wslu` | wslu（`xdg-open` で Windows のブラウザを開く）と GUI 系ライブラリ |
 | `run_once_30_linuxbrew` | Homebrew |
 | `run_once_40_python-env` | pyenv / pyenv-virtualenv とビルド依存 |
 | `run_once_50_node-env` | nvm |
 | `run_once_60_languages` | go / deno |
-| `run_once_70_editors-containers` | neovim（AppImage）/ docker と `my-settings.service` |
+| `run_once_70_editors-containers` | neovim（AppImage）/ docker |
 | `run_once_80_cli-tools` | **brew の Brewfile。CLI ツールの一覧はここを見る**（claude-code は `cask "claude-code@latest"`） |
 | `run_once_82_npm-global` | nvm の LTS と npm グローバル（ccstatusline は pin、yarn、commitizen） |
 | `run_once_83` / `84` / `86` | herdr の agent skill、プラグイン、Claude Code 統合 |
 | `run_once_85_gh-setup` | `gh auth login` と gh 拡張 |
 | `run_onchange_87_wikiwalk-tool` | `uv tool install` で wikiwalk。リモート HEAD が動くと再実行 |
 | `run_onchange_after_90` | herdr の umask override を変えたら service を restart |
-| `run_once_99_services` | `bitwarden-ssh-agent` の enable/start、`my-settings.service` と docker の enable |
+| `run_once_99_services` | `bitwarden-ssh-agent` の enable/start、`wsl-static-dns.service` と docker の enable |
 
 ツールを足すときは該当スクリプトに 1 行足す。
 run_once は内容のハッシュが変わると再実行されるが、既導入分はスキップされる作りになっている（`.claude/rules/run_once.md`）。

@@ -1,0 +1,9 @@
+[Unit]
+Description=Write a static public-DNS /etc/resolv.conf for WSL
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/bin/wsl-static-dns.sh
+
+[Install]
+WantedBy=multi-user.target

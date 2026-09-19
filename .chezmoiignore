@@ -53,7 +53,7 @@ fix_wayland.sh
 keyboard.conf
 local.conf
 wsl.conf
-my-settings.service
+wsl-static-dns.service
 run_once_install-packages.sh
 10_system-base.sh
 11_system-upgrade.sh
@@ -72,7 +72,7 @@ run_once_install-packages.sh
 87_wikiwalk-tool.sh
 90_reload-herdr-umask.sh
 99_services.sh
-my-settings.sh
+wsl-static-dns.sh
 setup_vall_e_x.sh
 .config/fontconfig
 .config/gh

@@ -9,7 +9,7 @@ systemctl --user disable --now ssh-agent 2>/dev/null || true
 systemctl --user enable bitwarden-ssh-agent
 systemctl --user start bitwarden-ssh-agent
 
-sudo systemctl enable my-settings.service
+sudo systemctl enable wsl-static-dns.service
 sudo systemctl enable docker
 
 # run_once_10 が置いたブートストラップ用の NOPASSWD ドロップインを撤去する。

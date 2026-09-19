@@ -23,6 +23,16 @@ if [ ! -f "$CHEZMOI_SUDO_DROPIN" ]; then
   command rm -f "$_cz_tmp"
 fi
 
+# WSL の DNS を公開リゾルバに固定する。dnsTunneling は Mirrored 環境で断続的に名前解決を
+# 落とす既知バグ（microsoft/WSL #41595）があり、ブートストラップ中のダウンロード
+# （apt/brew/ghcr）を不安定にする。ここで最初に固定し、以降を安定させる。値と書き込みは
+# wsl-static-dns.sh に一元化（DRY）。恒久化は run_once_99 で wsl-static-dns.service を enable。
+# docker の有無と切り離してここで設置する（旧構成は run_once_70 の docker 未導入ブロックに
+# 埋まっていて、docker 導入済みマシンでは service が張られなかった）。
+sudo ln -snfv ~/.local/share/chezmoi/wsl-static-dns.service /etc/systemd/system/wsl-static-dns.service
+sudo ln -snfv ~/.local/share/chezmoi/wsl-static-dns.sh /usr/local/bin/wsl-static-dns.sh
+sudo bash /usr/local/bin/wsl-static-dns.sh
+
 sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
 sudo ln -snfv ~/.local/share/chezmoi/local.conf /etc/fonts/local.conf
 sudo ln -snfv ~/.local/share/chezmoi/keyboard.conf /etc/default/keyboard
