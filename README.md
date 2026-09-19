@@ -47,12 +47,14 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin" init haoblackj
 ### 2. external を除いて apply する（run_once スクリプトが走る）
 
 ```sh
-sudo -v && ( while true; do sudo -n true; sleep 60; done ) 2>/dev/null &
+sudo -v
+( while true; do sudo -n true; sleep 60; done ) 2>/dev/null &
 ~/.local/bin/chezmoi apply --exclude=externals
 kill %1
 ```
 
-1 行目は sudo の認証キャッシュを apply の間ずっと延命するためのもの。
+最初の 2 行は sudo の認証キャッシュを apply の間ずっと延命するためのもの。
+`sudo -v` とループを 1 行に `&&` でつなぐと、シェルはその全体をバックグラウンドに回すので `sudo -v` がパスワードを読めずに止まり、延命が始まらない。必ず 2 行に分ける。
 Ubuntu の既定ではキャッシュは 15 分で切れるが、`apt upgrade` や Homebrew と pyenv の導入はそれを超えやすく、素で走らせると長いスクリプトのたびにパスワードを聞かれる。
 `kill %1` で延命ループを止める。
 
