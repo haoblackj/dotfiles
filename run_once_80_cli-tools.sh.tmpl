@@ -18,7 +18,9 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 echo "CLIツール一括インストール開始（brew bundle）"
 brew bundle install --no-upgrade --file=- <<'BREWFILE'
 brew "aicommit2"      # AI でコミットメッセージ生成
+brew "bats-core"      # Bash のテストランナー（hook 群・morning スキルの *.bats が依存）
 brew "bitwarden-cli"  # パスワードマネージャ CLI
+brew "ffmpeg"         # 音声・動画変換（kikimimi / VALL-E X のセットアップが依存）
 brew "fzf"            # ファジーファインダー
 brew "gemini-cli"     # Google Gemini モデルの CLI
 brew "gh"             # GitHub CLI
@@ -27,21 +29,26 @@ brew "git-delta"      # chezmoi/git の diff 表示（構文ハイライト付�
 brew "glow"           # ターミナルmarkdownレンダラー（herdr-file-viewer等が委譲）
 brew "herdr"          # AI エージェント向けターミナルマルチプレクサ
 brew "jq"             # JSON プロセッサ（hook 群が依存）
+brew "kcov"           # Bash のカバレッジ計測（bats と組で使う）
 brew "lazygit"        # git TUI
 brew "mono"           # クロスプラットフォームの .NET 実行環境
 brew "pandoc"         # マークアップ変換
+brew "parallel"       # GNU parallel（コマンドの並列実行）
 brew "peco"           # インタラクティブフィルタ
 brew "pipx"           # Python 製 CLI ツールを隔離環境で導入
 brew "poppler"        # PDF レンダリング（pdftotext 等）
 brew "pre-commit"     # git フック管理（verify-tests の pre-push 登録に必要）
+brew "restic"         # 暗号化バックアップ（~/.claude を Cloudflare R2 へ退避する仕組みが依存）
 brew "rtk"            # LLM トークン削減 CLI プロキシ
 brew "sevenzip"       # 7-Zip 書庫の圧縮・展開
+brew "shellcheck"     # シェルスクリプトの静的検査（check_claude_md.sh 等が依存）
 brew "tesseract"      # OCR エンジン
 brew "tesseract-lang" # Tesseract 追加言語データ
 brew "tmux"           # MulmoTerminalのセッション永続化バックエンド（未導入時はplain PTYにフォールバック）
 brew "trash-cli"      # freedesktop 準拠のゴミ箱 CLI
 brew "uv"             # Pythonパッケージ・ツール管理（wikiwalk等のuv tool install対象に必要）
-cask "claude-code"    # Claude Code 本体
+brew "yq"             # YAML / TOML プロセッサ（jq の YAML 版）
+cask "claude-code@latest" # Claude Code 本体（実機は @latest 版。無印は一つ古い版が入る）
 cask "gcloud-cli"     # Google Cloud SDK（gcloud/gsutil）
 BREWFILE
 echo "CLIツール一括インストール完了"
