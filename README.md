@@ -98,9 +98,11 @@ private repo の clone は `.gitconfig` の credential helper 経由で `gh` を
 ```sh
 systemctl --user status bitwarden-ssh-agent   # active なら socat ブリッジが立っている
 ssh-add -l                                     # Bitwarden の鍵が並べば Windows 側まで通っている
-claude                                         # SessionStart hook が claude-private を pull し memory と skills の symlink を張る
+~/.claude/hooks/claude-private-sync.sh pull    # claude-private を pull し memory/skills の symlink を張る（claude の SessionStart と同じ処理）
 ls -la ~/.claude/projects/*/memory ~/.claude/skills
 ```
+
+symlink の確認はこのフックを直接叩く。`claude` をホーム直下で起動すると、ホーム全体が 1 プロジェクト扱いになって `~/.claude/projects/` にホーム dir のエントリができるため、確認目的では開かない。実際に Claude Code を使うときは対象リポジトリへ `cd` してから起動する。
 
 `ssh-add -l` が空のときは Windows 側の Bitwarden がロックされているか、SSH agent の設定が無効になっている。
 
