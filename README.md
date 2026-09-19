@@ -47,16 +47,17 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin" init haoblackj
 ### 2. external を除いて apply する（run_once スクリプトが走る）
 
 ```sh
-sudo -v
-( while true; do sudo -n true; sleep 60; done ) 2>/dev/null &
 ~/.local/bin/chezmoi apply --exclude=externals
-kill %1
 ```
 
-最初の 2 行は sudo の認証キャッシュを apply の間ずっと延命するためのもの。
-`sudo -v` とループを 1 行に `&&` でつなぐと、シェルはその全体をバックグラウンドに回すので `sudo -v` がパスワードを読めずに止まり、延命が始まらない。必ず 2 行に分ける。
-Ubuntu の既定ではキャッシュは 15 分で切れるが、`apt upgrade` や Homebrew と pyenv の導入はそれを超えやすく、素で走らせると長いスクリプトのたびにパスワードを聞かれる。
-`kill %1` で延命ループを止める。
+sudo のパスワードは `run_once_10` の最初で 1 回だけ聞かれる。
+`run_once_10` が `/etc/sudoers.d/00-chezmoi-bootstrap` に「このユーザーを NOPASSWD」のドロップインを置き、以降の run_once を無人化して、`run_once_99` の末尾で消す。
+WSL2 の sudo（sudo-rs）は認証をプロセスの壁を越えて共有せず、run_once の各本が別々の子プロセスなので、`sudo -v` とバックグラウンドの延命ループでは無人化できない（Ubuntu 26.04 / sudo-rs 0.2.13 で実測）。ドロップインだけが子プロセスに効く。
+apply が `run_once_99` に届く前に中断した場合はドロップインが残る。完走させれば 99 が消すが、ブートストラップ自体をやめるなら手で消す。
+
+```sh
+sudo rm -f /etc/sudoers.d/00-chezmoi-bootstrap
+```
 
 chezmoi はターゲットをパス順に処理するので、`.local/share/claude-private`（private repo の clone）が `10_*.sh` 以降のスクリプトより先に来る。
 この clone は GitHub の認証情報を要求し、認証を担う `gh` は `run_once_80` で入り `run_once_85` でログインする。
@@ -65,7 +66,7 @@ chezmoi はターゲットをパス順に処理するので、`.local/share/clau
 
 途中で手を止める箇所は次の 2 つ。
 
-- `sudo` のパスワード（最初の `sudo -v` の 1 回。延命ループを使わないと apt 系スクリプトのたびに聞かれる）
+- `sudo` のパスワード（`run_once_10` の冒頭で 1 回。上記のドロップインが以降を無人化する）
 - `gh auth login -w`（`run_once_85`。ブラウザで device code を入力する）
 
 `run_once_99` は `systemctl --user` を使う。

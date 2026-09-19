@@ -5,6 +5,24 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
+# ブートストラップ中だけ、このユーザーの sudo を無認証にするドロップインを置く。
+# WSL2 の sudo-rs は sudo の認証をプロセスの壁を越えて共有しないため（同一セッションの
+# 別スクリプトでも引き継がない。Ubuntu 26.04 / sudo-rs 0.2.13 で実測）、これが無いと
+# run_once の各本（別々の子プロセス）で毎回パスワードを聞かれる。ここで最初の 1 回だけ
+# 認証し、以降の run_once を無人化する。撤去は run_once_99 の末尾。途中で apply が
+# 中断したら README「導入手順」の手動削除コマンドで消す。
+# 記法は `NOPASSWD: ALL`。sudo-rs は `Defaults:<user> !authenticate` を解さない（実測）。
+CHEZMOI_SUDO_DROPIN=/etc/sudoers.d/00-chezmoi-bootstrap
+if [ ! -f "$CHEZMOI_SUDO_DROPIN" ]; then
+  _cz_tmp="$(mktemp)"
+  printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$USER" > "$_cz_tmp"
+  # 壊れた sudoers で sudo をロックしないよう、設置前に visudo で検証する
+  if sudo visudo -cf "$_cz_tmp" >/dev/null; then
+    sudo install -m 0440 -o root -g root "$_cz_tmp" "$CHEZMOI_SUDO_DROPIN"
+  fi
+  command rm -f "$_cz_tmp"
+fi
+
 sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
 sudo ln -snfv ~/.local/share/chezmoi/local.conf /etc/fonts/local.conf
 sudo ln -snfv ~/.local/share/chezmoi/keyboard.conf /etc/default/keyboard
