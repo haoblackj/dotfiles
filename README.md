@@ -30,9 +30,8 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 3. Windows 側に Bitwarden Desktop を入れ、設定で SSH agent を有効にしてログインとアンロックを済ませる。
    `npiperelay.exe` を `C:\Users\yagu001\AppData\Local\Programs\npiperelay\npiperelay.exe` に置く。
    unit ファイルはこのパスを固定で持つので、Windows 側ユーザー名が `yagu001` でない機械ではそのままでは動かない。
-4. WSL 側で `sudo apt install socat` を打つ。
-   `bitwarden-ssh-agent.service` が `/usr/bin/socat` を使うが、run_once スクリプトには入っていない。
-   無いと `run_once_99` の `systemctl --user start` が失敗して apply が止まる。
+
+`bitwarden-ssh-agent.service` が使う `socat` は `run_once_10` の基本 apt パッケージに含めてあるので手動導入は要らない。
 
 ## 導入手順
 
@@ -133,7 +132,6 @@ run_once は内容のハッシュが変わると再実行されるが、既導�
 ## 手動作業として残るもの
 
 - `aicommit2 setup`（API キーの登録）
-- `sudo apt install socat`（前提 4）
 - Windows 側の Bitwarden Desktop と npiperelay（前提 3）
 - `bw login`（bitwarden-cli は入るが、使うときにログインする）
 - Cloudflare Workers AI のトークン失効時の再発行（下記「Memory Recall」）
