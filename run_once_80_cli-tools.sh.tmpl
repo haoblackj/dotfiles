@@ -18,7 +18,9 @@ export HOMEBREW_NO_ASK=1
 # ツールを追加するときはこのリストに 1 行足すだけでよい。
 # pyenv / pyenv-virtualenv は run_once_40、nvm は run_once_50 で管理するためここには含めない。
 echo "CLIツール一括インストール開始（brew bundle）"
-brew bundle install --no-upgrade --file=- <<'BREWFILE'
+# --verbose が無いと bundle は内側の brew install の出力を溜め込み、失敗時にしか出さない。
+# 345MB 級の bottle（tesseract-lang）を落とす間、固まったように見えるので進捗を流す。
+brew bundle install --verbose --no-upgrade --file=- <<'BREWFILE'
 brew "aicommit2"      # AI でコミットメッセージ生成
 brew "bats-core"      # Bash のテストランナー（hook 群・morning スキルの *.bats が依存）
 brew "bitwarden-cli"  # パスワードマネージャ CLI
