@@ -173,11 +173,16 @@ memory と機密スキル（自作改変分を含む）は private repo `claude-
 
 `dot_claude/` 配下を Claude Code の Write/Edit で編集すると、PostToolUse hook `chezmoi-auto-apply.sh` が `chezmoi apply ~/.claude/` を走らせる。
 逆に `~/.claude/` 側の管理ファイルを直接編集すると、同じ hook が `chezmoi re-add` を促す。
-`/config` で選んだ一時的な model 等はソース側の値で上書きされるので、避けたいときは Bash から編集して `chezmoi apply ~/.claude/hooks` のように範囲を絞る。
+
+`~/.claude/settings.json` だけは例外で、ソースの `linked/claude/settings.json` への symlink として配る（chezmoi 公式ガイド「外部から書き換えられる設定ファイル」の型）。
+Claude Code は `/config` やプラグイン導入のたびにこのファイルをキー順を変えて書き戻すため、通常ファイルとして管理すると実体の変更が無くても毎回ドリフトになっていた。
+symlink なら Claude Code の書き込みがそのままソースへ届き、chezmoi の比較も re-add も要らない。
+キー順の揺れは `.gitattributes` の clean filter（`jq -S`、定義は `dot_gitconfig.tmpl`）が index 側で吸収するので、コミットの差分には実体の変更だけが出る。
+ソースの置き場所を動かすと symlink が切れるので、`chezmoi` のソースディレクトリは既定の `~/.local/share/chezmoi` から動かさない。
 
 ### StatusLine
 
-`dot_claude/private_settings.json` の `statusLine.command` は `bash ~/.claude/hooks/statusline-context-window.sh`。
+`linked/claude/settings.json` の `statusLine.command` は `bash ~/.claude/hooks/statusline-context-window.sh`。
 このラッパーが context window の使用率をマーカーファイルへ書いてから、入力 JSON をそのまま `ccstatusline` へ流す。
 表示内容は `dot_config/ccstatusline/settings.json` と同ディレクトリのスクリプト群。
 `ccstatusline` 自体は `run_once_82` で pin 導入しており、バージョンを上げるときは pin を書き換えると `chezmoi apply` で再導入される。

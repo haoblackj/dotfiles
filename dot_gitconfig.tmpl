@@ -3,6 +3,9 @@
     smudge = git-lfs smudge -- %f
     process = git-lfs filter-process
     required = true
+# アプリが書き戻す JSON のキー順を index 側で正規化する（chezmoi ソースの .gitattributes が参照）
+[filter "jsonsort"]
+    clean = jq -S .
 [user]
     name = haoblackj
     email = 17177994+haoblackj@users.noreply.github.com

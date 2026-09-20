@@ -1,0 +1,4 @@
+# Claude Code が /config やプラグイン導入のたびにキー順を並べ替えて書き戻すので、
+# index に入る内容だけ jq -S で正規化する（filter の定義は dot_gitconfig.tmpl）。
+# 作業ツリーの実ファイルは触らない。実体の変更だけが差分として出る。
+linked/claude/settings.json filter=jsonsort

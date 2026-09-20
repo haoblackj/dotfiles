@@ -23,10 +23,11 @@ haoblackj のdotfilesをchezmoiで管理するリポジトリ。Claude Code設�
 
 ```
 dot_claude/                           — chezmoi source → ~/.claude/
-  settings.json                       — グローバルClaude Code設定
+  symlink_settings.json.tmpl          — ~/.claude/settings.json を linked/claude/settings.json への symlink にする
   hooks/
     executable_claude-private-sync.sh — SessionStart/Stop: private repo同期
     executable_chezmoi-auto-apply.sh  — PostToolUse: dot_claude/ 編集時に自動apply
+linked/claude/settings.json           — グローバルClaude Code設定の実体（Claude Code が直接書き戻す。README「ソースとターゲットの往復」）
 run_once_NN_*.sh.tmpl                 — 環境セットアップ（.claude/rules/run_once.md 参照）
 dot_zshrc.tmpl / dot_gitconfig.tmpl
 .chezmoiexternal.toml                 — book-to-skill (公開external) + claude-private clone定義

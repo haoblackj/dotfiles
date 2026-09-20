@@ -29,6 +29,10 @@ case "$file_path" in
     ;;
 esac
 
+# symlink のターゲット（~/.claude/settings.json など）はソース内の実体を指しているので、
+# 編集がそのままソースへ届く。re-add は要らない。
+[ -L "$file_path" ] && exit 0
+
 # (B) 管理対象かどうかは managed 一覧のキャッシュで判定する。
 # chezmoi の起動は 0.3 秒かかるので、毎回の Edit で呼ばないよう 60 分キャッシュする。
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-managed-targets"

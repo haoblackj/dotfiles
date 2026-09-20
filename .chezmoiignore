@@ -10,6 +10,9 @@ docs
 # bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
 ideas
 pyproject.toml
+# ターゲットから symlink で参照されるファイルの置き場（例: ~/.claude/settings.json →
+# linked/claude/settings.json）。アプリが書き戻す設定をソースで直接受ける公式の型。
+linked
 # /etc と /usr/local/bin に置くファイル。run_onchange_12 がソースからコピーするので、
 # ホームへは配らない
 wsl.conf
@@ -65,6 +68,8 @@ wsl-static-dns.service
 .gitignore
 .gitconfig
 .inputrc
+# Windows では Claude Code を使わず、symlink の作成に権限も要るので settings.json だけ外す
+.claude/settings.json
 .config/fontconfig
 .config/gh
 .config/lazygit

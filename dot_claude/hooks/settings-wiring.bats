@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# compact-plus 両取り統合の settings.json 配線検証(source private_settings.json 対象)。
+# compact-plus 両取り統合の settings.json 配線検証(source linked/claude/settings.json 対象)。
 #
 # 元は10件のassertを1つのpython3プロセス内で直列実行しており、最初の失敗で
 # AssertionErrorを投げて後続が一切実行されなかった(Pythonのassertの仕様)。
@@ -9,7 +9,7 @@
 set -u
 
 setup() {
-    S=~/.local/share/chezmoi/dot_claude/private_settings.json
+    S=~/.local/share/chezmoi/linked/claude/settings.json
 }
 
 # bats test_tags=production-asset

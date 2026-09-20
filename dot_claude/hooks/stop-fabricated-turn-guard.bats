@@ -241,7 +241,7 @@ user もういい 十分だよ ありがとう
 
 # bats test_tags=production-asset
 @test "配線: chezmoiソースの hooks.Stop に1件、SubagentStopには配線しない" {
-    SETTINGS=~/.local/share/chezmoi/dot_claude/private_settings.json
+    SETTINGS=~/.local/share/chezmoi/linked/claude/settings.json
     [ "$(jq -r '[.hooks.Stop[]? | .hooks[]? | .command] | map(select(test("stop-fabricated-turn-guard"))) | length' "$SETTINGS" 2>/dev/null)" = "1" ]
     [ "$(jq -r '[.hooks.SubagentStop[]? | .hooks[]? | .command] | map(select(test("stop-fabricated-turn-guard"))) | length' "$SETTINGS" 2>/dev/null)" = "0" ]
 }
