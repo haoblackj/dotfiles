@@ -158,5 +158,12 @@ brewup() {
   brew autoremove
   echo ""
 
+  # chezmoi は install.sh 経由で ~/bin に入れており brew の管轄外なので、ここで一緒に上げる
+  if command -v chezmoi >/dev/null 2>&1; then
+    echo "== chezmoi upgrade =="
+    chezmoi upgrade
+    echo ""
+  fi
+
   echo "✅ brew update all done"
 }
