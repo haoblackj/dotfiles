@@ -6,67 +6,43 @@ chezmoi で管理している Claude Code 設定（settings / keybindings / skil
 ## 構成概要
 
 ```
-公開 repo (github.com/haoblackj/dotfiles)
-  ~/.claude/settings.json         — hook 設定（sync script の呼び出し元）
-  ~/.claude/keybindings.json      — キーバインド
-  ~/.claude/skills/report-skills/ — 自作スキル（vendoring）
-  ~/.claude/skills/book-to-skill/ — 公開外部スキル（git-repo external）
+公開 repo (github.com/haoblackj/dotfiles)  ← chezmoi source: ~/.local/share/chezmoi
+  ~/.claude/settings.json            — hook 設定（sync script の呼び出し元）
+  ~/.claude/keybindings.json         — キーバインド
+  ~/.claude/CLAUDE.md / rules/ / output-styles/ / agents/
   ~/.claude/hooks/claude-private-sync.sh — 同期スクリプト本体
+  ~/.claude/skills/book-to-skill/    — 公開外部スキル（.chezmoiexternal.toml の git-repo external）
 
 private repo (github.com/haoblackj/claude-private)  ← clone 先: ~/.local/share/claude-private
   memory/<proj>/*.md   — プロジェクトごとのメモリ（セッション終了時に自動 push）
-  skills/learning-efficiency-book/ — 著作権配慮スキル
+  skills/<name>/       — 機密・自作改変スキル（learning-efficiency-book、report-skills、dig など）
+  secrets/             — memory_recall.py が使う Cloudflare のトークン
 ```
+
+スキルの置き場所の境界は README「Claude Code」の節が正で、ここには写さない。
+`dot_claude/skills/` にはスキルを置かない。公開スキルは external、それ以外は private repo に置く。
 
 **ライブ上のシンボリックリンク**（sync script が自動生成）：
 - `~/.claude/projects/<proj>/memory` → `~/.local/share/claude-private/memory/<proj>`
-- `~/.claude/skills/learning-efficiency-book` → `~/.local/share/claude-private/skills/learning-efficiency-book`
+- `~/.claude/skills/<name>` → `~/.local/share/claude-private/skills/<name>`（private repo の `skills/` 配下すべて）
 
 ---
 
 ## 1. 新マシンへの初期セットアップ
 
-### 前提
-- `git`, `curl` がインストール済み
-- `gh auth login` で GitHub 認証済み（`repo` スコープ必須。push 権限が必要）
+手順は README「導入手順」が正で、ここには写さない。
+Claude Code に関わる要点だけ書く。
 
-```sh
-# gh auth スコープ確認
-gh auth status
-# scopes に 'repo' がなければ追加
-gh auth refresh -s repo
-```
+- `~/.local/share/claude-private` の clone は `chezmoi apply` の external が行う。GitHub の認証（`gh auth login`、`repo` スコープ）が要るので、README のとおり初回は `--exclude=externals` でスクリプトを先に走らせる。
+- symlink の生成は chezmoi でなく hook が行う。Claude Code の SessionStart で `claude-private-sync.sh pull` が走る。
 
-### 手順
-
-```sh
-# 1. chezmoi のインストールと dotfiles の適用
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply haoblackj
-
-# 2. dotfiles のみ適用（新マシンでは install-packages スクリプトが走るので通常通り run_once を実行する）
-#    スキップしたい場合は --exclude=scripts を付ける
-chezmoi apply
-
-# 3. external が自動で clone される
-#    - ~/.claude/skills/book-to-skill   ← 公開スキル
-#    - ~/.local/share/claude-private    ← 機密（memory + 書籍スキル）
-#    確認:
-ls ~/.claude/skills/book-to-skill
-ls ~/.local/share/claude-private/memory
-
-# 4. Claude Code を起動 → SessionStart hook が自動で pull + symlink 生成
-```
-
-> chezmoi apply が external（`claude-private`）を clone するため、**gh 認証が必須**。
-> 認証前に apply するとスキップされる。その場合は認証後 `chezmoi apply` を再実行。
-
-### 手動で symlink を作る場合（hook が動く前に確認したいとき）
+hook が動く前に symlink を確認したいときは、hook を直接叩く。
 
 ```sh
 ~/.claude/hooks/claude-private-sync.sh pull
 # 実行後に確認:
 ls -la ~/.claude/projects/*/memory
-ls -la ~/.claude/skills/learning-efficiency-book
+ls -la ~/.claude/skills
 ```
 
 ---
@@ -86,12 +62,12 @@ sync script の `migrate_new()` 関数が**セッション終了時（Stop hook�
 #### 状況: 他マシンのメモリを手動で取り込みたい場合
 
 ```sh
-# このマシスで:
+# このマシンで:
 STAGE=~/.local/share/claude-private
 PROJ="<他マシンのプロジェクトディレクトリ名>"   # 例: -home-alice-repo-xxx
 
-# 1. 他マシスから取得（例: rsync / scp / wsl コピー等）
-#    他マシスの ~/.claude/projects/<PROJ>/memory/ の中身を
+# 1. 他マシンから取得（例: rsync / scp / wsl コピー等）
+#    他マシンの ~/.claude/projects/<PROJ>/memory/ の中身を
 mkdir -p "$STAGE/memory/$PROJ"
 cp -a /path/to/other/machine/memory/. "$STAGE/memory/$PROJ/"
 
@@ -122,7 +98,7 @@ ln -sf "$STAGE/skills/new-skill" ~/.claude/skills/new-skill
 
 ### 2-C. git pull 時の merge conflict 解消
 
-`claude-private` で複数マシスが並行してコミットしてコンフリクトした場合：
+`claude-private` で複数マシンが並行してコミットしてコンフリクトした場合：
 
 ```sh
 cd ~/.local/share/claude-private
@@ -172,7 +148,7 @@ git merge origin/main   # コンフリクトがあれば次のセクション(3)
 
 ## コンテキスト
 ~/.local/share/claude-private で git merge conflict が発生しました。
-複数マシスからの同期によりメモリ(*.md)ファイルにコンフリクトマーカーが入っています。
+複数マシンからの同期によりメモリ(*.md)ファイルにコンフリクトマーカーが入っています。
 
 ## やること
 1. `git -C ~/.local/share/claude-private diff --name-only --diff-filter=U` でコンフリクトファイルを確認
@@ -229,7 +205,7 @@ git merge origin/main   # コンフリクトがあれば次のセクション(3)
 2. セッション終了時 Stop hook が `migrate_new()` を実行  
    → 実ディレクトリを `claude-private/memory/<new-proj>/` にコピー → commit/push  
    → 元の実ディレクトリを symlink に置換
-3. 他マシスの次回セッション開始時に SessionStart hook が pull → symlink 生成
+3. 他マシンの次回セッション開始時に SessionStart hook が pull → symlink 生成
 
 ---
 
