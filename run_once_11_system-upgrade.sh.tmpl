@@ -1,6 +1,7 @@
 #!/bin/bash
 set -eu
 
+# sudo は環境変数を落とすので、debconf の対話を止める DEBIAN_FRONTEND は env 経由で渡す
 echo "システムパッケージのアップグレード"
-sudo apt update -y
-sudo apt upgrade -y
+sudo env DEBIAN_FRONTEND=noninteractive apt-get update -y
+sudo env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y

@@ -26,18 +26,51 @@ fi
 # enable）は run_once_99。ここは apt より前に効かせるため、ソースのスクリプトを直接 1 回実行する。
 sudo sh {{ joinPath .chezmoi.sourceDir "wsl-static-dns.sh" | quote }}
 
-# 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
-# レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
-if command -v zsh >/dev/null 2>&1; then
-  echo "zshインストール済"
-else
-  echo "zshインストール"
-  sudo apt update
-  sudo apt install zsh -y
-  sudo usermod -s /usr/bin/zsh "$USER"
+# ---------------------------------------------------------------------------
+# apt はこのスクリプトだけが扱う（apt upgrade は run_once_11）。ツール側のスクリプト
+# （brew / pyenv / deno / nvim）は apt を持たず、必要なパッケージはここで先に入る。
+# sudo は環境変数を落とすので、debconf の対話（keyboard-configuration 等）を止める
+# DEBIAN_FRONTEND は env 経由で渡す。apt でなく apt-get を使うのは、apt が
+# スクリプト向けの CLI 安定を保証しておらず、非 TTY で警告を出すため。
+# ---------------------------------------------------------------------------
+apt_get() {
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get "$@"
+}
+
+apt_get update -y
+
+# リポジトリ追加に要るものを先に入れる（add-apt-repository は software-properties-common、
+# docker の鍵取得と codename 判定は curl / gnupg / lsb-release）
+apt_get install -y ca-certificates curl gnupg lsb-release software-properties-common
+
+repo_added=0
+
+# wslu（wslview で Windows 側のブラウザを開く）の PPA。24.04 では deb822 の .sources、
+# 旧版では .list で置かれるので拡張子を固定しない
+if ! ls /etc/apt/sources.list.d/wslutilities-ubuntu-wslu-* >/dev/null 2>&1; then
+  echo "wslu の PPA を追加"
+  sudo env DEBIAN_FRONTEND=noninteractive add-apt-repository -y -n ppa:wslutilities/wslu
+  repo_added=1
 fi
 
-sudo apt update -y && sudo apt install -y \
+# docker の公式リポジトリ
+if [ ! -f /etc/apt/keyrings/docker.gpg ] || [ ! -f /etc/apt/sources.list.d/docker.list ]; then
+  echo "docker のリポジトリを追加"
+  sudo mkdir -p /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+  repo_added=1
+fi
+
+if [ "$repo_added" = 1 ]; then
+  apt_get update -y
+fi
+
+# パッケージは 1 回の install にまとめる。導入済みのものは apt が素通しする。
+# 名前が無い版（例: libasound2 が 24.04 で libasound2t64）に当たると全体が落ちるので、
+# Ubuntu の版を上げたらここを見る。
+echo "apt パッケージ一括インストール"
+apt_get install -y \
   apt-transport-https \
   bubblewrap \
   ca-certificates \
@@ -52,7 +85,54 @@ sudo apt update -y && sudo apt install -y \
   libnss3 \
   zip \
   unzip \
-  xdg-utils
+  xdg-utils \
+  zsh \
+  language-pack-ja \
+  wslu \
+  libgtk2.0-0 \
+  libgtk-3-0 \
+  libnotify-dev \
+  libxss1 \
+  libasound2t64 \
+  libxtst6 \
+  xauth \
+  xvfb \
+  libgbm-dev \
+  fonts-ipafont \
+  build-essential \
+  procps \
+  file \
+  libssl-dev \
+  zlib1g-dev \
+  libbz2-dev \
+  libreadline-dev \
+  libsqlite3-dev \
+  libncurses-dev \
+  libffi-dev \
+  liblzma-dev \
+  tk-dev \
+  uuid-dev \
+  libnss3-dev \
+  libgdbm-dev \
+  libdb-dev \
+  libexpat1-dev \
+  golang-go \
+  docker-ce \
+  docker-compose-plugin
+# 上の一覧の由来:
+#   基本 (apt-transport-https 〜 xdg-utils)、zsh、日本語ロケール (language-pack-ja)、
+#   wslu、GUI 系ライブラリ (libgtk2.0-0 〜 fonts-ipafont)、Homebrew の前提
+#   (build-essential procps file)、pyenv の Python ビルド依存 (libssl-dev 〜 libexpat1-dev)、
+#   go、docker
 
-sudo apt install -y language-pack-ja
+# ログインシェルを zsh に（再ログインで効く）
+if [ "$(getent passwd "$USER" | cut -d: -f7)" != "/usr/bin/zsh" ]; then
+  sudo usermod -s /usr/bin/zsh "$USER"
+fi
+
+# docker グループ（再ログインで効く）
+if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+  sudo usermod -aG docker "$USER"
+fi
+
 sudo localectl set-locale LANG=ja_JP.UTF-8

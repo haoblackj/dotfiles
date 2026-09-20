@@ -76,7 +76,7 @@ systemd が動いていない Ubuntu イメージではここで失敗するの�
 ### 3. WSL を入れ直す
 
 Windows 側で `wsl --shutdown` してから再度開く。
-ログインシェルの zsh 化（`run_once_10` の `usermod -s`）と docker グループ（`run_once_70`）は、再ログインしないと効かない。
+ログインシェルの zsh 化と docker グループ（どちらも `run_once_10` の `usermod`）は、再ログインしないと効かない。
 DNS は `run_once_10` が `wsl-static-dns.sh` を即実行して公開リゾルバに固定するのでブートストラップ中から効く（恒久化は `wsl-static-dns.service` と `wsl.conf` の `generateResolvConf=false`）。
 再起動後のシェルは zsh が brew を読むので `gh` が PATH に載る。次の external clone がこれを要るので、順序として再起動を先に置く。
 
@@ -115,15 +115,14 @@ claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`
 
 | スクリプト | 中身 |
 |---|---|
-| `run_once_10_system-base` | ブートストラップ用 sudo ドロップイン、公開 DNS 固定（`wsl-static-dns.sh` を 1 回実行）、zsh、apt の基本パッケージ、日本語ロケール |
-| `run_once_11_system-upgrade` | `apt upgrade` |
+| `run_once_10_system-base` | ブートストラップ用 sudo ドロップイン、公開 DNS 固定（`wsl-static-dns.sh` を 1 回実行）、**apt のすべて**（wslu と docker のリポジトリ追加、基本パッケージ、zsh、GUI ライブラリ、brew と pyenv の前提、go、docker）、zsh 化、docker グループ、日本語ロケール |
+| `run_once_11_system-upgrade` | `apt-get upgrade` |
 | `run_onchange_12_system-files` | `/etc/wsl.conf` `/etc/default/keyboard` `/etc/fonts/local.conf` `wsl-static-dns.sh` `wsl-static-dns.service` をソースから `/etc` と `/usr/local/bin` へコピー。内容が変わると再実行 |
-| `run_once_20_wslu` | wslu（`xdg-open` で Windows のブラウザを開く）と GUI 系ライブラリ |
 | `run_once_30_linuxbrew` | Homebrew |
-| `run_once_40_python-env` | pyenv / pyenv-virtualenv とビルド依存 |
+| `run_once_40_python-env` | pyenv / pyenv-virtualenv（brew） |
 | `run_once_50_node-env` | nvm |
-| `run_once_60_languages` | go / deno |
-| `run_once_70_editors-containers` | neovim（AppImage）/ docker |
+| `run_once_60_languages` | deno |
+| `run_once_70_editors-containers` | neovim（AppImage） |
 | `run_once_80_cli-tools` | **brew の Brewfile。CLI ツールの一覧はここを見る**（claude-code は `cask "claude-code@latest"`） |
 | `run_once_82_npm-global` | nvm の LTS と npm グローバル（ccstatusline は pin、yarn、commitizen） |
 | `run_once_83` / `84` / `86` | herdr の agent skill、プラグイン、Claude Code 統合 |

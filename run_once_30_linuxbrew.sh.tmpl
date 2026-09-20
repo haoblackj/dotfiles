@@ -7,7 +7,7 @@ if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
   echo "linuxbrewインストール済"
 else
   echo "linuxbrewインストール開始"
-  sudo apt-get install -y build-essential procps curl file git
+  # 前提の apt パッケージ（build-essential procps curl file git）は run_once_10 が入れる
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi

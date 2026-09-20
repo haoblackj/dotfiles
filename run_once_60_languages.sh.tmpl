@@ -1,15 +1,9 @@
 #!/bin/bash
 set -eu
 
+# go は apt の golang-go で run_once_10 が入れる。ここは apt 以外の導入だけ。
 # 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
 # レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
-if command -v go >/dev/null 2>&1; then
-  echo "goインストール済"
-else
-  echo "goインストール開始"
-  sudo apt install -y golang-go
-fi
-
 # deno は ~/.deno/bin に入り、run_once の非対話シェルでは PATH に載らないので実体で見る
 if [ -x "$HOME/.deno/bin/deno" ] || command -v deno >/dev/null 2>&1; then
   echo "denoインストール済"

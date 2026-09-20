@@ -7,24 +7,7 @@ set -eu
 if command -v pyenv >/dev/null 2>&1; then
   echo "pyenvインストール済"
 else
-  echo "pyenvビルド依存パッケージインストール"
-  sudo apt update && sudo apt install -y \
-    build-essential \
-    libssl-dev \
-    zlib1g-dev \
-    libbz2-dev \
-    libreadline-dev \
-    libsqlite3-dev \
-    libncurses-dev \
-    libffi-dev \
-    liblzma-dev \
-    tk-dev \
-    uuid-dev \
-    libnss3-dev \
-    libgdbm-dev \
-    libdb-dev \
-    libexpat1-dev
-
+  # Python のビルド依存（libssl-dev 等の apt パッケージ）は run_once_10 が入れる
   echo "pyenvインストール開始"
   brew install pyenv
   brew install pyenv-virtualenv
