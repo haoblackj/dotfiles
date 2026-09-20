@@ -61,9 +61,16 @@ export PATH="$PYENV_ROOT/bin:$PATH"
 export LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix zlib)/lib"
 export CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix zlib)/include"
 
-# 初期化
-eval "$(pyenv init - zsh)"
-eval "$(pyenv virtualenv-init -)"
+# 初期化は turbo モードでプロンプト表示後に行う。init と virtualenv-init で合わせて
+# 0.3 秒（xtrace 実測）かかり、中で bash と pyenv 本体を起動しているのが主因。
+# shims の PATH だけは同期で通しておき、プロンプト直後に打った python が shims 経由で
+# 解決するようにする。仮想環境の自動切替フック（virtualenv-init の precmd）と
+# pyenv 関数（activate / shell）は読み込み完了後に効き始める。
+# z-shell/null は中身の無いプラグインで、atinit のコードを turbo に乗せるためだけに使う。
+export PATH="$PYENV_ROOT/shims:$HOMEBREW_PREFIX/opt/pyenv-virtualenv/shims:$PATH"
+zinit wait lucid for \
+  atinit'eval "$(pyenv init - zsh)"; eval "$(pyenv virtualenv-init -)"' \
+  z-shell/null
 
 # その他設定
 unsetopt nomatch
