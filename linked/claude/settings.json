@@ -1,19 +1,186 @@
 {
+  "agentPushNotifEnabled": true,
+  "askUserQuestionTimeout": "never",
   "cleanupPeriodDays": 36500,
+  "effortLevel": "high",
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": false,
+    "claude-code-setup@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "codex@openai-codex": true,
+    "compact-plus@compact-plus-local": true,
+    "pr-review-toolkit@claude-plugins-official": false,
+    "pyright-lsp@claude-plugins-official": true,
+    "reviewable-html-workbench@reviewable-html-workbench-local": true,
+    "security-guidance@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
   "env": {
     "CLAUDE_CODE_THRIFTY_SONIC": "0",
     "COMPACT_PLUS_FALLBACK_BACKEND": "tmp=$(mktemp \"${TMPDIR:-/tmp}/compact-plus-codex.XXXXXX\"); { printf \"%s\\n\\n\" \"$SYSTEM_PROMPT\"; cat; } | codex exec --model gpt-5.4-mini --sandbox read-only --skip-git-repo-check --dangerously-bypass-hook-trust --ignore-user-config --ephemeral --output-last-message \"$tmp\" - >/dev/null && cat \"$tmp\"; status=$?; rm -f \"$tmp\"; exit \"$status\"",
     "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
-    "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
     "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120",
+    "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
     "ENABLE_COMMIT_REVIEW": "0"
   },
+  "extraKnownMarketplaces": {
+    "compact-plus-local": {
+      "source": {
+        "repo": "u-ichi/compact-plus",
+        "source": "github"
+      }
+    },
+    "karpathy-skills": {
+      "source": {
+        "repo": "forrestchang/andrej-karpathy-skills",
+        "source": "github"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "repo": "openai/codex-plugin-cc",
+        "source": "github"
+      }
+    },
+    "reviewable-html-workbench-local": {
+      "source": {
+        "repo": "u-ichi/reviewable-html-workbench",
+        "source": "github"
+      }
+    },
+    "superpowers-marketplace": {
+      "source": {
+        "repo": "obra/superpowers-marketplace",
+        "source": "github"
+      }
+    }
+  },
+  "feedbackDrafts": "off",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/chezmoi-auto-apply.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "Write|Edit"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "rtk hook claude",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/route-deletes-to-trash.sh\"",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/guard-destructive-git.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/guard-agent-model-unspecified.sh\"",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Agent"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/claude-private-sync.sh pull",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/yagu001/.claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "^(startup|resume|clear|compact|fork)$"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/claude-private-sync.sh push",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/stop-fabricated-turn-guard.py",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/userpromptsubmit-compact-prep-reminder.sh",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "python3 ~/.claude/hooks/memory_recall.py",
+            "statusMessage": "関連メモリを検索中...",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "inputNeededNotifEnabled": true,
+  "outputStyle": "エクシア（能天使）",
   "permissions": {
     "allow": [
       "Bash(git *)",
       "Bash(git -C * *)",
       "Bash(chezmoi apply *)"
     ],
+    "ask": [
+      "Bash(claude -p:*)",
+      "Bash(claude --print:*)"
+    ],
+    "defaultMode": "auto",
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f*)",
@@ -23,187 +190,20 @@
       "Bash(git checkout --*)",
       "Bash(rm *)",
       "Bash(shred *)"
-    ],
-    "ask": [
-      "Bash(claude -p:*)",
-      "Bash(claude --print:*)"
-    ],
-    "defaultMode": "auto"
+    ]
   },
+  "remoteControlAtStartup": true,
   "skillOverrides": {
     "book-to-skill": "off",
     "report-skills": "off"
   },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/claude-private-sync.sh pull"
-          }
-        ]
-      },
-      {
-        "matcher": "^(startup|resume|clear|compact|fork)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash '/home/yagu001/.claude/hooks/herdr-agent-state.sh' session",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/claude-private-sync.sh push"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/stop-fabricated-turn-guard.py"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "rtk hook claude"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/route-deletes-to-trash.sh\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/guard-destructive-git.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$HOME/.claude/hooks/guard-agent-model-unspecified.sh\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/chezmoi-auto-apply.sh"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/userpromptsubmit-compact-prep-reminder.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/.claude/hooks/memory_recall.py",
-            "timeout": 10,
-            "statusMessage": "関連メモリを検索中..."
-          }
-        ]
-      }
-    ]
-  },
+  "skipWorkflowUsageWarning": true,
   "statusLine": {
-    "type": "command",
     "command": "bash ~/.claude/hooks/statusline-context-window.sh",
     "padding": 0,
-    "refreshInterval": 30
+    "refreshInterval": 30,
+    "type": "command"
   },
-  "enabledPlugins": {
-    "skill-creator@claude-plugins-official": true,
-    "andrej-karpathy-skills@karpathy-skills": false,
-    "superpowers@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true,
-    "compact-plus@compact-plus-local": true,
-    "reviewable-html-workbench@reviewable-html-workbench-local": true,
-    "codex@openai-codex": true,
-    "code-review@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": false,
-    "pyright-lsp@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true
-  },
-  "extraKnownMarketplaces": {
-    "karpathy-skills": {
-      "source": {
-        "source": "github",
-        "repo": "forrestchang/andrej-karpathy-skills"
-      }
-    },
-    "superpowers-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "obra/superpowers-marketplace"
-      }
-    },
-    "compact-plus-local": {
-      "source": {
-        "source": "github",
-        "repo": "u-ichi/compact-plus"
-      }
-    },
-    "reviewable-html-workbench-local": {
-      "source": {
-        "source": "github",
-        "repo": "u-ichi/reviewable-html-workbench"
-      }
-    },
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    }
-  },
-  "outputStyle": "エクシア（能天使）",
-  "remoteControlAtStartup": true,
-  "effortLevel": "high",
-  "askUserQuestionTimeout": "never",
-  "tui": "fullscreen",
-  "skipWorkflowUsageWarning": true,
   "switchModelsOnFlag": true,
-  "inputNeededNotifEnabled": true,
-  "agentPushNotifEnabled": true,
-  "feedbackDrafts": "off"
+  "tui": "fullscreen"
 }
