@@ -9,8 +9,8 @@ set -eu
 # WSL2 の sudo-rs は sudo の認証をプロセスの壁を越えて共有しないため（同一セッションの
 # 別スクリプトでも引き継がない。Ubuntu 26.04 / sudo-rs 0.2.13 で実測）、これが無いと
 # run_once の各本（別々の子プロセス）で毎回パスワードを聞かれる。ここで最初の 1 回だけ
-# 認証し、以降の run_once を無人化する。撤去は run_once_99 の末尾。途中で apply が
-# 中断したら README「導入手順」の手動削除コマンドで消す。
+# 認証し、以降の run_once を無人化する。撤去は run_after_99_remove-bootstrap-sudo.sh が
+# 毎回の apply の末尾で行う（中断した apply の後も、次に完走した apply で消える）。
 # 記法は `NOPASSWD: ALL`。sudo-rs は `Defaults:<user> !authenticate` を解さない（実測）。
 CHEZMOI_SUDO_DROPIN=/etc/sudoers.d/00-chezmoi-bootstrap
 if [ ! -f "$CHEZMOI_SUDO_DROPIN" ]; then

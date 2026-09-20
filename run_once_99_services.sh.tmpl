@@ -12,10 +12,6 @@ systemctl --user start bitwarden-ssh-agent
 sudo systemctl enable wsl-static-dns.service
 sudo systemctl enable docker
 
-# run_once_10 が置いたブートストラップ用の NOPASSWD ドロップインを撤去する。
-# ここまで到達したらブートストラップは完了しており、無認証 sudo を残す理由はない。
-sudo rm -f /etc/sudoers.d/00-chezmoi-bootstrap
-
 {{     end }}
 {{   end }}
 {{ end }}
