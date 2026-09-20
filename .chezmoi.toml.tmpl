@@ -49,3 +49,9 @@ umask = 0o022
 
 [diff]
     command = "delta"
+
+# 毎回走るスクリプト（run_after_99_remove-bootstrap-sudo.sh）は status に常に R で載り、
+# zsh 起動時のドリフト検知が毎回「実行待ち」を出してしまう。status からだけ除外する
+# （apply では走る）。
+[status]
+    exclude = ["always"]
