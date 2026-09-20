@@ -9,6 +9,13 @@ docs
 # bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
 ideas
 pyproject.toml
+# /etc と /usr/local/bin に置くファイル。run_onchange_12 がソースからコピーするので、
+# ホームへは配らない
+wsl.conf
+keyboard.conf
+local.conf
+wsl-static-dns.sh
+wsl-static-dns.service
 # Pythonテスト実行で生成されるバイトコードとキャッシュはapply対象外
 **/__pycache__
 **/__pycache__/**
@@ -50,13 +57,9 @@ pyproject.toml
 .gitconfig
 .inputrc
 fix_wayland.sh
-keyboard.conf
-local.conf
-wsl.conf
-wsl-static-dns.service
-run_once_install-packages.sh
 10_system-base.sh
 11_system-upgrade.sh
+12_system-files.sh
 20_wslu.sh
 30_linuxbrew.sh
 40_python-env.sh
@@ -73,7 +76,6 @@ run_once_install-packages.sh
 90_reload-herdr-umask.sh
 99_services.sh
 99_remove-bootstrap-sudo.sh
-wsl-static-dns.sh
 setup_vall_e_x.sh
 .config/fontconfig
 .config/gh

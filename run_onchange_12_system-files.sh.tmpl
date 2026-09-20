@@ -1,0 +1,28 @@
+#!/bin/bash
+set -eu
+
+{{ if eq .chezmoi.os "linux" }}
+{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
+{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+
+# システム側（/etc、/usr/local/bin）に置くファイルをソースからコピーする。
+# 以前はソースディレクトリへの symlink だったため、/etc がソースの置き場所に縛られ、
+# ホームにも同名の死んだコピーが配られていた。内容のハッシュを埋め込み、変わったときだけ再実行する。
+# 初回の DNS 固定は apt より前に効かせる必要があるので run_once_10 が別途 1 回実行する。
+# wsl.conf hash: {{ include "wsl.conf" | sha256sum }}
+# keyboard.conf hash: {{ include "keyboard.conf" | sha256sum }}
+# local.conf hash: {{ include "local.conf" | sha256sum }}
+# wsl-static-dns.sh hash: {{ include "wsl-static-dns.sh" | sha256sum }}
+# wsl-static-dns.service hash: {{ include "wsl-static-dns.service" | sha256sum }}
+
+SRC={{ .chezmoi.sourceDir | quote }}
+sudo install -m 0644 -o root -g root "$SRC/wsl.conf" /etc/wsl.conf
+sudo install -m 0644 -o root -g root "$SRC/keyboard.conf" /etc/default/keyboard
+sudo install -m 0644 -o root -g root "$SRC/local.conf" /etc/fonts/local.conf
+sudo install -m 0755 -o root -g root "$SRC/wsl-static-dns.sh" /usr/local/bin/wsl-static-dns.sh
+sudo install -m 0644 -o root -g root "$SRC/wsl-static-dns.service" /etc/systemd/system/wsl-static-dns.service
+sudo systemctl daemon-reload
+
+{{     end }}
+{{   end }}
+{{ end }}
