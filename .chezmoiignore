@@ -3,6 +3,7 @@
 # ** を含まないパターンはターゲットのルートからしか一致しないので、/ 無しで同じ意味になる。
 README.md
 CLAUDE.md
+AGENTS.md
 LICENSE
 install.sh
 docs
@@ -72,7 +73,6 @@ fix_wayland.sh
 84_herdr-plugins.sh
 85_gh-setup.sh
 86_herdr-integration-claude.sh
-87_wikiwalk-tool.sh
 90_reload-herdr-umask.sh
 99_services.sh
 99_remove-bootstrap-sudo.sh
@@ -82,7 +82,6 @@ setup_vall_e_x.sh
 .config/lazygit
 .config/nvim
 zsh
-install-packages.sh
 .codex
 {{- end }}
 
@@ -102,6 +101,7 @@ install-packages.sh
 .config/glazewm
 scoop
 .wezterm.lua
-AppData/Roaming/alacritty
+# Windows Terminal 等の設定。Windows 側の chezmoi だけが配る
+AppData
 ubuntu-(wsl-zsh).ps1
 {{- end }}
