@@ -37,6 +37,9 @@ umask = 0o022
 [data]
     location = {{ $location | quote }}
     isWSL = {{ $isWSL }}
+    # devcontainer は WSL のカーネルを共有するので isWSL が真になる。run_once の実行可否
+    # （.chezmoiignore）と .zshrc の wsl_only.zsh 読み込みは、この 2 つの組で判定する。
+    isDevcontainer = {{ eq (env "REMOTE_CONTAINERS") "true" }}
     windowsUsername = {{ $windowsUsername | quote }}
 
 [edit]

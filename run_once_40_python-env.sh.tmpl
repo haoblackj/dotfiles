@@ -1,19 +1,7 @@
 #!/bin/bash
 set -eu
 
-{{ if eq .chezmoi.os "linux" }}
-{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-{{     if ne (env "REMOTE_CONTAINERS") "true" }}
-
-# 非インタラクティブシェルでは .profile が読まれないため brew を PATH に追加
-if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
-
-export HOMEBREW_NO_AUTO_UPDATE=1
-# Homebrew 7 以降は依存を伴う brew install が TTY 上で [y/n] を聞く（ask モード）。止める
-export HOMEBREW_NO_ASK=1
-
+{{ template "brew-env.sh" }}
 # 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
 # レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
 if command -v pyenv >/dev/null 2>&1; then
@@ -41,7 +29,3 @@ else
   brew install pyenv
   brew install pyenv-virtualenv
 fi
-
-{{     end }}
-{{   end }}
-{{ end }}

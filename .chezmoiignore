@@ -39,9 +39,17 @@ wsl-static-dns.service
 .claude/compact-plus-backend/*.test.sh
 .claude/compact-plus-backend/*.bats
 
-{{- if eq (env "REMOTE_CONTAINERS") "true" }}
-# devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi aplly の対象から外す
+{{- if .isDevcontainer }}
+# devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi apply の対象から外す
 .gitconfig
+{{- end }}
+
+{{- if or (not .isWSL) .isDevcontainer }}
+# ルート直下の *.sh は WSL の実機向け（run_once / run_onchange / run_after のスクリプトと、
+# fix_wayland.sh、setup_vall_e_x.sh）。WSL 以外と devcontainer では展開も実行もしない。
+# 判定を各スクリプトの三重ガードからここへ集約した。判定の元は .chezmoi.toml.tmpl の data
+# （isWSL / isDevcontainer）で、init 時に決まる。
+*.sh
 {{- end }}
 
 {{ if eq .chezmoi.os "windows" -}}
@@ -57,26 +65,6 @@ wsl-static-dns.service
 .gitignore
 .gitconfig
 .inputrc
-fix_wayland.sh
-10_system-base.sh
-11_system-upgrade.sh
-12_system-files.sh
-20_wslu.sh
-30_linuxbrew.sh
-40_python-env.sh
-50_node-env.sh
-60_languages.sh
-70_editors-containers.sh
-80_cli-tools.sh
-82_npm-global.sh
-83_herdr-skill.sh
-84_herdr-plugins.sh
-85_gh-setup.sh
-86_herdr-integration-claude.sh
-90_reload-herdr-umask.sh
-99_services.sh
-99_remove-bootstrap-sudo.sh
-setup_vall_e_x.sh
 .config/fontconfig
 .config/gh
 .config/lazygit
@@ -89,10 +77,8 @@ zsh
 # Linux マシンのため、下記ファイルは chezmoi apply の対象から外す
 # .wslconfig は Windows のユーザーホームに置くファイルで、WSL/Linux 側では読まれない
 .wslconfig
-# run_onchange_after_50_komorebi-fetch-asc.bat.tmpl のターゲット名
-50_komorebi-fetch-asc.bat
-# run_once_after_55_komorebi-zebar-autostart.bat.tmpl のターゲット名
-55_komorebi-zebar-autostart.bat
+# run_*.bat.tmpl（komorebi / zebar のスクリプト）のターゲット名
+*.bat
 .config/komorebi
 .config/whkd
 .config/wezterm

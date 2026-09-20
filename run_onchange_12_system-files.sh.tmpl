@@ -1,10 +1,6 @@
 #!/bin/bash
 set -eu
 
-{{ if eq .chezmoi.os "linux" }}
-{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-{{     if ne (env "REMOTE_CONTAINERS") "true" }}
-
 # システム側（/etc、/usr/local/bin）に置くファイルをソースからコピーする。
 # 以前はソースディレクトリへの symlink だったため、/etc がソースの置き場所に縛られ、
 # ホームにも同名の死んだコピーが配られていた。内容のハッシュを埋め込み、変わったときだけ再実行する。
@@ -22,7 +18,3 @@ sudo install -m 0644 -o root -g root "$SRC/local.conf" /etc/fonts/local.conf
 sudo install -m 0755 -o root -g root "$SRC/wsl-static-dns.sh" /usr/local/bin/wsl-static-dns.sh
 sudo install -m 0644 -o root -g root "$SRC/wsl-static-dns.service" /etc/systemd/system/wsl-static-dns.service
 sudo systemctl daemon-reload
-
-{{     end }}
-{{   end }}
-{{ end }}

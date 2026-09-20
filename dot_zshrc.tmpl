@@ -32,14 +32,9 @@ fi
 source ~/zsh/plugins.zsh
 source ~/zsh/config.zsh
 source ~/zsh/alias.zsh
-{{ if eq .chezmoi.os "linux" }}
-{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-{{     if ne (env "REMOTE_CONTAINERS") "true" }}
+{{ if and .isWSL (not .isDevcontainer) -}}
 source ~/zsh/wsl_only.zsh
-{{     end }}
-{{   end }}
 {{ end }}
-
 # To customize prompt, run `p10k configure` or edit .../zsh/p10k.zsh.
 [[ ! -f ~/zsh/p10k.zsh ]] || source ~/zsh/p10k.zsh
 

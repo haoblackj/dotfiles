@@ -1,10 +1,6 @@
 #!/bin/bash
 set -eu
 
-{{ if eq .chezmoi.os "linux" }}
-{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-{{     if ne (env "REMOTE_CONTAINERS") "true" }}
-
 {{ $wsluPath := lookPath "xdg-open" }}
 {{ if $wsluPath }}
 echo "wsluインストール済"
@@ -27,7 +23,3 @@ sudo apt install -y \
   xvfb \
   libgbm-dev \
   fonts-ipafont
-
-{{     end }}
-{{   end }}
-{{ end }}

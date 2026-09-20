@@ -1,14 +1,6 @@
 #!/bin/bash
 set -eu
 
-{{ if eq .chezmoi.os "linux" }}
-{{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-{{     if ne (env "REMOTE_CONTAINERS") "true" }}
-
 echo "システムパッケージのアップグレード"
 sudo apt update -y
 sudo apt upgrade -y
-
-{{     end }}
-{{   end }}
-{{ end }}
