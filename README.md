@@ -23,10 +23,11 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 
 ## 前提（chezmoi を動かす前に済ませること）
 
-1. WSL2 に Ubuntu を入れ、Linux ユーザー名を `yagu001` にする。
-   `dot_zshrc.tmpl`（`/home/yagu001/.deno/env`）と `bitwarden-ssh-agent.service`（`/mnt/c/Users/yagu001/...`）が絶対パスで参照している。
+1. WSL2 に Ubuntu を入れる。Linux ユーザー名は任意（設定は `$HOME` で参照する）。
+   Windows Terminal の `settings.json`（Windows 側 chezmoi が配る）だけは WSL 側のパス `/home/yagu001` を直書きしているので、名前を変えるならそこを合わせる。
 2. WSL の interop を有効のままにしておく。
    `.chezmoi.toml.tmpl` が `powershell.exe` を呼んで Windows 側ユーザー名を取り、`.gitconfig` と `.profile` に埋め込む。
+   `powershell.exe` が PATH に無い経路（SSH ログイン等）で `chezmoi init` すると、代わりに 1 回だけ対話で聞く。
 3. Windows 側に Bitwarden Desktop を入れ、設定で SSH agent を有効にしてログインとアンロックを済ませる。
    `npiperelay.exe` を `C:\Users\<Windowsユーザー名>\AppData\Local\Programs\npiperelay\npiperelay.exe` に置く。
    unit ファイル（`bitwarden-ssh-agent.service.tmpl`）は、`.chezmoi.toml.tmpl` が powershell で取った `.windowsUsername` からこのパスを埋めるので、Windows ユーザー名がマシンごとに違っても追従する。
@@ -50,9 +51,9 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin" init haoblackj
 ```
 
 sudo のパスワードは `run_once_10` の最初で 1 回だけ聞かれる。
-`run_once_10` が `/etc/sudoers.d/00-chezmoi-bootstrap` に「このユーザーを NOPASSWD」のドロップインを置き、以降の run_once を無人化して、`run_once_99` の末尾で消す。
+`run_once_10` が `/etc/sudoers.d/00-chezmoi-bootstrap` に「このユーザーを NOPASSWD」のドロップインを置き、以降の run_once を無人化して、毎回の apply の末尾で走る `run_after_99_remove-bootstrap-sudo.sh` が消す。
 WSL2 の sudo（sudo-rs）は認証をプロセスの壁を越えて共有せず、run_once の各本が別々の子プロセスなので、`sudo -v` とバックグラウンドの延命ループでは無人化できない（Ubuntu 26.04 / sudo-rs 0.2.13 で実測）。ドロップインだけが子プロセスに効く。
-apply が `run_once_99` に届く前に中断した場合はドロップインが残る。完走させれば 99 が消すが、ブートストラップ自体をやめるなら手で消す。
+apply が途中で中断した場合はドロップインが残るが、次に完走した apply の末尾で消える。ブートストラップ自体をやめるなら手で消す。
 
 ```sh
 sudo rm -f /etc/sudoers.d/00-chezmoi-bootstrap
@@ -69,7 +70,7 @@ chezmoi はターゲットをパス順に処理するので、`.local/share/clau
 - `gh auth login -w`（`run_once_85`。ブラウザで device code を入力する）
 
 `run_once_99` は `systemctl --user` を使う。
-systemd が動いていない Ubuntu イメージではここで失敗するので、Windows 側から `wsl --shutdown` して入り直し、同じコマンドを再実行する（`run_once_10` が `/etc/wsl.conf` を `systemd=true` の設定へ symlink 済み）。
+systemd が動いていない Ubuntu イメージではここで失敗するので、Windows 側から `wsl --shutdown` して入り直し、同じコマンドを再実行する（`run_onchange_12` が `systemd=true` の `/etc/wsl.conf` を配置済み）。
 失敗した run_once スクリプトは記録に残らず次回の apply で再実行される（実機で確認済み）。
 
 ### 3. WSL を入れ直す
@@ -114,8 +115,9 @@ claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`
 
 | スクリプト | 中身 |
 |---|---|
-| `run_once_10_system-base` | 公開 DNS 固定（`wsl-static-dns`）、`/etc/wsl.conf` `/etc/fonts/local.conf` `/etc/default/keyboard` の symlink、zsh、apt の基本パッケージ、日本語ロケール |
+| `run_once_10_system-base` | ブートストラップ用 sudo ドロップイン、公開 DNS 固定（`wsl-static-dns.sh` を 1 回実行）、zsh、apt の基本パッケージ、日本語ロケール |
 | `run_once_11_system-upgrade` | `apt upgrade` |
+| `run_onchange_12_system-files` | `/etc/wsl.conf` `/etc/default/keyboard` `/etc/fonts/local.conf` `wsl-static-dns.sh` `wsl-static-dns.service` をソースから `/etc` と `/usr/local/bin` へコピー。内容が変わると再実行 |
 | `run_once_20_wslu` | wslu（`xdg-open` で Windows のブラウザを開く）と GUI 系ライブラリ |
 | `run_once_30_linuxbrew` | Homebrew |
 | `run_once_40_python-env` | pyenv / pyenv-virtualenv とビルド依存 |
@@ -126,9 +128,9 @@ claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`
 | `run_once_82_npm-global` | nvm の LTS と npm グローバル（ccstatusline は pin、yarn、commitizen） |
 | `run_once_83` / `84` / `86` | herdr の agent skill、プラグイン、Claude Code 統合 |
 | `run_once_85_gh-setup` | `gh auth login` と gh 拡張 |
-| `run_onchange_87_wikiwalk-tool` | `uv tool install` で wikiwalk。リモート HEAD が動くと再実行 |
 | `run_onchange_after_90` | herdr の umask override を変えたら service を restart |
 | `run_once_99_services` | `bitwarden-ssh-agent` の enable/start、`wsl-static-dns.service` と docker の enable |
+| `run_after_99_remove-bootstrap-sudo` | 毎回の apply の末尾で、`run_once_10` の sudo ドロップインが残っていれば消す |
 
 ツールを足すときは該当スクリプトに 1 行足す。
 run_once は内容のハッシュが変わると再実行されるが、既導入分はスキップされる作りになっている（`.claude/rules/run_once.md`）。
