@@ -12,7 +12,7 @@
       {
         "id": "1",
         "type": "custom-command",
-        "commandPath": "/home/yagu001/.config/ccstatusline/model-name.sh",
+        "commandPath": "$HOME/.config/ccstatusline/model-name.sh",
         "timeout": 1000,
         "color": "hex:26bbd9"
       },
@@ -26,7 +26,7 @@
       {
         "id": "usage-battery",
         "type": "custom-command",
-        "commandPath": "/home/yagu001/.config/ccstatusline/usage-battery.sh",
+        "commandPath": "$HOME/.config/ccstatusline/usage-battery.sh",
         "timeout": 1000,
         "preserveColors": true
       }
@@ -61,7 +61,7 @@
       {
         "id": "issue-pr-links",
         "type": "custom-command",
-        "commandPath": "/home/yagu001/.config/ccstatusline/issue-pr-links.sh",
+        "commandPath": "$HOME/.config/ccstatusline/issue-pr-links.sh",
         "timeout": 1000,
         "color": "hex:ee64ac"
       },
@@ -76,7 +76,7 @@
       {
         "id": "git-status-counts",
         "type": "custom-command",
-        "commandPath": "/home/yagu001/.config/ccstatusline/git-status-counts.sh",
+        "commandPath": "$HOME/.config/ccstatusline/git-status-counts.sh",
         "timeout": 1000,
         "color": "hex:fbc3a7"
       }

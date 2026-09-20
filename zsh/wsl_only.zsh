@@ -3,7 +3,7 @@ export PATH="$HOME/.local/bin:$PATH"
 # tfenv は未インストール（~/.tfenv が存在しない）。使い始めるときに戻す。
 #export PATH="$HOME/.tfenv/bin:$PATH"
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
-export DENO_INSTALL="/home/yagu001/.deno"
+export DENO_INSTALL="$HOME/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 export PATH=$HOME/bin:/usr/local/bin:$PATH
 # 2行目と同じものを足していた重複。

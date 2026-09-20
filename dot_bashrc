@@ -1,43 +1,5 @@
-#if [ -f ~/.ssh-agent ]; then
-#    . ~/.ssh-agent
-#fi
-#if [ -z "$SSH_AGENT_PID" ] || ! kill -0 $SSH_AGENT_PID; then
-#    ssh-agent > ~/.ssh-agent
-#    . ~/.ssh-agent
-#fi
-#ssh-add -l >& /dev/null || ssh-add
+# bash は予備のシェル。常用は zsh（dot_zshrc.tmpl）で、ここには PATH の最低限だけ置く。
 alias dotfilespull='git -C dotfiles/ pull'
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-service docker status > /dev/null 2>&1
-if [ -n "$(which wslpath)" ]; then
-if [ $? = 1 ]; then
-    sudo service docker start
-fi
-fi
-
-# Go Path設定
-#export GOPATH=$HOME
-#export PATH=$PATH:$GOPATH/bin
-# export PATH=$PATH:/usr/local/go/bin
-
-# asdf Path設定
-export PATH="$HOME/.asdf/bin:$PATH"
-
-export PYENV_ROOT="${HOME}/.pyenv"
-if [ -d "${PYENV_ROOT}" ]; then
-    export PATH=${PYENV_ROOT}/bin:$PATH
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)"
-fi
-export PYENV_ROOT="${HOME}/.pyenv"
-if [ -d "${PYENV_ROOT}" ]; then
-    export PATH=${PYENV_ROOT}/bin:$PATH
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)"
-fi
-. "/home/yagu001/.deno/env"
 
 # Homebrew 環境変数の設定（ユーザー or システムインストール対応）
 if [ -d "$HOME/.linuxbrew" ]; then
@@ -45,3 +7,9 @@ if [ -d "$HOME/.linuxbrew" ]; then
 elif [ -d "/home/linuxbrew/.linuxbrew" ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+[ -f "$HOME/.deno/env" ] && . "$HOME/.deno/env"
