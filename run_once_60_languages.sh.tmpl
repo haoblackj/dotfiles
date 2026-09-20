@@ -5,21 +5,22 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
-{{ $goPath := lookPath "go" }}
-{{ if $goPath }}
-echo "goインストール済"
-{{ else }}
-echo "goインストール開始"
-sudo apt install -y golang-go
-{{ end }}
+# 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
+# レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
+if command -v go >/dev/null 2>&1; then
+  echo "goインストール済"
+else
+  echo "goインストール開始"
+  sudo apt install -y golang-go
+fi
 
-{{ $denoPath := lookPath "deno" }}
-{{ if $denoPath }}
-echo "denoインストール済"
-{{ else }}
-echo "denoインストール開始"
-curl -fsSL https://deno.land/x/install/install.sh | sh -s -- -y
-{{ end }}
+# deno は ~/.deno/bin に入り、run_once の非対話シェルでは PATH に載らないので実体で見る
+if [ -x "$HOME/.deno/bin/deno" ] || command -v deno >/dev/null 2>&1; then
+  echo "denoインストール済"
+else
+  echo "denoインストール開始"
+  curl -fsSL https://deno.land/x/install/install.sh | sh -s -- -y
+fi
 
 {{     end }}
 {{   end }}

@@ -5,15 +5,16 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
-{{ $linuxbrewPath := lookPath "brew" }}
-{{ if $linuxbrewPath }}
-echo "linuxbrewインストール済"
-{{ else }}
-echo "linuxbrewインストール開始"
-sudo apt-get install -y build-essential procps curl file git
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-{{ end }}
+# 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
+# レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
+if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+  echo "linuxbrewインストール済"
+else
+  echo "linuxbrewインストール開始"
+  sudo apt-get install -y build-essential procps curl file git
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
 
 {{     end }}
 {{   end }}

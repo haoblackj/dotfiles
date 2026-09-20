@@ -37,15 +37,16 @@ sudo ln -snfv ~/.local/share/chezmoi/wsl.conf /etc/wsl.conf
 sudo ln -snfv ~/.local/share/chezmoi/local.conf /etc/fonts/local.conf
 sudo ln -snfv ~/.local/share/chezmoi/keyboard.conf /etc/default/keyboard
 
-{{ $zshPath := lookPath "zsh" }}
-{{ if $zshPath }}
-echo "zshインストール済"
-{{ else }}
-echo "zshインストール"
-sudo apt update
-sudo apt install zsh -y
-sudo usermod -s /usr/bin/zsh "$USER"
-{{ end }}
+# 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
+# レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
+if command -v zsh >/dev/null 2>&1; then
+  echo "zshインストール済"
+else
+  echo "zshインストール"
+  sudo apt update
+  sudo apt install zsh -y
+  sudo usermod -s /usr/bin/zsh "$USER"
+fi
 
 sudo apt update -y && sudo apt install -y \
   apt-transport-https \

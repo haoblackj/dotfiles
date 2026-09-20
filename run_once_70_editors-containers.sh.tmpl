@@ -5,31 +5,31 @@ set -eu
 {{   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 {{     if ne (env "REMOTE_CONTAINERS") "true" }}
 
-{{ $neovimPath := lookPath "nvim" }}
-{{ if $neovimPath }}
-echo "neovimインストール済"
-{{ else }}
-echo "neovimインストール開始"
-curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
-chmod u+x nvim-linux-x86_64.appimage
-./nvim-linux-x86_64.appimage --appimage-extract
-sudo mv squashfs-root /
-sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
-{{ end }}
+# 導入済み判定はテンプレートの lookPath でなく実行時に行う。lookPath だと導入前後で
+# レンダリング結果（内容ハッシュ）が変わり、導入後に一度「実行待ち」が出る。
+if command -v nvim >/dev/null 2>&1; then
+  echo "neovimインストール済"
+else
+  echo "neovimインストール開始"
+  curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage
+  chmod u+x nvim-linux-x86_64.appimage
+  ./nvim-linux-x86_64.appimage --appimage-extract
+  sudo mv squashfs-root /
+  sudo ln -s /squashfs-root/AppRun /usr/local/bin/nvim
+fi
 
-{{ $dockerPath := lookPath "docker" }}
-{{ if $dockerPath }}
-echo "dockerインストール済"
-{{ else }}
-echo "dockerインストール開始"
-sudo apt install -y ca-certificates curl gnupg lsb-release
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
-sudo apt update
-sudo apt install -y docker-ce docker-compose-plugin
-sudo usermod -aG docker "$USER"
-{{ end }}
+if command -v docker >/dev/null 2>&1; then
+  echo "dockerインストール済"
+else
+  echo "dockerインストール開始"
+  sudo apt install -y ca-certificates curl gnupg lsb-release
+  sudo mkdir -p /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+  sudo apt update
+  sudo apt install -y docker-ce docker-compose-plugin
+  sudo usermod -aG docker "$USER"
+fi
 
 {{     end }}
 {{   end }}
