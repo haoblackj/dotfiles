@@ -68,8 +68,10 @@ wsl-static-dns.service
 .gitignore
 .gitconfig
 .inputrc
-# Windows では Claude Code を使わず、symlink の作成に権限も要るので settings.json だけ外す
-.claude/settings.json
+# Windows では Claude Code を使わないので、~/.claude 全体と external の 2 つ
+# （book-to-skill、claude-private の clone）を配らない
+.claude
+.local/share/claude-private
 .config/fontconfig
 .config/gh
 .config/lazygit

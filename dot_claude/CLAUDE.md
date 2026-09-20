@@ -56,6 +56,7 @@
 ## ホーム配下の設定ファイルはchezmoi前提で扱う
 
 - `~/.claude/`等のホーム配下のファイルはchezmoi管理下のことがある。編集したら`chezmoi re-add <file>`でソース（`~/.local/share/chezmoi/`）へ取り込み、chezmoiリポジトリ側でコミットまで一続きで行う。リーダーに「chezmoiがあります」と指摘させない。
+- 例外は `~/.claude/settings.json`。ソースの `linked/claude/settings.json` への symlink なので、編集はそのままソースへ届き、`re-add` は不要。chezmoi リポジトリで `git commit -- linked/claude/settings.json` だけ行う。キー順の揺れは git の clean filter が吸収するので、順序だけの差は `git status` に出ない（経緯は dotfiles の README「ソースとターゲットの往復」）。
 - ソース側を直接編集するとPostToolUse hookが`chezmoi apply ~/.claude/`を走らせる。他ファイルにソース未反映の乖離があるとその変更ごと上書きされるため、乖離があるときはターゲット側を編集して`re-add`する側を選ぶ。
 - 検知は`~/.claude/hooks/chezmoi-auto-apply.sh`が担うが、管理ファイル一覧を60分キャッシュするので新規に管理下へ入れた直後は黙ることがある。hookの通知がなくても上記は自分で守る。
 - chezmoiリポジトリでのgit操作は、コミットでパスを名指しする。複数セッションが同じソースを触るので、index に載せたファイルが別セッションのコミットへ巻き込まれる事故が実際に起きた。

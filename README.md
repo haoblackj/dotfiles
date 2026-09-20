@@ -19,7 +19,7 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 | Windows 側 | `dot_wslconfig.tmpl` / `dot_config/{komorebi,whkd,yasb,glazewm,scoop}` / `dot_glzr/` / `AppData/` / `*.bat.tmpl` | Windows ネイティブの chezmoi が配る。下記「Windows 側」 |
 | 非公開データ | `.chezmoiexternal.toml` → `~/.local/share/claude-private` | memory と機密スキル。private repo `haoblackj/claude-private` |
 
-`.chezmoiignore` が OS ごとに配布対象を振り分ける（Windows では Linux 用のファイルとスクリプトを、Linux では Windows 用のファイルを除外）。
+`.chezmoiignore` が OS ごとに配布対象を振り分ける（Windows では Linux 用のファイルとスクリプト、それに Claude Code 関連の `~/.claude` と external 2 つを、Linux では Windows 用のファイルを除外）。
 
 ## 前提（chezmoi を動かす前に済ませること）
 
