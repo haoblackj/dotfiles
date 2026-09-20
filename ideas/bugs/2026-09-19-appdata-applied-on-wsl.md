@@ -13,3 +13,8 @@ WSL 側でも管理対象に載っていた。実際に `/home/yagu001/AppData` 
 
 同じ `chezmoi managed` の出力で、`AGENTS.md` も WSL 側のターゲット（`~/AGENTS.md`）に載っていた。
 `.chezmoiignore` には `/README.md` `/CLAUDE.md` はあるが `/AGENTS.md` が無い。
+
+## 結果（2026-09-20、クローズ）
+
+`.chezmoiignore` の Linux 側に `AppData` を、無条件側に `AGENTS.md` を追加し、
+配られていた `~/AppData` と `~/AGENTS.md` はゴミ箱へ移した。

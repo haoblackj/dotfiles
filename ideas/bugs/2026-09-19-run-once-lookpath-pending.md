@@ -21,3 +21,10 @@ WSL 再構築の完走後、再起動して zsh に入ると、chezmoi のドリ
 対して `run_once_50_node-env.sh.tmpl` はスクリプト内の実行時チェック
 （`[ -s "$HOME/.nvm/nvm.sh" ]`）でやっていてハッシュが安定し、pending を出さない。
 30/40/60/70 も同様に実行時 `command -v` 判定へ寄せれば pending は消えるはず（未検証）。
+
+## 結果（2026-09-20、クローズ）
+
+10/30/40/60/70 を実行時判定へ書き換えた。`run_once_20`（`lookPath "xdg-open"`）は見落として
+いたが、apt を `run_once_10` へ統合した際に 20 ごと消えた。この判定は元から誤りで、
+`xdg-open` は 10 が入れる `xdg-utils` が提供するため、新規構築では wslu が入らなかった。
+規則は `.claude/rules/run_once.md` に書いた。
