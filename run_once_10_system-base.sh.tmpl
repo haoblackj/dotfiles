@@ -53,6 +53,24 @@ if ! ls /etc/apt/sources.list.d/wslutilities-ubuntu-wslu-* >/dev/null 2>&1; then
   repo_added=1
 fi
 
+# この PPA は oracular (24.10) を最後に新しいシリーズを出していない（2026-09 時点。upstream に
+# 新シリーズ向けの issue も .deb 配布も無い）ので、26.04 (resolute) では apt update が 404 で
+# 落ちる。現行シリーズが PPA に無ければ noble のビルドを使う。wslu の依存は desktop-file-utils /
+# bc / psmisc だけで中身はシェルスクリプトなので、noble のビルドが新しい版にもそのまま入る。
+# 差し替えは「無いとき」だけなので、PPA が現行シリーズを出せば新規構築では正規のものを使う。
+wslu_ppa=https://ppa.launchpadcontent.net/wslutilities/wslu/ubuntu
+codename="$(lsb_release -cs)"
+if ! curl -fsSI "$wslu_ppa/dists/$codename/Release" >/dev/null 2>&1; then
+  for f in /etc/apt/sources.list.d/wslutilities-ubuntu-wslu-*; do
+    [ -e "$f" ] || continue
+    if grep -qw "$codename" "$f"; then
+      echo "wslu の PPA に $codename が無いので noble のビルドを使う"
+      sudo sed -i "s/\b$codename\b/noble/" "$f"
+      repo_added=1
+    fi
+  done
+fi
+
 # docker の公式リポジトリ
 if [ ! -f /etc/apt/keyrings/docker.gpg ] || [ ! -f /etc/apt/sources.list.d/docker.list ]; then
   echo "docker のリポジトリを追加"
