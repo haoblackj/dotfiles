@@ -47,6 +47,12 @@ wsl-static-dns.service
 .gitconfig
 {{- end }}
 
+{{- if not .isHome }}
+# Bitwarden の SSH agent（npiperelay.exe 経由）は自宅 PC だけ。職場機ではマルウェア検知に
+# 当たるので unit を配らない。既に配った機は run_once_99 が disable --now で止める。
+.config/systemd/user/bitwarden-ssh-agent.service
+{{- end }}
+
 {{- if or (not .isWSL) .isDevcontainer }}
 # ルート直下の *.sh は WSL の実機向け（run_once / run_onchange / run_after のスクリプトと、
 # fix_wayland.sh、setup_vall_e_x.sh）。WSL 以外と devcontainer では展開も実行もしない。

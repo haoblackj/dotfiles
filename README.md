@@ -28,11 +28,13 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 2. WSL の interop を有効のままにしておく。
    `.chezmoi.toml.tmpl` が `powershell.exe` を呼んで Windows 側ユーザー名を取り、`.gitconfig` と `.profile` に埋め込む。
    `powershell.exe` が PATH に無い経路（SSH ログイン等）で `chezmoi init` すると、代わりに 1 回だけ対話で聞く。
-3. Windows 側に Bitwarden Desktop を入れ、設定で SSH agent を有効にしてログインとアンロックを済ませる。
+3. 自宅 PC だけ: Windows 側に Bitwarden Desktop を入れ、設定で SSH agent を有効にしてログインとアンロックを済ませる。
    `npiperelay.exe` を `C:\Users\<Windowsユーザー名>\AppData\Local\Programs\npiperelay\npiperelay.exe` に置く。
    unit ファイル（`bitwarden-ssh-agent.service.tmpl`）は、`.chezmoi.toml.tmpl` が powershell で取った `.windowsUsername` からこのパスを埋めるので、Windows ユーザー名がマシンごとに違っても追従する。
 
 `bitwarden-ssh-agent.service` が使う `socat` は `run_once_10` の基本 apt パッケージに含めてあるので手動導入は要らない。
+
+Bitwarden 関連（この unit と `run_once_99` での起動、`run_once_80` の `bitwarden-cli`、`zsh/config.zsh` の `SSH_AUTH_SOCK`）は、`.chezmoi.toml.tmpl` の `isHome`（Windows 側の `USERDOMAIN` が `HIRO`。WSL では powershell で取る）が真のときだけ配って走らせる。職場機では `npiperelay.exe` 経由の agent がマルウェア検知に当たるため。`isHome` は `chezmoi init` のときに決まるので、この仕組みより前に init した機では `chezmoi init` を一度やり直してから apply する（既に動いている agent は `run_once_99` が止める）。
 
 ## 導入手順
 

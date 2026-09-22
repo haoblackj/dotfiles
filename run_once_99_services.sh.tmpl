@@ -2,8 +2,14 @@
 set -eu
 
 systemctl --user disable --now ssh-agent 2>/dev/null || true
+{{ if .isHome -}}
 systemctl --user enable bitwarden-ssh-agent
 systemctl --user start bitwarden-ssh-agent
+{{- else -}}
+# Bitwarden の SSH agent は自宅 PC だけ（.chezmoi.toml.tmpl の isHome）。unit は .chezmoiignore で
+# 配らないが、この変更より前に配った機では動いたままなので、あれば止める。
+systemctl --user disable --now bitwarden-ssh-agent 2>/dev/null || true
+{{- end }}
 
 sudo systemctl enable wsl-static-dns.service
 sudo systemctl enable docker

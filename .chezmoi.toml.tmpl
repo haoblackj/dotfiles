@@ -3,29 +3,32 @@
   {{- $isWSL = contains "microsoft" (.chezmoi.kernel.osrelease | lower) -}}
 {{- end -}}
 
-{{- $location := "work" -}}
-
-{{- if $isWSL -}}
-    {{- $location = "wsl" -}}
-{{- else -}}
-    {{- $domain := env "USERDOMAIN" -}}
-    {{- if eq $domain "HIRO" -}}
-        {{- $location = "home" -}}
-    {{- end -}}
-{{- end -}}
-
-{{- /* WSL側ユーザー名は yagu001 に統一しているため、実際の Windows 側ユーザー名は
-      env経由では取れない（WSLENVで明示共有した変数しか渡らない）。
-      WSLインタロップ経由で powershell.exe を直接叩いて動的に取得する。
+{{- /* 自宅 PC の判定は Windows 側の USERDOMAIN が HIRO であること。Windows では env で
+      そのまま取れる。WSL 側はユーザー名を yagu001 に統一していて、Windows 側のユーザー名も
+      USERDOMAIN も env 経由では取れない（WSLENV で明示共有した変数しか渡らない）ので、
+      WSL インタロップ経由で powershell.exe を 1 回だけ叩いて 2 つまとめて取る。
       SSH ログイン等で /mnt/c が PATH に無く powershell.exe が見つからないときは、
-      init の 1 回だけ対話で聞く（promptStringOnce は既存の設定値があればそれを使う）。 */ -}}
+      init の 1 回だけ対話で聞く（prompt*Once は既存の設定値があればそれを使う）。 */ -}}
 {{- $windowsUsername := "" -}}
+{{- $isHome := false -}}
 {{- if $isWSL -}}
     {{- if lookPath "powershell.exe" -}}
-        {{- $windowsUsername = output "powershell.exe" "-NoProfile" "-Command" "$env:UserName" | trim -}}
+        {{- $ps := output "powershell.exe" "-NoProfile" "-Command" "$env:UserName; $env:USERDOMAIN" | trim | splitList "\n" -}}
+        {{- $windowsUsername = index $ps 0 | trim -}}
+        {{- $isHome = eq (index $ps 1 | trim) "HIRO" -}}
     {{- else -}}
         {{- $windowsUsername = promptStringOnce . "windowsUsername" "Windows 側のユーザー名（powershell.exe が PATH に無いため手入力）" -}}
+        {{- $isHome = promptBoolOnce . "isHome" "自宅 PC か（Windows 側の USERDOMAIN が HIRO なら y。powershell.exe が PATH に無いため手入力）" false -}}
     {{- end -}}
+{{- else -}}
+    {{- $isHome = eq (env "USERDOMAIN") "HIRO" -}}
+{{- end -}}
+
+{{- $location := "work" -}}
+{{- if $isWSL -}}
+    {{- $location = "wsl" -}}
+{{- else if $isHome -}}
+    {{- $location = "home" -}}
 {{- end -}}
 
 # SSHログインでは pam_umask が /etc/login.defs の USERGROUPS_ENAB=yes を見て
@@ -41,6 +44,10 @@ umask = 0o022
     # （.chezmoiignore）と .zshrc の wsl_only.zsh 読み込みは、この 2 つの組で判定する。
     isDevcontainer = {{ eq (env "REMOTE_CONTAINERS") "true" }}
     windowsUsername = {{ $windowsUsername | quote }}
+    # 自宅 PC（Windows 側の USERDOMAIN が HIRO）。Bitwarden 関連（SSH agent の unit と
+    # 起動、bitwarden-cli、zsh の SSH_AUTH_SOCK）は自宅以外では配らず走らせない。
+    # 職場機では npiperelay.exe 経由の agent がマルウェア検知に当たるため。
+    isHome = {{ $isHome }}
 
 [edit]
     command = "code"

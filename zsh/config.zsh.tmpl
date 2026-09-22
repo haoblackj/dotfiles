@@ -129,8 +129,12 @@ export GH_CONFIG_DIR=~/.config/gh
 # tfenv は未インストール（~/.tfenv が存在しない）。使い始めるときに戻す。
 #export PATH="$HOME/.tfenv/bin:$PATH"
 
-# ssh-agent設定(Bitwarden Desktop SSH Agent -> npiperelay/socat経由)
+{{ if .isHome -}}
+# ssh-agent設定(Bitwarden Desktop SSH Agent -> npiperelay/socat経由)。自宅 PC だけ
+# （.chezmoi.toml.tmpl の isHome）。職場機では agent 自体を配らないので向け先も置かない。
 export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/bitwarden-ssh-agent.sock"
+
+{{ end -}}
 
 # Homebrew一括アップデート関数
 brewup() {

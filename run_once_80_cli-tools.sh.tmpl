@@ -11,7 +11,9 @@ echo "CLIツール一括インストール開始（brew bundle）"
 brew bundle install --verbose --no-upgrade --file=- <<'BREWFILE'
 brew "aicommit2"      # AI でコミットメッセージ生成
 brew "bats-core"      # Bash のテストランナー（hook 群・morning スキルの *.bats が依存）
-brew "bitwarden-cli"  # パスワードマネージャ CLI
+{{ if .isHome -}}
+brew "bitwarden-cli"  # パスワードマネージャ CLI（Bitwarden 関連は自宅 PC だけ）
+{{ end -}}
 brew "ffmpeg"         # 音声・動画変換（kikimimi / VALL-E X のセットアップが依存）
 brew "fzf"            # ファジーファインダー
 brew "gemini-cli"     # Google Gemini モデルの CLI
