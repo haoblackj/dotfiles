@@ -15,6 +15,9 @@
 # ラベルに入る（0.9.1 で実測）。ラベルは1引数で渡し、-- を挟まない。
 #
 # fail-open: 常に exit 0。stdout には何も出さない。
+#
+# herdr サーバーが生きたまま応答しない場合に備え、herdr 呼び出しは timeout 5 で括る。
+# 括らないと statusline が呼ばれるたび（毎応答・30秒ごと）に子プロセスが終わらずに積み上がる。
 
 set -uo pipefail
 
@@ -33,9 +36,9 @@ STATE_DIR="${TMPDIR:-/tmp}/herdr-tab-title"
 STATE="$STATE_DIR/$PANE_ID"
 [[ -f "$STATE" && "$(cat -- "$STATE" 2>/dev/null)" == "$NAME" ]] && exit 0
 
-PANE_COUNT=$(herdr tab get "$TAB_ID" 2>/dev/null | jq -r '.result.tab.pane_count // empty' 2>/dev/null)
+PANE_COUNT=$(timeout 5 herdr tab get "$TAB_ID" 2>/dev/null | jq -r '.result.tab.pane_count // empty' 2>/dev/null)
 [[ "$PANE_COUNT" == 1 ]] || exit 0
 
-herdr tab rename "$TAB_ID" "$NAME" >/dev/null 2>&1 || exit 0
+timeout 5 herdr tab rename "$TAB_ID" "$NAME" >/dev/null 2>&1 || exit 0
 mkdir -p "$STATE_DIR" 2>/dev/null && printf '%s' "$NAME" > "$STATE" 2>/dev/null
 exit 0

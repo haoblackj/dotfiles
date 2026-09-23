@@ -8,7 +8,10 @@ setup() {
     export TMPDIR="$TMPDIR_TEST"
 
     # 偽の herdr。呼ばれるたびに引数を | 区切りで1行記録する。
-    #   tab get    -> FAKE_TAB_GET があればそれを、無ければ pane_count=FAKE_PANE_COUNT の JSON を返す
+    #   tab get    -> FAKE_HANG=1 なら応答せず sleep 30 で固まる（exec で置き換えるので、
+    #                 timeout に殺されたときに子プロセスが残らない）。
+    #                 それ以外は FAKE_TAB_GET があればそれを、無ければ
+    #                 pane_count=FAKE_PANE_COUNT の JSON を返す
     #   tab rename -> FAKE_RENAME_FAIL=1 なら exit 1
     FAKE_BIN="$TMPDIR_TEST/fakebin"
     mkdir -p "$FAKE_BIN"
@@ -16,6 +19,9 @@ setup() {
 #!/bin/bash
 { printf '%s|' "$@"; printf '\n'; } >> "$HERDR_LOG"
 if [ "$1" = tab ] && [ "$2" = get ]; then
+  if [ "${FAKE_HANG:-0}" = 1 ]; then
+    exec sleep 30
+  fi
   if [ -n "${FAKE_TAB_GET+x}" ]; then
     printf '%s' "$FAKE_TAB_GET"
   else
@@ -151,4 +157,16 @@ state_of() { # pane_id
     run bash "$SCRIPT" <<< 'not json'
     [ "$status" -eq 0 ]
     [ ! -s "$HERDR_LOG" ]
+}
+
+@test "tab getがハングする -> timeoutで打ち切られ8秒以内にexit 0、renameを呼ばない、前回値も記録しない" {
+    export FAKE_HANG=1
+    start_ns=$(date +%s%N)
+    run bash "$SCRIPT" <<< "$(input_with_name "タイトル")"
+    end_ns=$(date +%s%N)
+    elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
+    [ "$status" -eq 0 ]
+    [ "$elapsed_ms" -lt 8000 ]
+    ! grep -q '^tab|rename|' "$HERDR_LOG" || false
+    [ "$(state_of w1:p1)" = "" ]
 }
