@@ -123,14 +123,18 @@ comfy-batch-runner。番号は変わりうるので `herdr pane list` の `cwd` 
 セッションを立てるとは、次の一続きの操作を指す。
 
 1. `herdr pane list` で各ワークスペースの `cwd` を読み、対象リポジトリのワークスペースを特定する
-2. `herdr tab list` でそのワークスペースの既存ラベルを読み、表記の慣行に揃える
-   （`w8` は `#31 設計` `#34 nvfp4破綻` のように `#` と番号から始める短い名前。`Issue` は付けない。
-   `w7` は `rtk-hook` `gpu-tdr` のように内容の短い名前）
-3. `herdr tab create --workspace <id> --label "<揃えた名前>" --cwd <リポジトリ> --no-focus`
-4. 返された root pane へ `herdr agent start <名前> --kind claude --pane <id>`
-5. `herdr agent get` で `idle` を確かめる
-6. プロンプトを1回送る。`--wait` は付けない（指示を渡すだけなら待つ必要がなく、付けると
+2. `herdr tab create --workspace <id> --cwd <リポジトリ> --no-focus`（`--label` は付けない）
+3. 返された root pane へ `herdr agent start <名前> --kind claude --pane <id>`
+4. `herdr agent get` で `idle` を確かめる
+5. プロンプトを1回送る。`--wait` は付けない（指示を渡すだけなら待つ必要がなく、付けると
    相手の応答が落ち着くまで数分ブロックする）
+
+タブ名はフックが、そのタブで動く Claude Code のセッションタイトルに揃える（haoblackj/dotfiles#11）。
+自動生成のタイトルを `~/.claude/hooks/session-title-promote.sh` が名前へ格上げし、statusline から
+呼ばれる `~/.claude/hooks/herdr-tab-title-sync.sh` がタブ名へ写す。タイトルは `language` 設定で日本語になる。
+issue 番号の接頭辞（`#34` など）は付けず、タブ名を手で揃えない（リーダーとの合意）。手で付けた名前は、
+次にセッションタイトルが変わった時点で上書きされる。1つのタブに複数のペインがあると、フックは
+タブ名を変えない。
 
 既存のタブへ `pane split` で押し込まない。リーダーが具体的な操作を指示したときはその指示に従う。
 
