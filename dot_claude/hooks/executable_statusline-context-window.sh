@@ -13,10 +13,18 @@
 #
 # fail-open: マーカー書き込みに失敗しても、ccstatusline の実行(=画面表示)は必ず行う。
 # session_id は既存hookと同じ正規表現でパストラバーサル対策する。
+#
+# herdr のタブ名の同期（haoblackj/dotfiles#11）は herdr-tab-title-sync.sh に任せ、
+# 入力JSONを渡してバックグラウンドで呼ぶ。stdout と stderr を捨てるのは、子が
+# 表示のパイプを握ったままにならないようにするため。握ったままだと Claude Code が
+# パイプの終端を待ち、表示が遅れる。
 
 set -uo pipefail
 
 INPUT=$(cat)
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+printf '%s' "$INPUT" | bash "$HOOK_DIR/herdr-tab-title-sync.sh" >/dev/null 2>&1 &
 
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 WINDOW_SIZE=$(printf '%s' "$INPUT" | jq -r '.context_window.context_window_size // empty' 2>/dev/null)
