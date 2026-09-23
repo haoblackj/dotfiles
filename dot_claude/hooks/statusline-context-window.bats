@@ -198,3 +198,51 @@ wait_for_rename() { # 上限5秒
     [ "$output" = "$input" ]
     [ -z "$stderr" ]
 }
+
+rate_of() { # session_id
+    cat "$TMPDIR_TEST/claude-status-rate-limits/$1" 2>/dev/null || echo ''
+}
+
+@test "rate_limits の両方の枠 -> 枠ごとに used と resetsAt と changedAt" {
+    input='{"session_id":"rl-1","rate_limits":{"five_hour":{"used_percentage":38.5,"resets_at":1790170000},"seven_day":{"used_percentage":19,"resets_at":1790700000}}}'
+    run bash "$SCRIPT" <<< "$input"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$input" ]
+    [ "$(rate_of rl-1 | jq -c 'del(.fiveHour.changedAt, .sevenDay.changedAt)')" = '{"fiveHour":{"used":38.5,"resetsAt":1790170000},"sevenDay":{"used":19,"resetsAt":1790700000}}' ]
+    [[ "$(rate_of rl-1 | jq -r '.fiveHour.changedAt')" =~ ^[0-9]+$ ]]
+    [[ "$(rate_of rl-1 | jq -r '.sevenDay.changedAt')" =~ ^[0-9]+$ ]]
+}
+
+@test "同じ値で書き直すと changedAt を引き継ぎ、変わった枠だけ更新する" {
+    mkdir -p "$TMPDIR_TEST/claude-status-rate-limits"
+    printf '%s' '{"fiveHour":{"used":38,"resetsAt":1790170000,"changedAt":100},"sevenDay":{"used":5,"resetsAt":1790700000,"changedAt":200}}' > "$TMPDIR_TEST/claude-status-rate-limits/rl-2"
+    run bash "$SCRIPT" <<< '{"session_id":"rl-2","rate_limits":{"five_hour":{"used_percentage":38,"resets_at":1790170000},"seven_day":{"used_percentage":6,"resets_at":1790700000}}}'
+    [ "$(rate_of rl-2 | jq -r '.fiveHour.changedAt')" = "100" ]
+    [ "$(rate_of rl-2 | jq -r '.sevenDay.changedAt')" != "200" ]
+}
+
+@test "片方の枠だけ -> その枠のキーだけ書く" {
+    run bash "$SCRIPT" <<< '{"session_id":"rl-3","rate_limits":{"seven_day":{"used_percentage":5,"resets_at":1790700000}}}'
+    [ "$(rate_of rl-3 | jq -c 'has("fiveHour"), has("sevenDay")' | tr -d '\n')" = "falsetrue" ]
+}
+
+@test "rate_limits が無い -> ファイルを作らない、fail-open" {
+    input='{"session_id":"rl-4","context_window":{"context_window_size":1000000}}'
+    run bash "$SCRIPT" <<< "$input"
+    [ "$status" -eq 0 ]
+    [ "$(rate_of rl-4)" = "" ]
+}
+
+@test "rate_limits 用でも session_id のパストラバーサルを弾く" {
+    run bash "$SCRIPT" <<< '{"session_id":"../evil","rate_limits":{"five_hour":{"used_percentage":1,"resets_at":1790170000}}}'
+    [ "$status" -eq 0 ]
+    [ ! -e "$TMPDIR_TEST/evil" ]
+    [ -z "$(ls -A "$TMPDIR_TEST/claude-status-rate-limits" 2>/dev/null)" ]
+}
+
+@test "既存のファイルが FIFO でも読みに行かず固まらない" {
+    mkdir -p "$TMPDIR_TEST/claude-status-rate-limits"
+    mkfifo "$TMPDIR_TEST/claude-status-rate-limits/rl-5"
+    run timeout 5 bash "$SCRIPT" <<< '{"session_id":"rl-5","rate_limits":{"five_hour":{"used_percentage":1,"resets_at":1790170000}}}'
+    [ "$status" -eq 0 ]
+}

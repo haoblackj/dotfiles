@@ -3,6 +3,9 @@
 # マーカーファイルに書き込んでから、元のJSONをそのまま ccstatusline にパイプして表示を維持する。
 #   窓幅:   context_window.context_window_size → ${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID
 #   使用率: context_window.used_percentage     → ${TMPDIR:-/tmp}/claude-status-context-usage/$SESSION_ID
+#   残量:   rate_limits の5時間枠と週枠          → ${TMPDIR:-/tmp}/claude-status-rate-limits/$SESSION_ID
+#           home-dashboard の collector が全セッション分を読み、枠ごとに最新の値を選ぶ。
+#           渡る値に受信時刻が無いので、枠の値が変わった時刻を枠ごとの changedAt として残す。
 #
 # どちらも Claude Code 本体が計算した値で、公式ドキュメントは statusLine を「assistant の
 # 応答ごと」と「/compact 完了時」に再実行すると定めている。used_percentage は /compact 直後に
@@ -40,6 +43,39 @@ if [[ -n "$SESSION_ID" && "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
     mkdir -p "$USAGE_DIR" 2>/dev/null && printf '%s\n' "$USED_PCT" > "$USAGE_DIR/$SESSION_ID" 2>/dev/null
   else
     rm -f -- "$USAGE_DIR/$SESSION_ID" 2>/dev/null
+  fi
+
+  RATE_DIR="${TMPDIR:-/tmp}/claude-status-rate-limits"
+  RATE_FILE="$RATE_DIR/$SESSION_ID"
+  # 前回の値。通常のファイルのときだけ読む（FIFO やリンクを読んで固まったり他を読んだりしない）
+  PREV='{}'
+  if [[ -f "$RATE_FILE" && ! -L "$RATE_FILE" ]]; then
+    PREV=$(jq -c 'if type == "object" then . else {} end' "$RATE_FILE" 2>/dev/null) || PREV='{}'
+    [[ -n "$PREV" ]] || PREV='{}'
+  fi
+  RATE=$(printf '%s' "$INPUT" | jq -c --argjson prev "$PREV" --argjson now "$(date +%s)" '
+    def win($src; $key):
+      if ($src | type) == "object"
+         and ($src.used_percentage | type) == "number" and ($src.resets_at | type) == "number"
+      then {($key): {
+              used: $src.used_percentage,
+              resetsAt: $src.resets_at,
+              changedAt: (
+                if ($prev[$key] | type) == "object"
+                   and $prev[$key].used == $src.used_percentage
+                   and $prev[$key].resetsAt == $src.resets_at
+                   and ($prev[$key].changedAt | type) == "number"
+                then $prev[$key].changedAt else $now end)}}
+      else {} end;
+    (.rate_limits // {}) as $r
+    | if ($r | type) == "object" then win($r.five_hour; "fiveHour") + win($r.seven_day; "sevenDay") else {} end
+  ' 2>/dev/null)
+  # 一時ファイルに書いてから置き換え、collector が書きかけを読まないようにする
+  if [[ -n "$RATE" && "$RATE" != "{}" ]] && mkdir -p "$RATE_DIR" 2>/dev/null \
+     && RATE_TMP=$(mktemp "$RATE_DIR/.tmp.XXXXXX" 2>/dev/null); then
+    if ! { printf '%s\n' "$RATE" > "$RATE_TMP" && mv -f -- "$RATE_TMP" "$RATE_FILE"; } 2>/dev/null; then
+      rm -f -- "$RATE_TMP" 2>/dev/null
+    fi
   fi
 fi
 
