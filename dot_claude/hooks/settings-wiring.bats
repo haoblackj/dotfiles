@@ -9,7 +9,7 @@
 set -u
 
 setup() {
-    S=~/.local/share/chezmoi/linked/claude/settings.json
+    S="${S_OVERRIDE:-$HOME/.local/share/chezmoi/linked/claude/settings.json}"
 }
 
 # bats test_tags=production-asset
@@ -127,6 +127,38 @@ PY
 import json,sys
 d=json.load(open(sys.argv[1]))
 assert "compact-plus-local" in d.get("extraKnownMarketplaces",{}), "marketplace未宣言"
+print("PASS")
+PY
+}
+
+# bats test_tags=production-asset
+@test "languageがjapanese(自動タイトルを日本語に固定する。haoblackj/dotfiles#11)" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d.get("language")=="japanese", "language!=japanese"
+print("PASS")
+PY
+}
+
+# bats test_tags=production-asset
+@test "session-title-promote.shがSessionStartとUserPromptSubmitの両方に配線されている" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
+def cmds(ev): return " ".join(x.get("command","") for g in h.get(ev,[]) for x in g.get("hooks",[]))
+assert "session-title-promote.sh" in cmds("SessionStart"), "SessionStart に無い"
+assert "session-title-promote.sh" in cmds("UserPromptSubmit"), "UserPromptSubmit に無い"
+print("PASS")
+PY
+}
+
+# bats test_tags=production-asset
+@test "statusLineは従来どおりstatusline-context-window.shを指す" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert "statusline-context-window.sh" in d.get("statusLine",{}).get("command",""), "statusLine が変わっている"
 print("PASS")
 PY
 }

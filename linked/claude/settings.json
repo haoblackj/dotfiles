@@ -127,6 +127,14 @@
           }
         ],
         "matcher": "^(startup|resume|clear|compact|fork)$"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/session-title-promote.sh\"",
+            "type": "command"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -165,10 +173,19 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/session-title-promote.sh\"",
+            "type": "command"
+          }
+        ]
       }
     ]
   },
   "inputNeededNotifEnabled": true,
+  "language": "japanese",
   "outputStyle": "エクシア（能天使）",
   "permissions": {
     "allow": [
