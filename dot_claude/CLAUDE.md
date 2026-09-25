@@ -138,6 +138,27 @@ issue 番号の接頭辞（`#34` など）は付けず、タブ名を手で揃�
 
 既存のタブへ `pane split` で押し込まない。リーダーが具体的な操作を指示したときはその指示に従う。
 
+### 対話セッションでの実機検証
+
+フック、`/clear` などのスラッシュコマンド、チップやタブ名の表示のように、対話の Claude Code を
+動かさないと確かめられないものは、tmux ではなく Herdr のタブで検証する（リーダーの指示）。
+タブとして見えるので、リーダーが経過を追える。
+
+1. scratchpad に使い捨ての作業ディレクトリを作る。試すフックは `--settings <検証用 settings.json>` で
+   差し込み、フックの状態ファイル（`${TMPDIR}` の下の印など）は `TMPDIR=<検証用>` で本番と分ける。
+   本番のフックも同時に走るので、状態を分けないと互いの印を読み合う。
+2. `herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd <作業ディレクトリ> --no-focus`
+3. `herdr agent start <名前> --kind claude --pane <root pane> -- <claude の引数>`。`--` 以降の
+   `-n` や `--settings` はそのまま `claude` へ渡る（2026-09-25 に確認）。初めてのディレクトリでは
+   フォルダを信頼するかの確認が出るので、`herdr agent read` で画面を見て `herdr agent send-keys` で答える。
+4. スラッシュコマンドもプロンプトも `herdr agent prompt <名前> "<テキスト>"` で送る。応答を待つときは
+   `--wait --timeout <ms>` を付ける。
+5. `herdr tab get`（タブ名）、`herdr agent read --source visible`（チップと画面）、
+   `~/.claude/projects/<作業ディレクトリ由来の名前>/<session_id>.jsonl`（transcript）で結果を見る。
+6. 終わったら、自分で作ったタブを `herdr tab close` で閉じる。
+
+プロンプトは利用枠を消費するので、確かめたい挙動に要る最小の往復にとどめる。
+
 ## 決定論的処理を優先
 
 - ファイル出力・フォーマット遵守は、LLMの規律に頼らずスクリプトの責任にする。LLMは判断と生成、スクリプトは構造と入出力を担当する。
