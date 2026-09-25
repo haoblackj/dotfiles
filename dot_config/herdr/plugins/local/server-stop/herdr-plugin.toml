@@ -1,0 +1,24 @@
+id = "local.server-stop"
+name = "Server Stop"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "y/N を確かめてから herdr server stop を実行する。コマンドパレット（prefix+a）から呼ぶ。"
+platforms = ["linux", "macos"]
+
+# herdr 0.9.1 ではグローバルメニューが本体に固定で、プラグインから項目を足せない
+# （src/client/shell/global_menu.rs を確認、2026-09-25）。UI から呼ぶ口はコマンドパレットだけ。
+[[actions]]
+id = "stop"
+title = "Stop herdr server (all panes)"
+contexts = ["workspace"]
+command = ["bash", "-c", "exec \"${HERDR_BIN_PATH:-herdr}\" plugin pane open --plugin local.server-stop --entrypoint confirm --focus"]
+
+# サーバー停止は全ペインのプロセス（動いているエージェントを含む）を終わらせるので、
+# 押し間違いに備えてポップアップで y/N を聞く。
+[[panes]]
+id = "confirm"
+title = "Stop herdr server"
+placement = "popup"
+width = 60
+height = 8
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/confirm.sh\""]
