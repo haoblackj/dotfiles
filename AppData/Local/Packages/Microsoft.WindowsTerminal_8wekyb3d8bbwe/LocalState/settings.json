@@ -59,7 +59,8 @@
             }
         ]
     },
-    "schemes": 
+    "rendering.disablePartialInvalidation": true,
+    "schemes":
     [
         {
             "background": "#1C1E26",
