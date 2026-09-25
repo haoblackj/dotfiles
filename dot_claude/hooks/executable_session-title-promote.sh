@@ -11,6 +11,11 @@
 #   SessionStart:      入力の session_title がある（claude -n、名前付きセッションの resume）
 #   UserPromptSubmit:  jsonl に custom-title の行がある（最初のプロンプト前の /rename）
 #
+# /clear の後は例外（haoblackj/dotfiles#12）。Claude Code は格上げした名前を新しい会話へ
+# 引き継ぎ、名前付きのセッションには ai-title を生成しない。フックから名前は外せない
+# （空の sessionTitle は無視される）ので、SessionStart の source が clear のときは
+# 印の代わりに <session_id>.clear を置き、最初のプロンプトの先頭から題を作る。
+#
 # fail-open: 常に exit 0。
 
 set -uo pipefail
@@ -23,9 +28,15 @@ SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 
 MARK_DIR="${TMPDIR:-/tmp}/claude-session-titled"
 MARK="$MARK_DIR/$SESSION_ID"
+CLEARED="$MARK.clear"
 
 mark() {
   mkdir -p "$MARK_DIR" 2>/dev/null && : > "$MARK" 2>/dev/null
+}
+
+emit_title() { # $1 = title
+  jq -nc --arg t "$1" \
+    '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",sessionTitle:$t}}'
 }
 
 # jsonl から指定した type の行だけを取り出す。grep で候補を絞ってから jq で type を
@@ -38,11 +49,25 @@ records_of_type() { # $1 = type, $2 = transcript path
 
 case "$EVENT" in
   SessionStart)
+    SOURCE=$(printf '%s' "$INPUT" | jq -r '.source // empty' 2>/dev/null)
+    if [[ "$SOURCE" == clear ]]; then
+      mkdir -p "$MARK_DIR" 2>/dev/null && : > "$CLEARED" 2>/dev/null
+      exit 0
+    fi
     TITLE=$(printf '%s' "$INPUT" | jq -r '.session_title // empty' 2>/dev/null)
     [[ -n "$TITLE" ]] && mark
     ;;
   UserPromptSubmit)
     [[ -f "$MARK" ]] && exit 0
+    if [[ -f "$CLEARED" ]]; then
+      # 最初の空でない行の空白を詰め、先頭30文字（コードポイント）に切る。
+      TITLE=$(printf '%s' "$INPUT" | jq -r '
+        [.prompt // "" | split("\n")[] | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ")
+         | select(. != "")][0] // "" | .[0:30]' 2>/dev/null)
+      [[ -n "$TITLE" ]] || exit 0
+      emit_title "$TITLE" && mark
+      exit 0
+    fi
     TRANSCRIPT=$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
     [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]] || exit 0
     if [[ -n "$(records_of_type custom-title "$TRANSCRIPT" | head -n1)" ]]; then
@@ -51,8 +76,7 @@ case "$EVENT" in
     fi
     AI_TITLE=$(records_of_type ai-title "$TRANSCRIPT" | tail -n1 | jq -r '.aiTitle // empty' 2>/dev/null)
     [[ -n "$AI_TITLE" ]] || exit 0
-    jq -nc --arg t "$AI_TITLE" \
-      '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",sessionTitle:$t}}' && mark
+    emit_title "$AI_TITLE" && mark
     ;;
 esac
 exit 0

@@ -27,9 +27,14 @@ ss_input() { # session_id [session_title]
     fi
 }
 
-ups_input() { # session_id [transcript_path]
-    jq -nc --arg s "$1" --arg t "${2:-$TRANSCRIPT}" \
-        '{session_id:$s,hook_event_name:"UserPromptSubmit",transcript_path:$t,prompt:"x"}'
+ups_input() { # session_id [transcript_path] [prompt]
+    jq -nc --arg s "$1" --arg t "${2:-$TRANSCRIPT}" --arg p "${3:-x}" \
+        '{session_id:$s,hook_event_name:"UserPromptSubmit",transcript_path:$t,prompt:$p}'
+}
+
+ss_clear_input() { # session_id [session_title]
+    jq -nc --arg s "$1" --arg t "${2:-引き継いだ名前}" \
+        '{session_id:$s,hook_event_name:"SessionStart",source:"clear",session_title:$t}'
 }
 
 add_ai_title() { # title
@@ -128,4 +133,45 @@ add_ai_title() { # title
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     [ ! -e "$TMPDIR_TEST/evil" ]
+}
+
+@test "SessionStartでsourceがclear -> session_titleがあっても印を置かない" {
+    run bash "$SCRIPT" <<< "$(ss_clear_input sess-c1)"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    ! marked sess-c1 || false
+}
+
+@test "clear後の最初のプロンプト -> 引き継いだcustom-titleを無視し、プロンプトの先頭をsessionTitleにして印を置く" {
+    jq -nc '{type:"custom-title",customTitle:"引き継いだ名前",sessionId:"sess"}' >> "$TRANSCRIPT"
+    bash "$SCRIPT" <<< "$(ss_clear_input sess-c2)"
+    run bash "$SCRIPT" <<< "$(ups_input sess-c2 "$TRANSCRIPT" "Issue12に取り掛かろう")"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName')" = "UserPromptSubmit" ]
+    [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.sessionTitle')" = "Issue12に取り掛かろう" ]
+    marked sess-c2
+}
+
+@test "clear後の題 -> 最初の空でない行を、空白を詰めて先頭30文字に切る" {
+    bash "$SCRIPT" <<< "$(ss_clear_input sess-c3)"
+    prompt=$'\n   \n  あいうえお   かきくけこ\tさしすせそたちつてとなにぬねのはひふへほ\n二行目'
+    run bash "$SCRIPT" <<< "$(ups_input sess-c3 "$TRANSCRIPT" "$prompt")"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.sessionTitle')" = "あいうえお かきくけこ さしすせそたちつてとなにぬねのはひふ" ]
+}
+
+@test "clear後のプロンプトが空白だけ -> 何も出さず、印も置かない" {
+    bash "$SCRIPT" <<< "$(ss_clear_input sess-c4)"
+    run bash "$SCRIPT" <<< "$(ups_input sess-c4 "$TRANSCRIPT" $' \n\t ')"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    ! marked sess-c4 || false
+}
+
+@test "clear後に題を付けた後のプロンプト -> 何も出さない" {
+    bash "$SCRIPT" <<< "$(ss_clear_input sess-c5)"
+    bash "$SCRIPT" <<< "$(ups_input sess-c5 "$TRANSCRIPT" "最初の依頼")"
+    run bash "$SCRIPT" <<< "$(ups_input sess-c5 "$TRANSCRIPT" "次の依頼")"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
