@@ -2,6 +2,15 @@
 
 全プロジェクト共通の個人ポリシー。プロジェクト側 CLAUDE.md はこれを継承する。
 
+## クラウドセッション（環境変数 `CLAUDE_CODE_REMOTE=true`）での読み替え
+
+クラウドでは、このファイルは dotfiles の `install-cloud.sh` が配ったもの。手元の WSL 前提の記述を次のとおり読み替える。
+
+- 「ホーム配下の設定ファイルはchezmoi前提で扱う」「Herdr でのセッションの立て方」「環境の境界（WSL/Windows）」と、Codex への委譲の記述は適用しない。chezmoi / herdr / codex / trash-put はコンテナに無い。
+- superpowers などのプラグインは入っていない。スキル名での指定は、同じ手順を自分で踏む指示として読む。
+- auto memory は無い。memory に残すはずの教訓や退けられた判断は、issue か PR の説明に書くか、リーダーへ報告する。
+- 削除は `trash-put` の代わりに、追跡されたファイルなら `git rm`（git で戻せる）。追跡外のファイルは消す前にリーダーに確かめる。
+
 ## プラン実行方式
 
 - 実装プランの実行はサブエージェント駆動（superpowers:subagent-driven-development）をデフォルトとする。

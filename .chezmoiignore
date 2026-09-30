@@ -6,6 +6,9 @@ CLAUDE.md
 AGENTS.md
 LICENSE
 install.sh
+# クラウドセッション用の配布スクリプトとそのテスト。ホームへは配らない
+install-cloud.sh
+install-cloud.bats
 docs
 # bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
 ideas
