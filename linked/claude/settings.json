@@ -2,7 +2,6 @@
   "agentPushNotifEnabled": true,
   "askUserQuestionTimeout": "never",
   "cleanupPeriodDays": 36500,
-  "effortLevel": "high",
   "enabledPlugins": {
     "andrej-karpathy-skills@karpathy-skills": false,
     "claude-code-setup@claude-plugins-official": true,
