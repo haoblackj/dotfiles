@@ -230,7 +230,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 |---|---|---|
 | `dot_claude/CLAUDE.md` / `agents/` / `rules/` / `output-styles/` | 配る | 環境に依存しない。CLAUDE.md の WSL 前提の記述は、冒頭の「クラウドセッションでの読み替え」節で打ち消す |
 | settings.json の `outputStyle` / `language` / `effortLevel` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
-| `.chezmoiexternal.toml` のうち `.claude/` 配下の external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
+| `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
 | hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
 | `permissions` | 配らない | `deny` の `rm` を持ち込むと、`trash-put` の無いクラウドで削除の手段が無くなる。`defaultMode` はセッション側で決まる |
@@ -241,11 +241,15 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 - `dot_claude/` に何かを足したら、クラウドへ配るかをこの表で決める。配るなら `install-cloud.sh` の `COPY_ITEMS`（ディレクトリやファイル）か `SETTINGS_KEYS`（settings のキー）に足し、この表と `install-cloud.bats` を合わせる。
 - `COPY_ITEMS` はそのまま写すので、chezmoi の属性つきの名前（`executable_` / `dot_` / `*.tmpl` など）は入れられない。混ざるとスクリプトが警告を出す。
 - `dot_claude/CLAUDE.md` に手元専用の道具（chezmoi / herdr / codex / memory など）を前提にした節を足したら、冒頭の「クラウドセッションでの読み替え」節にも足す。
-- `.chezmoiexternal.toml` で `.claude/` 配下に足した external は自動で配られる。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
+- `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external は自動で配られる（`archive` / `file` は飛ばし、`clone.args` などのオプションは読まない）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
 - 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。
 - 取得に失敗しても exit 0 で抜ける（環境のセットアップ全体を落とさない）。効いていないと感じたら、セッションの Setup script のログに出る `[install-cloud]` の行を見る。
-- 手元で走らせると chezmoi 管理の `~/.claude` を上書きしうるので、`~/.claude/settings.json` が symlink か chezmoi のソースがある環境では何もせず exit 1 で抜ける。
-- テスト: `bats install-cloud.bats`（pre-push の bats に含まれる）。ブランチを試すときは Setup script で `DOTFILES_REF=<branch>` を渡し、raw URL のブランチ名も合わせる。
+- 手元で走らせると chezmoi 管理の `~/.claude` を上書きしうるので、`~/.claude/settings.json` が symlink、chezmoi のソースがある、chezmoi が PATH にある、のどれかなら何もせず exit 1 で抜ける。
+- テスト: `bats install-cloud.bats`（pre-push の bats に含まれる）。ブランチを試すときは、raw URL のブランチ名と `DOTFILES_REF` の両方を合わせ、変数は `bash` の側に渡す（`DOTFILES_REF=x curl ...` と書くと curl にしか渡らず、main が配られる）。
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/haoblackj/dotfiles/<branch>/install-cloud.sh | DOTFILES_REF=<branch> bash
+  ```
 
 ## herdr
 
