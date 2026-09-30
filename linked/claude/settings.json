@@ -222,5 +222,8 @@
     "type": "command"
   },
   "switchModelsOnFlag": true,
-  "tui": "fullscreen"
+  "tui": "fullscreen",
+  "worktree": {
+    "baseRef": "head"
+  }
 }
