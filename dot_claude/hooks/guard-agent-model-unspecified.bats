@@ -211,6 +211,12 @@ define_without_model() { # <dir> <name>
 }
 
 @test "名前付き・壊れた定義: 読めない定義は model ありとみなさず deny" {
+    # root には chmod 000 が効かず、読めない定義を作れない。飛ばすと確かめないまま
+    # 通って見えるので、理由を出して落とす（クラウドのコンテナは root で動く）
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "root では chmod 000 が効かず、このテストの前提（定義が読めない）を作れない。一般ユーザーで回す" >&2
+        return 1
+    fi
     define_with_model "$CWD/.claude/agents" reviewer
     chmod 000 "$CWD/.claude/agents/reviewer.md"
     run decide "$(named reviewer)"
