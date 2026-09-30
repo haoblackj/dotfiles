@@ -38,7 +38,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     run jq -c 'keys' "$HOME/.claude/settings.json"
-    [ "$output" = '["effortLevel","language","outputStyle"]' ]
+    [ "$output" = '["language","outputStyle"]' ]
     run jq -r '.outputStyle' "$HOME/.claude/settings.json"
     [ "$output" = "$(jq -r '.outputStyle' "$SRC/linked/claude/settings.json")" ]
 }

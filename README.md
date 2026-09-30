@@ -229,7 +229,8 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | 対象 | クラウドへ | 理由 |
 |---|---|---|
 | `dot_claude/CLAUDE.md` / `agents/` / `rules/` / `output-styles/` | 配る | 環境に依存しない。CLAUDE.md の WSL 前提の記述は、冒頭の「クラウドセッションでの読み替え」節で打ち消す |
-| settings.json の `outputStyle` / `language` / `effortLevel` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
+| settings.json の `outputStyle` / `language` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
+| settings.json の `effortLevel` | 配らない（手元でも持たない） | ユーザー設定の最上位の `effortLevel` は Opus 5.5 以降のモデルで無視される（公式の settings reference）。モデルの既定値（Opus 5.5 / Sonnet 5.5 は `medium`）に任せる |
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
 | hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
