@@ -62,7 +62,7 @@ deny() { # <reason>
 subagent_type=$(printf '%s' "$payload" | jq -r '.tool_input.subagent_type // ""' 2>/dev/null)
 case "$subagent_type" in
   ""|general-purpose)
-    deny "[guard-agent-model-unspecified] model を指定しないサブエージェント起動は、セッション既定(この環境では Opus 5 [1M] / effort high)をそのまま継承します。役と複雑さからティアを選び、\`model\` を明示して起動し直してください。参照: superpowers の subagent-driven-development/SKILL.md の \`## Model Selection\` 節。"
+    deny "[guard-agent-model-unspecified] model を指定しないサブエージェント起動は、セッションのモデルと effort をそのまま継承します。役と複雑さからティアを選び、\`model\` を明示して起動し直してください。参照: superpowers の subagent-driven-development/SKILL.md の \`## Model Selection\` 節。"
     ;;
   */*|.*)
     # 名前は外から来る値なので、パスの区切りや先頭のドットを含むものは agents/ の
@@ -134,4 +134,4 @@ fi
 
 case "$fields" in *$'\t'1) exit 0 ;; esac
 
-deny "[guard-agent-model-unspecified] 名前付きサブエージェント \`$subagent_type\` の定義 $definition の frontmatter に model がありません(または定義が読めません)。このままではセッション既定(この環境では Opus 5 [1M] / effort high)をそのまま継承します。定義の frontmatter に \`model:\` を書くか、起動側で \`model\` を明示してください。参照: superpowers の subagent-driven-development/SKILL.md の \`## Model Selection\` 節。"
+deny "[guard-agent-model-unspecified] 名前付きサブエージェント \`$subagent_type\` の定義 $definition の frontmatter に model がありません(または定義が読めません)。このままではセッションのモデルと effort をそのまま継承します。定義の frontmatter に \`model:\` を書くか、起動側で \`model\` を明示してください。参照: superpowers の subagent-driven-development/SKILL.md の \`## Model Selection\` 節。"
