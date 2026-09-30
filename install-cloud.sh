@@ -26,8 +26,11 @@ SETTINGS_KEYS=(outputStyle language effortLevel)
 
 log() { echo "[install-cloud] $*" >&2; }
 
-# 手元の chezmoi 管理の ~/.claude を上書きしない
-if [ -L "$HOME/.claude/settings.json" ] || [ -d "$HOME/.local/share/chezmoi/.git" ]; then
+# 手元の chezmoi 管理の ~/.claude を上書きしない。ソースの置き場所は
+# install.sh の --source で動きうるので、chezmoi 本体の有無でも見る
+# （クラウドのコンテナには chezmoi が無い）。
+if [ -L "$HOME/.claude/settings.json" ] || [ -d "$HOME/.local/share/chezmoi/.git" ] ||
+  command -v chezmoi >/dev/null 2>&1; then
   log "chezmoi 管理の環境で動いているので何もしない（クラウド専用のスクリプト）"
   exit 1
 fi
@@ -55,7 +58,7 @@ for item in "${COPY_ITEMS[@]}"; do
   fi
   # chezmoi の属性つきの名前が混ざったら知らせる（写した先で名前が化ける）
   odd=$(find "$from" -regextype posix-extended \
-    -regex '.*/(executable_|private_|readonly_|dot_|symlink_|empty_|exact_|create_|modify_|remove_)[^/]*|.*\.tmpl' \
+    -regex '.*/(executable_|private_|readonly_|literal_|encrypted_|dot_|symlink_|empty_|exact_|create_|modify_|remove_|run_)[^/]*|.*\.(tmpl|age|asc|literal)' \
     2>/dev/null)
   [ -n "$odd" ] && log "chezmoi の属性つきの名前がある。そのまま写すので名前を確かめる: $odd"
   rm -rf "${HOME:?}/.claude/$item"
@@ -67,11 +70,12 @@ done
 src_settings="$SRC/linked/claude/settings.json"
 dst_settings="$HOME/.claude/settings.json"
 if [ -f "$src_settings" ] && command -v jq >/dev/null 2>&1; then
-  keys_json=$(printf '%s\n' "${SETTINGS_KEYS[@]}" | jq -R . | jq -sc .)
-  [ -f "$dst_settings" ] || echo '{}' >"$dst_settings"
-  if jq --slurpfile src "$src_settings" --argjson keys "$keys_json" \
-    '. + ($src[0] | with_entries(select(.key as $k | $keys | index($k))))' \
-    "$dst_settings" >"$dst_settings.tmp"; then
+  # 空のファイルは jq が何も出さずに成功するので、中身が無ければ {} から始める
+  [ -s "$dst_settings" ] || echo '{}' >"$dst_settings"
+  if jq --slurpfile src "$src_settings" \
+    '. + ($src[0] | with_entries(select(.key | IN($ARGS.positional[]))))' \
+    "$dst_settings" --args "${SETTINGS_KEYS[@]}" >"$dst_settings.tmp" &&
+    [ -s "$dst_settings.tmp" ]; then
     mv "$dst_settings.tmp" "$dst_settings"
     log "配置: ~/.claude/settings.json（${SETTINGS_KEYS[*]}）"
   else
@@ -82,23 +86,42 @@ else
   log "settings.json を飛ばす（ソースが無いか jq が無い）"
 fi
 
-# 3. .chezmoiexternal.toml の external のうち ~/.claude 配下のもの（公開スキル）。
-#    ~/.claude の外（claude-private など非公開のもの）は対象にしない。
+# 3. .chezmoiexternal.toml の external のうち ~/.claude 配下の git-repo（公開スキル）。
+#    ~/.claude の外（claude-private など非公開のもの）と、git-repo 以外の type
+#    （archive / file）は対象にしない。clone.args などのオプションは読まない。
 ext="$SRC/.chezmoiexternal.toml"
 if [ -f "$ext" ]; then
-  awk '
-    /^\[/ { t = $0; gsub(/^\["|"\]$/, "", t) }
-    /^url *=/ { u = $0; sub(/^url *= *"/, "", u); sub(/".*$/, "", u); if (t ~ /^\.claude\//) print t, u }
-  ' "$ext" | while read -r target url; do
+  targets=$(python3 - "$ext" <<'EOF'
+import sys, tomllib
+with open(sys.argv[1], "rb") as f:
+    for target, spec in tomllib.load(f).items():
+        if not target.startswith(".claude/"):
+            continue
+        if spec.get("type") != "git-repo":
+            print(f"SKIP {target} {spec.get('type')}")
+            continue
+        print(f"GIT {target} {spec['url']}")
+EOF
+  ) || { log ".chezmoiexternal.toml を読めなかったので external を飛ばす"; targets=""; }
+  while read -r kind target url; do
+    [ -n "$kind" ] || continue
+    if [ "$kind" = SKIP ]; then
+      log "git-repo 以外の external は飛ばす: $target ($url)"
+      continue
+    fi
     dest="$HOME/$target"
-    rm -rf "$dest"
-    mkdir -p "$(dirname "$dest")"
-    if git clone -q --depth 1 "$url" "$dest"; then
+    # 一時ディレクトリへ clone し、成功したときだけ差し替える（失敗で既存を失わない）
+    staging=$(mktemp -d)
+    if git clone -q --depth 1 "$url" "$staging/repo" </dev/null; then
+      rm -rf "$dest"
+      mkdir -p "$(dirname "$dest")"
+      mv "$staging/repo" "$dest"
       log "配置: ~/$target"
     else
       log "clone に失敗したので飛ばす: $url"
     fi
-  done
+    rm -rf "$staging"
+  done <<<"$targets"
 fi
 
 exit 0

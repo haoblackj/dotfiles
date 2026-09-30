@@ -54,6 +54,15 @@ setup() {
     [ "$output" = "japanese" ]
 }
 
+@test "空の settings.json でもキーを入れる" {
+    mkdir -p "$HOME/.claude"
+    : >"$HOME/.claude/settings.json"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    run jq -r '.language' "$HOME/.claude/settings.json"
+    [ "$output" = "japanese" ]
+}
+
 @test "二度走らせても同じ結果になる（消した agent が残らない）" {
     bash "$SCRIPT" 2>/dev/null
     echo stale >"$HOME/.claude/agents/stale.md"
@@ -68,6 +77,10 @@ setup() {
 type = "git-repo"
 url = "https://invalid.example/pub.git"
 
+[".claude/skills/arc"]
+type = "archive"
+url = "https://invalid.example/arc.tar.gz"
+
 [".local/share/secret"]
 type = "git-repo"
 url = "https://invalid.example/secret.git"
@@ -77,11 +90,43 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"https://invalid.example/pub.git"* ]]
     [[ "$output" != *"secret.git"* ]]
+    [[ "$output" == *"git-repo 以外の external は飛ばす: .claude/skills/arc"* ]]
+}
+
+@test "external の clone に失敗しても既存のものを残す" {
+    cat >"$SRC/.chezmoiexternal.toml" <<'EOF'
+[".claude/skills/pub"]
+type = "git-repo"
+url = "https://invalid.example/pub.git"
+EOF
+    mkdir -p "$HOME/.claude/skills/pub"
+    echo keep >"$HOME/.claude/skills/pub/SKILL.md"
+    run bash -c 'GIT_TERMINAL_PROMPT=0 bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.claude/skills/pub/SKILL.md")" = keep ]
 }
 
 @test "chezmoi 管理の環境では何もしない" {
     mkdir -p "$HOME/.local/share/chezmoi/.git" "$HOME/.claude"
     run bash "$SCRIPT"
+    [ "$status" -eq 1 ]
+    [ ! -e "$HOME/.claude/CLAUDE.md" ]
+}
+
+@test "settings.json が symlink の環境では何もしない" {
+    mkdir -p "$HOME/.claude"
+    echo '{}' >"$BATS_TEST_TMPDIR/real.json"
+    ln -s "$BATS_TEST_TMPDIR/real.json" "$HOME/.claude/settings.json"
+    run bash "$SCRIPT"
+    [ "$status" -eq 1 ]
+    [ ! -e "$HOME/.claude/CLAUDE.md" ]
+}
+
+@test "chezmoi が PATH にある環境では何もしない" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/sh\n' >"$BATS_TEST_TMPDIR/bin/chezmoi"
+    chmod +x "$BATS_TEST_TMPDIR/bin/chezmoi"
+    run env PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$SCRIPT"
     [ "$status" -eq 1 ]
     [ ! -e "$HOME/.claude/CLAUDE.md" ]
 }
