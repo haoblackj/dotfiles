@@ -17,6 +17,7 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 | systemd user unit | `dot_config/systemd/user/` | Bitwarden SSH agent ブリッジ、herdr の umask override |
 | その他 `~/.config` | `dot_config/{herdr,nvim,lazygit,rtk,ccstatusline,fontconfig}` | |
 | Windows 側 | `dot_wslconfig.tmpl` / `dot_config/{komorebi,whkd,yasb,glazewm,scoop}` / `dot_glzr/` / `AppData/` / `*.bat.tmpl` | Windows ネイティブの chezmoi が配る。下記「Windows 側」 |
+| Claude Code（クラウド） | `install-cloud.sh` | Claude Code on the web の Setup script から呼ぶ。下記「クラウドセッション」 |
 | 非公開データ | `.chezmoiexternal.toml` → `~/.local/share/claude-private` | memory と機密スキル。private repo `haoblackj/claude-private` |
 
 `.chezmoiignore` が OS ごとに配布対象を振り分ける（Windows では Linux 用のファイルとスクリプト、それに Claude Code 関連の `~/.claude` と external 2 つを、Linux では Windows 用のファイルを除外）。
@@ -212,6 +213,39 @@ echo '{"prompt": "背が高い人に合う家具を探したい"}' | \
 ```
 
 1 件注入されれば動いている。空なら `memory-recall.log` を見る。
+
+### クラウドセッション（Claude Code on the web）
+
+クラウドのコンテナは手元の `~/.claude` を読まない（公式: https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup ）。
+そこで、クラウド環境の Setup script（セッションのタイトルバーの環境メニュー → Edit → Setup script）で `install-cloud.sh` を走らせ、環境に依存しない部分だけを `~/.claude` へ写す。
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/haoblackj/dotfiles/main/install-cloud.sh | bash
+```
+
+Setup script はリポジトリではなく環境ごとの設定なので、どのリポジトリのセッションでも、この環境を選べば効く。
+chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し、external の claude-private が認証を要するため）。
+
+| 対象 | クラウドへ | 理由 |
+|---|---|---|
+| `dot_claude/CLAUDE.md` / `agents/` / `rules/` / `output-styles/` | 配る | 環境に依存しない。CLAUDE.md の WSL 前提の記述は、冒頭の「クラウドセッションでの読み替え」節で打ち消す |
+| settings.json の `outputStyle` / `language` / `effortLevel` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
+| `.chezmoiexternal.toml` のうち `.claude/` 配下の external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
+| memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
+| hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
+| `permissions` | 配らない | `deny` の `rm` を持ち込むと、`trash-put` の無いクラウドで削除の手段が無くなる。`defaultMode` はセッション側で決まる |
+| プラグイン（`enabledPlugins`） | 配らない | クラウドは settings 経由のプラグインを入れない（公式）。codex は CLI 自体が無い |
+
+#### install-cloud.sh のメンテナンス
+
+- `dot_claude/` に何かを足したら、クラウドへ配るかをこの表で決める。配るなら `install-cloud.sh` の `COPY_ITEMS`（ディレクトリやファイル）か `SETTINGS_KEYS`（settings のキー）に足し、この表と `install-cloud.bats` を合わせる。
+- `COPY_ITEMS` はそのまま写すので、chezmoi の属性つきの名前（`executable_` / `dot_` / `*.tmpl` など）は入れられない。混ざるとスクリプトが警告を出す。
+- `dot_claude/CLAUDE.md` に手元専用の道具（chezmoi / herdr / codex / memory など）を前提にした節を足したら、冒頭の「クラウドセッションでの読み替え」節にも足す。
+- `.chezmoiexternal.toml` で `.claude/` 配下に足した external は自動で配られる。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
+- 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。
+- 取得に失敗しても exit 0 で抜ける（環境のセットアップ全体を落とさない）。効いていないと感じたら、セッションの Setup script のログに出る `[install-cloud]` の行を見る。
+- 手元で走らせると chezmoi 管理の `~/.claude` を上書きしうるので、`~/.claude/settings.json` が symlink か chezmoi のソースがある環境では何もせず exit 1 で抜ける。
+- テスト: `bats install-cloud.bats`（pre-push の bats に含まれる）。ブランチを試すときは Setup script で `DOTFILES_REF=<branch>` を渡し、raw URL のブランチ名も合わせる。
 
 ## herdr
 
