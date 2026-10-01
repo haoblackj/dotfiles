@@ -178,3 +178,38 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     call
     [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
 }
+
+@test "Codex がエラーで Claude の週枠が尽きた -> stop-weekly を知らせる" {
+    usage 10 95 0 10 10 0
+    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
+        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    call
+    [ -n "$(context_of)" ]
+    [[ "$(context_of)" == *"Codex 読めず"* ]]
+    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
+}
+
+@test "Codex がエラーで Claude の5時間枠 85% -> stop-5h" {
+    usage 85 10 0 10 10 0
+    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
+        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    call
+    [ "$(cut -d' ' -f1 "$STATE")" = stop-5h ]
+}
+
+@test "Codex がエラーで Claude に余裕 -> 振り先も状態も変えない" {
+    usage 10 10 0 10 10 0
+    call
+    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
+        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    call
+    [ -z "$output" ]
+    [ "$(cut -d' ' -f1 "$STATE")" = split ]
+}
+
+@test "Codex のエントリーが無く Claude の週枠が尽きた -> stop-weekly" {
+    usage 10 95 0 10 10 0
+    jq '[.[] | select(.provider == "claude")]' "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    call
+    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
+}

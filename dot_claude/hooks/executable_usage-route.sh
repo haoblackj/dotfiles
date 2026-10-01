@@ -19,8 +19,10 @@
 # 状態ファイル: ${TMPDIR:-/tmp}/claude-usage-route/<session_id> に "<route> <count> <forced>"。
 # サブエージェントのツール呼び出しも同じ session_id で数える。
 #
-# fail-open: serve に届かない、どちらかの provider がエラー、JSON が想定と違う、どの場合も
-# 何も出さず exit 0。状態ファイルも書き換えない。
+# fail-open: serve に届かない、Claude がエラー、JSON が想定と違う、どの場合も何も出さず exit 0。
+# 状態ファイルも書き換えない。Codex だけ読めないとき（無い、エラー、数値でない）は、Claude の
+# 判定（週枠、5時間枠）だけをして知らせる。Claude に余裕があると split と claude-only を
+# 決められないので、その場合は黙り、状態も変えない。要約の Codex は「Codex 読めず」と書く。
 
 set -uo pipefail
 
@@ -45,11 +47,15 @@ VERDICT=$(jq -r '
     + (if (delta($e) | type) == "number" then "（ペース差 \(if delta($e) >= 0 then "+" else "" end)\(delta($e))）" else "" end);
   if type != "array" then empty else
     first_of("claude") as $c | first_of("codex") as $x
-    | if (ok($c) and ok($x)) | not then empty else
+    | if ok($c) | not then empty else
         (if week_out($c) then "stop-weekly"
          elif h5_out($c) then "stop-5h"
+         elif ok($x) | not then empty
          elif h5_out($x) or week_out($x) then "claude-only"
-         else "split" end) + "\t" + fmt("Claude"; $c) + " / " + fmt("Codex"; $x)
+         else "split" end) as $r
+        | if $r == "" then empty else
+            $r + "\t" + fmt("Claude"; $c) + " / " + (if ok($x) then fmt("Codex"; $x) else "Codex 読めず" end)
+          end
       end
   end' <<< "$BODY" 2>/dev/null) || exit 0
 [[ -n "$VERDICT" ]] || exit 0

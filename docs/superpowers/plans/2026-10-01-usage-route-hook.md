@@ -19,7 +19,7 @@
 - Claude の週枠で止める側になったときは2段階: 最初に `additionalContext` で知らせ、そのあともツールの呼び出しが続いたら、数回目で `"continue": false` と `stopReason` を返して打ち切る。
 - CodexBar の Claude の取得元は `oauth` に固定する（`auto` と `cli` は WSL で timed out になる。実測）。
 - `serve` は `127.0.0.1:8080`、`--refresh-interval` は 300（キャッシュの寿命の秒数）。
-- フックは `curl -m 2` で読み、読めないとき（サーバー停止、エラー、どちらかの provider の取得失敗）は何も出さず exit 0。作業を止めない。
+- フックは `curl -m 2` で読み、読めないとき（サーバー停止、エラー、Claude の取得失敗）は何も出さず exit 0。Codex だけ読めないときは Claude の判定（5時間枠、週枠）だけをし、Claude に余裕があれば振り先を変えない（2026-10-01 の決定）。作業を止めない。
 - キャッシュは自作しない。定期ジョブ（CronCreate）は使わない。
 - Codex の無料リセットの権利は、リーダーの許可なく使わない（CLAUDE.md に書く）。
 - フックはクラウドへ配らない（`install-cloud.sh` は hooks を写さない）。CLAUDE.md はクラウドへ配られるので、クラウドの読み替えに1句足す。
