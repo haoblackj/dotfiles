@@ -19,7 +19,12 @@ repos:
       # ワークツリーから push すると、git はフックに GIT_DIR=<本体>/.git/worktrees/<名前>
       # を渡す。テストの一時リポジトリへの git init / add がそれを継承して本体側へ
       # 書き込み、本体の core.bare を true にし、ワークツリーの index を汚した
-      # （2026-10-01）。bats の前に git rev-parse --local-env-vars の変数を外す。
+      # （2026-10-01）。bats の前に GIT_* を落とす。残す名前は pre-commit の
+      # no_git_env（pre_commit/git.py）に合わせた。git の場所や認証の設定で、
+      # リポジトリの場所を指さない（クラウドが GitHub の URL を書き換える
+      # GIT_CONFIG_COUNT / KEY / VALUE もここに入る）。
+      # 撤去した run-bats-gate が 2026-09-12 から同じことをしていて、置き換えた
+      # 2026-09-13 に落ちていた。
       - id: bats
         name: bats
         language: system
@@ -28,8 +33,13 @@ repos:
         pass_filenames: false
         verbose: true
         entry: >-
-          bash -c 'cd "$(git rev-parse --show-toplevel)" &&
-          unset $(git rev-parse --local-env-vars) &&
+          bash -c 'cd "$(git rev-parse --show-toplevel)" || exit 1;
+          for v in $(compgen -e); do case "$v" in
+          GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_SSL_CAINFO|GIT_SSL_NO_VERIFY) ;;
+          GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) ;;
+          GIT_HTTP_PROXY_AUTHMETHOD|GIT_ALLOW_PROTOCOL|GIT_ASKPASS) ;;
+          GIT_*) unset "$v" ;;
+          esac; done;
           bats -r .'
       # ShellCheck の除外規則 -e SC2015,SC2016,SC2030,SC2031 の理由
       # （両リポジトリで同一内容。自己完結させるため）。
