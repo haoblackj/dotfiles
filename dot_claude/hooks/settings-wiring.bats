@@ -9,7 +9,9 @@
 set -u
 
 setup() {
-    S="${S_OVERRIDE:-$HOME/.local/share/chezmoi/linked/claude/settings.json}"
+    # テストを走らせたチェックアウトの settings.json を読む。main のチェックアウトを決め打ちすると、
+    # settings.json を変えるブランチ（ワークツリー）からの push で pre-push の bats が落ちる（#31）
+    S="${S_OVERRIDE:-$BATS_TEST_DIRNAME/../../linked/claude/settings.json}"
 }
 
 # bats test_tags=production-asset
