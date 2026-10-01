@@ -31,7 +31,18 @@ call() {
     run bash "$SCRIPT" <<< '{"session_id":"sess","hook_event_name":"PostToolUse","tool_name":"Bash"}'
 }
 
+# サブエージェントのツール呼び出し（入力に agent_id が付く）
+call_sub() {
+    run bash "$SCRIPT" <<< '{"session_id":"sess","agent_id":"sub1","hook_event_name":"PostToolUse","tool_name":"Bash"}'
+}
+
+# 失敗したツール呼び出し（PostToolUse の代わりに PostToolUseFailure が届く）
+call_fail() {
+    run bash "$SCRIPT" <<< '{"session_id":"sess","hook_event_name":"PostToolUseFailure","tool_name":"Bash"}'
+}
+
 context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$output"; }
+forced() { [ "$(jq -r '.continue' <<< "$output")" = false ]; }
 
 @test "サーバーに届かない -> 何も出さない" {
     export USAGE_ROUTE_URL="http://127.0.0.1:1/usage"
@@ -267,4 +278,78 @@ codex_error() {
     call
     [ -z "$output" ]
     [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
+}
+
+@test "サブエージェントで打ち切ったら、残りのサブエージェントと次の親の呼び出しも打ち切り、親のあとは黙る" {
+    usage 10 95 0 10 10 0
+    call
+    [ -n "$(context_of)" ]
+    for _ in 1 2 3 4; do
+        call_sub
+        [ -z "$output" ]
+    done
+    call_sub
+    forced
+    call_sub
+    forced
+    call
+    forced
+    call
+    [ -z "$output" ]
+    call_sub
+    [ -z "$output" ]
+}
+
+@test "親で打ち切ったら、そのあとのサブエージェントも打ち切らない" {
+    usage 10 95 0 10 10 0
+    for _ in 1 2 3 4 5 6; do call; done
+    call_sub
+    [ -z "$output" ]
+}
+
+@test "PostToolUseFailure も数え、知らせのイベント名を入力に合わせる" {
+    usage 10 95 0 10 10 0
+    call_fail
+    [ "$(jq -r '.hookSpecificOutput.hookEventName' <<< "$output")" = PostToolUseFailure ]
+    [ -n "$(context_of)" ]
+    for _ in 1 2 3 4; do
+        call_fail
+        [ -z "$output" ]
+    done
+    call_fail
+    forced
+}
+
+@test "前の版が打ち切ったあとの状態（stop-weekly 5 1） -> 親もサブエージェントも打ち切らない" {
+    usage 10 95 0 10 10 0
+    mkdir -p "$(dirname "$STATE")"
+    echo "stop-weekly 5 1" > "$STATE"
+    call
+    [ -z "$output" ]
+    call_sub
+    [ -z "$output" ]
+}
+
+@test "サブエージェントで打ち切って親を待つ間に stop-weekly を抜けて戻る -> 数え直す" {
+    usage 10 95 0 10 10 0
+    call
+    for _ in 1 2 3 4 5; do call_sub; done
+    forced
+    usage 10 10 0 10 10 0
+    call
+    usage 10 95 0 10 10 0
+    call
+    [ -n "$(context_of)" ]
+    for _ in 1 2 3 4; do
+        call
+        [ -z "$output" ]
+    done
+    call
+    forced
+}
+
+@test "PostToolUse の知らせのイベント名は PostToolUse" {
+    usage 10 95 0 10 10 0
+    call
+    [ "$(jq -r '.hookSpecificOutput.hookEventName' <<< "$output")" = PostToolUse ]
 }
