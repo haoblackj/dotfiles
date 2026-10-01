@@ -164,13 +164,15 @@ PY
 }
 
 # bats test_tags=production-asset
-@test "PostToolUseに usage-route.sh が全ツールで配線されている" {
+@test "PostToolUse と PostToolUseFailure に usage-route.sh が全ツールで配線されている" {
     python3 - "$S" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
-groups=[g for g in h.get("PostToolUse",[]) if any("usage-route.sh" in x.get("command","") for x in g.get("hooks",[]))]
-assert len(groups)==1, f"usage-route.sh の配線が {len(groups)} 件"
-assert groups[0].get("matcher")=="*", f"matcher={groups[0].get('matcher')!r}"
+# 失敗したツール呼び出しは PostToolUseFailure だけが届くので、両方に要る（haoblackj/dotfiles#29）
+for ev in ("PostToolUse","PostToolUseFailure"):
+    groups=[g for g in h.get(ev,[]) if any("usage-route.sh" in x.get("command","") for x in g.get("hooks",[]))]
+    assert len(groups)==1, f"{ev}: usage-route.sh の配線が {len(groups)} 件"
+    assert groups[0].get("matcher")=="*", f"{ev}: matcher={groups[0].get('matcher')!r}"
 print("PASS")
 PY
 }
