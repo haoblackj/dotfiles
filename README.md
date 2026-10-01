@@ -131,7 +131,7 @@ claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`
 | `run_once_83` / `84` / `86` | herdr の agent skill、プラグイン、Claude Code 統合 |
 | `run_once_85_gh-setup` | `gh auth login` と gh 拡張 |
 | `run_onchange_after_90` | herdr の umask override を変えたら service を restart |
-| `run_once_after_87_codexbar-serve` | `codexbar-serve`（利用枠の JSON を返す常駐。`usage-route.sh` が読む）の enable/start |
+| `run_onchange_after_87_codexbar-serve` | `codexbar-serve`（利用枠の JSON を返す常駐。`usage-route.sh` が読む）の enable と restart。unit を変えたら再実行 |
 | `run_once_99_services` | `bitwarden-ssh-agent` の enable/start、`wsl-static-dns.service` と docker の enable |
 | `run_after_99_remove-bootstrap-sudo` | 毎回の apply の末尾で、`run_once_10` の sudo ドロップインが残っていれば消す |
 
