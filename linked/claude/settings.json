@@ -66,6 +66,15 @@
           }
         ],
         "matcher": "Write|Edit"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/usage-route.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "PreToolUse": [
