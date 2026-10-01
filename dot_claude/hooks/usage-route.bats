@@ -47,6 +47,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
         > "$TMPDIR_TEST/port" &
     HANG_PID=$!
     for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$TMPDIR_TEST/port" ] && break; sleep 0.2; done
+    [ -s "$TMPDIR_TEST/port" ]
     HANG_PORT="$(cat "$TMPDIR_TEST/port")"
     export USAGE_ROUTE_URL="http://127.0.0.1:$HANG_PORT/usage"
     SECONDS=0
@@ -96,6 +97,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     usage 85 10 0 10 10 0
     call
     [[ "$(context_of)" == *"5時間枠"* ]]
+    [ "$(cut -d' ' -f1 "$STATE")" = stop-5h ]
     for _ in 1 2 3 4 5 6 7; do
         call
         [ -z "$output" ]
