@@ -56,9 +56,11 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     run jq -c 'keys' "$HOME/.claude/settings.json"
-    [ "$output" = '["language","outputStyle"]' ]
+    [ "$output" = '["language","outputStyle","spinnerVerbs"]' ]
     run jq -r '.outputStyle' "$HOME/.claude/settings.json"
     [ "$output" = "$(jq -r '.outputStyle' "$SRC/linked/claude/settings.json")" ]
+    run jq -c '.spinnerVerbs' "$HOME/.claude/settings.json"
+    [ "$output" = "$(jq -c '.spinnerVerbs' "$SRC/linked/claude/settings.json")" ]
 }
 
 @test "既存の settings.json のキーを残してマージする" {

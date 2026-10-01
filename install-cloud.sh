@@ -22,7 +22,7 @@ COPY_ITEMS=(CLAUDE.md agents rules output-styles)
 
 # linked/claude/settings.json から ~/.claude/settings.json へ抜き出すキー。
 # hooks / statusLine / enabledPlugins などの手元専用のキーは入れない。
-SETTINGS_KEYS=(outputStyle language)
+SETTINGS_KEYS=(outputStyle language spinnerVerbs)
 
 log() { echo "[install-cloud] $*" >&2; }
 
