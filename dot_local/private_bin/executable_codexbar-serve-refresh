@@ -1,0 +1,21 @@
+#!/bin/bash
+# codexbar serve が古いバイナリのまま動いていたら再起動する（haoblackj/dotfiles#31）。
+# brew upgrade は serve を再起動せず、Homebrew にはアップグレードの後に何かを走らせる仕組みも無い。
+# そこで codexbar-serve-refresh.timer が定期的に呼び、serve の /health の version と
+# codexbar --version を比べる（古い serve の見分け方として CodexBar の docs/cli.md が挙げる方法）。
+#
+# serve が応答しない、どちらかの版が読めないときは何もしない。落ちた serve は unit の
+# Restart=on-failure が受け持つ。
+
+set -uo pipefail
+
+URL="${CODEXBAR_HEALTH_URL:-http://127.0.0.1:8080/health}"
+
+RUNNING=$(curl -s -f -m 5 "$URL" 2>/dev/null | jq -r '.version // empty' 2>/dev/null) || exit 0
+[[ -n "$RUNNING" ]] || exit 0
+INSTALLED=$(codexbar --version 2>/dev/null | awk '{print $NF}')
+[[ -n "$INSTALLED" ]] || exit 0
+[[ "$RUNNING" == "$INSTALLED" ]] && exit 0
+
+echo "codexbar serve を再起動する（動いている版 $RUNNING、入っている版 $INSTALLED）"
+systemctl --user restart codexbar-serve

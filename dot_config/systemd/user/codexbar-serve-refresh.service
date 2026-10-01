@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart codexbar-serve when the installed codexbar is newer (haoblackj/dotfiles#31)
+
+[Service]
+Type=oneshot
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/codexbar-serve-refresh

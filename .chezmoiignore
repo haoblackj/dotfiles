@@ -44,6 +44,8 @@ wsl-static-dns.service
 # 配置先ではソース名（executable_ 接頭辞つき）が解決せず、何も検証しない複製になるため。
 .claude/compact-plus-backend/*.test.sh
 .claude/compact-plus-backend/*.bats
+# ~/.local/bin のスクリプトの単体テストも同じ理由（ソース名で本体を参照する）で対象外。
+.local/bin/*.bats
 
 {{- if .isDevcontainer }}
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi apply の対象から外す

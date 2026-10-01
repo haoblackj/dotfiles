@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+
+# codexbar serve を常駐させる（haoblackj/dotfiles#14）。unit は dot_config/systemd/user/ が配り、
+# codexbar 本体は run_once_80 の Brewfile が入れる。after にして、unit が配られた後に走らせる。
+# unit（起動の引数と CODEXBAR_CONFIG）が変わったら再起動する（#31）。設定ファイルの中身は
+# serve がリクエストのたびに読み直すので、ここでは見ない（CodexBar の docs/cli.md）。
+# brew upgrade で本体が新しくなったときの再起動は codexbar-serve-refresh.timer が受け持つ。
+# codexbar-serve.service hash: {{ include "dot_config/systemd/user/codexbar-serve.service" | sha256sum }}
+# codexbar-serve-refresh.service hash: {{ include "dot_config/systemd/user/codexbar-serve-refresh.service" | sha256sum }}
+# codexbar-serve-refresh.timer hash: {{ include "dot_config/systemd/user/codexbar-serve-refresh.timer" | sha256sum }}
+systemctl --user daemon-reload
+systemctl --user enable codexbar-serve
+systemctl --user restart codexbar-serve
+systemctl --user enable --now codexbar-serve-refresh.timer
