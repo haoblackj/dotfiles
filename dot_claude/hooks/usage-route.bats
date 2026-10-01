@@ -213,3 +213,58 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     call
     [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
 }
+
+codex_error() {
+    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
+        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+}
+
+@test "Codex が読めず、stop-weekly から Claude に余裕が戻る -> claude-only を知らせる" {
+    usage 10 95 0 10 10 0
+    call
+    usage 10 10 0 10 10 0
+    codex_error
+    call
+    [[ "$(context_of)" == *"余裕が戻った"* ]]
+    [[ "$(context_of)" == *"読めない"* ]]
+    [[ "$(context_of)" != *"尽きた"* ]]
+    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
+}
+
+@test "Codex が読めず、stop-5h から戻る -> claude-only" {
+    usage 85 10 0 10 10 0
+    call
+    usage 10 10 0 10 10 0
+    codex_error
+    call
+    [[ "$(context_of)" == *"余裕が戻った"* ]]
+    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
+}
+
+@test "Codex が読めないまま戻ったあと、Claude の週枠がまた尽きる -> 再び2段階" {
+    usage 10 95 0 10 10 0
+    call
+    usage 10 10 0 10 10 0
+    codex_error
+    call
+    usage 10 95 0 10 10 0
+    codex_error
+    call
+    [ -n "$(context_of)" ]
+    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
+    for _ in 1 2 3 4; do
+        call
+        [ -z "$output" ]
+    done
+    call
+    [ "$(jq -r '.continue' <<< "$output")" = false ]
+}
+
+@test "Codex が読めず、直前が claude-only -> 黙る" {
+    usage 10 10 0 90 10 0
+    call
+    codex_error
+    call
+    [ -z "$output" ]
+    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
+}

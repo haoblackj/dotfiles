@@ -22,7 +22,9 @@
 # fail-open: serve に届かない、Claude がエラー、JSON が想定と違う、どの場合も何も出さず exit 0。
 # 状態ファイルも書き換えない。Codex だけ読めないとき（無い、エラー、数値でない）は、Claude の
 # 判定（週枠、5時間枠）だけをして知らせる。Claude に余裕があると split と claude-only を
-# 決められないので、その場合は黙り、状態も変えない。要約の Codex は「Codex 読めず」と書く。
+# 決められない（undecided）。直前が stop-5h / stop-weekly なら、止める側のままだと次に Claude が
+# 尽きても知らせも強制もしないので、claude-only に切り替えて知らせる。それ以外（split、
+# claude-only、状態なし）は黙り、状態も変えない。要約の Codex は「Codex 読めず」と書く。
 
 set -uo pipefail
 
@@ -50,12 +52,10 @@ VERDICT=$(jq -r '
     | if ok($c) | not then empty else
         (if week_out($c) then "stop-weekly"
          elif h5_out($c) then "stop-5h"
-         elif ok($x) | not then empty
+         elif ok($x) | not then "undecided"
          elif h5_out($x) or week_out($x) then "claude-only"
          else "split" end) as $r
-        | if $r == "" then empty else
-            $r + "\t" + fmt("Claude"; $c) + " / " + (if ok($x) then fmt("Codex"; $x) else "Codex 読めず" end)
-          end
+        | $r + "\t" + fmt("Claude"; $c) + " / " + (if ok($x) then fmt("Codex"; $x) else "Codex 読めず" end)
       end
   end' <<< "$BODY" 2>/dev/null) || exit 0
 [[ -n "$VERDICT" ]] || exit 0
@@ -84,6 +84,17 @@ save() {
 notify() {
   jq -nc --arg c "$1" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
 }
+
+if [[ "$ROUTE" == undecided ]]; then
+  case "$PREV_ROUTE" in
+    stop-5h|stop-weekly)
+      ROUTE=claude-only
+      save "$ROUTE" 0 0
+      notify "利用枠: Claude の枠に余裕が戻った（$SUMMARY）。Codex の枠は読めないので、実装も Claude で行う。Codex の無料リセットの権利は、リーダーの許可なく使わない。"
+      exit 0 ;;
+    *) exit 0 ;;
+  esac
+fi
 
 if [[ "$ROUTE" != "$PREV_ROUTE" ]]; then
   save "$ROUTE" 0 0
