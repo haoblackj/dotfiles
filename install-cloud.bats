@@ -16,6 +16,24 @@ setup() {
     cp -R "$BATS_TEST_DIRNAME/dot_claude" "$SRC/dot_claude"
     cp "$BATS_TEST_DIRNAME/linked/claude/settings.json" "$SRC/linked/claude/settings.json"
     export DOTFILES_SRC="$SRC"
+    # PATH 上の chezmoi を隠す（スクリプトは chezmoi が PATH にあると何もしない）。
+    # 同じディレクトリの jq や python3 を残すため、ディレクトリごと外さずに
+    # chezmoi 以外を symlink した一時ディレクトリへ置き換える。
+    local dir path="" i=0 shadow f
+    local IFS=:
+    for dir in $PATH; do
+        if [ -x "$dir/chezmoi" ]; then
+            i=$((i + 1))
+            shadow="$BATS_TEST_TMPDIR/path$i"
+            mkdir -p "$shadow"
+            for f in "$dir"/*; do
+                [ "${f##*/}" = chezmoi ] || ln -s "$f" "$shadow/"
+            done
+            dir="$shadow"
+        fi
+        path="${path:+$path:}$dir"
+    done
+    export PATH="$path"
 }
 
 @test "CLAUDE.md / agents / rules / output-styles を ~/.claude へ写す" {
