@@ -49,7 +49,7 @@
 ## 開発フローの既定運用
 
 - 実装作業はワークツリーを使う（`superpowers:using-git-worktrees` の手順に従う。先に公式の `EnterWorktree` を使い、`git worktree add` は無いときの代替）。新規ブランチ作成込みでデフォルト許可とし、都度の確認は不要。サブエージェントは既定で `isolation` を付けず、親のワークツリーで動かす（本チェックアウトへの書き込みは Claude Code が止める）。複数のサブエージェントが同時に別々のファイルを編集するときだけ `isolation: "worktree"` を使い、切る前に親の作業をコミットし、返ってきた `worktree-agent-*` ブランチを親のブランチへマージする。
-- 軽微な修正（typo修正・ドキュメント追記など、コードの挙動やリポジトリ構造に影響しない変更）はmain/masterに直接コミットしてよい。ただし ruleset を張ったリポジトリ（comfy-batch-runner、kikimimi）では直接 push が止まるので、そこでは軽微でも pull request 経由。
+- 軽微な修正（typo修正・ドキュメント追記など、コードの挙動やリポジトリ構造に影響しない変更）はmain/masterに直接コミットしてよい。ただし ruleset で main への直接 push を止めているリポジトリでは、軽微でも pull request 経由。
 
 ## ホーム配下の設定ファイルはchezmoi前提で扱う
 
@@ -92,7 +92,7 @@
 
 操作のしかたは公式の `herdr` スキルに従う。ここにはこの環境の決まりだけを書く。
 
-- ワークスペースはリポジトリごとに割っている（`w7` が penguinEx、`w8` が comfy-batch-runner。番号は変わりうるので `herdr pane list` の `cwd` で確かめる）。1タブ1セッション、1セッション1リポジトリ。
+- ワークスペースはリポジトリごとに割っている（番号は変わりうるので `herdr pane list` の `cwd` で確かめる）。1タブ1セッション、1セッション1リポジトリ。
 - セッションは、対象リポジトリのワークスペースに `herdr tab create --no-focus` でタブを作り、その root pane で `herdr agent start --kind claude` して立てる。既存のタブへ `pane split` で押し込まない。リーダーが具体的な操作を指示したときはその指示に従う。
 - `--label` は付けない。タブ名はフック（`~/.claude/hooks/` の `session-title-promote.sh` と `herdr-tab-title-sync.sh`）がセッションタイトルに揃え、手で付けた名前は上書きされる。issue 番号の接頭辞（`#34` など）も付けない（リーダーとの合意）。
 - 指示を渡すだけのプロンプトには `--wait` を付けない。付けると相手の応答が落ち着くまで数分ブロックする。
