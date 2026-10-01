@@ -1,0 +1,9 @@
+[Unit]
+Description=Check every 15 minutes whether codexbar-serve runs an old codexbar (haoblackj/dotfiles#31)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
