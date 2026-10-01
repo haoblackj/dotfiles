@@ -1,0 +1,14 @@
+[Unit]
+Description=CodexBar usage server for Claude Code hooks (haoblackj/dotfiles#14)
+
+[Service]
+Type=simple
+# usage-route.sh が PostToolUse のたびに読む。--refresh-interval はキャッシュの寿命の秒数で、
+# 期限が切れても直前の値をすぐ返して裏で取り直す（CodexBar の docs/cli.md）。
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/linuxbrew/.linuxbrew/bin/codexbar serve --host 127.0.0.1 --port 8080 --refresh-interval 300
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

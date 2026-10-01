@@ -14,7 +14,7 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 | Claude Code | `dot_claude/` | settings / hooks / keybindings / CLAUDE.md / output-styles。境界は下記「Claude Code」 |
 | Codex | `dot_codex/` | 委譲スクリプトと設定 |
 | CLI ツール類 | `run_once_NN_*.sh.tmpl` | 導入スクリプト。中身は下記「自動で入るもの」 |
-| systemd user unit | `dot_config/systemd/user/` | Bitwarden SSH agent ブリッジ、herdr の umask override |
+| systemd user unit | `dot_config/systemd/user/` | Bitwarden SSH agent ブリッジ、herdr の umask override、CodexBar の usage サーバー（`codexbar-serve`） |
 | その他 `~/.config` | `dot_config/{herdr,nvim,lazygit,rtk,ccstatusline,fontconfig}` | |
 | Windows 側 | `dot_wslconfig.tmpl` / `dot_config/{komorebi,whkd,yasb,glazewm,scoop}` / `dot_glzr/` / `AppData/` / `*.bat.tmpl` | Windows ネイティブの chezmoi が配る。下記「Windows 側」 |
 | Claude Code（クラウド） | `install-cloud.sh` | Claude Code on the web の Setup script から呼ぶ。下記「クラウドセッション」 |
@@ -131,6 +131,7 @@ claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`
 | `run_once_83` / `84` / `86` | herdr の agent skill、プラグイン、Claude Code 統合 |
 | `run_once_85_gh-setup` | `gh auth login` と gh 拡張 |
 | `run_onchange_after_90` | herdr の umask override を変えたら service を restart |
+| `run_once_after_87_codexbar-serve` | `codexbar-serve`（利用枠の JSON を返す常駐。`usage-route.sh` が読む）の enable/start |
 | `run_once_99_services` | `bitwarden-ssh-agent` の enable/start、`wsl-static-dns.service` と docker の enable |
 | `run_after_99_remove-bootstrap-sudo` | 毎回の apply の末尾で、`run_once_10` の sudo ドロップインが残っていれば消す |
 
