@@ -320,6 +320,34 @@ codex_error() {
     forced
 }
 
+@test "前の版が打ち切ったあとの状態（stop-weekly 5 1） -> 親もサブエージェントも打ち切らない" {
+    usage 10 95 0 10 10 0
+    mkdir -p "$(dirname "$STATE")"
+    echo "stop-weekly 5 1" > "$STATE"
+    call
+    [ -z "$output" ]
+    call_sub
+    [ -z "$output" ]
+}
+
+@test "サブエージェントで打ち切って親を待つ間に stop-weekly を抜けて戻る -> 数え直す" {
+    usage 10 95 0 10 10 0
+    call
+    for _ in 1 2 3 4 5; do call_sub; done
+    forced
+    usage 10 10 0 10 10 0
+    call
+    usage 10 95 0 10 10 0
+    call
+    [ -n "$(context_of)" ]
+    for _ in 1 2 3 4; do
+        call
+        [ -z "$output" ]
+    done
+    call
+    forced
+}
+
 @test "PostToolUse の知らせのイベント名は PostToolUse" {
     usage 10 95 0 10 10 0
     call

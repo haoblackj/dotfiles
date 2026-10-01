@@ -21,7 +21,9 @@
 # 「経過率 − 使用率」と符号が逆なだけで同じ計算。
 #
 # 状態ファイル: ${TMPDIR:-/tmp}/claude-usage-route/<session_id> に "<route> <count> <forced>"。
-# forced は 0 = まだ打ち切っていない、1 = サブエージェントで打ち切り親はまだ、2 = 親で打ち切った。
+# forced は 0 = まだ打ち切っていない、1 = 親で打ち切った、2 = サブエージェントで打ち切り親はまだ。
+# 1 を「済み」にしているのは、親を待つ段を持たなかった前の版が打ち切ったあと 1 を書いていたため。
+# 配備の時点で週枠で止めている途中のセッションを、もう一度打ち切らない。
 # サブエージェントのツール呼び出しも同じ session_id で届き（入力に agent_id が付く）、同じく数える。
 #
 # fail-open: serve に届かない、Claude がエラー、JSON が想定と違う、どの場合も何も出さず exit 0。
@@ -124,8 +126,8 @@ if [[ "$ROUTE" != "$PREV_ROUTE" ]]; then
 fi
 
 force() {
-  # 親で打ち切ったら 2、サブエージェントなら親を待つ 1
-  save "$ROUTE" "$COUNT" $((IN_SUBAGENT ? 1 : 2))
+  # 親で打ち切ったら 1、サブエージェントなら親を待つ 2
+  save "$ROUTE" "$COUNT" $((IN_SUBAGENT ? 2 : 1))
   jq -nc --arg r "Claude の週枠が尽きたため、利用枠のフック（usage-route.sh）が打ち切った（$SUMMARY）。" \
     '{continue: false, stopReason: $r}'
 }
@@ -139,7 +141,7 @@ if [[ "$ROUTE" == stop-weekly ]]; then
       else
         save "$ROUTE" "$COUNT" 0
       fi ;;
-    1) force ;;
+    2) force ;;
   esac
 fi
 exit 0
