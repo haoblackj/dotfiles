@@ -16,6 +16,10 @@ repos:
         entry: pytest -p no:cacheprovider
       # 追跡された .bats をソースツリーで走らせる。bats を直接呼ぶ
       # （自作の run-bats-gate は 2026-09-13 に撤去）。
+      # ワークツリーから push すると、git はフックに GIT_DIR=<本体>/.git/worktrees/<名前>
+      # を渡す。テストの一時リポジトリへの git init / add がそれを継承して本体側へ
+      # 書き込み、本体の core.bare を true にし、ワークツリーの index を汚した
+      # （2026-10-01）。bats の前に git rev-parse --local-env-vars の変数を外す。
       - id: bats
         name: bats
         language: system
@@ -24,7 +28,9 @@ repos:
         pass_filenames: false
         verbose: true
         entry: >-
-          bash -c 'cd "$(git rev-parse --show-toplevel)" && bats -r .'
+          bash -c 'cd "$(git rev-parse --show-toplevel)" &&
+          unset $(git rev-parse --local-env-vars) &&
+          bats -r .'
       # ShellCheck の除外規則 -e SC2015,SC2016,SC2030,SC2031 の理由
       # （両リポジトリで同一内容。自己完結させるため）。
       # SC2015（`A && B || C` は if-then-else ではない）:
