@@ -1,0 +1,7 @@
+#!/bin/bash
+set -eu
+
+# codexbar serve を常駐させる（haoblackj/dotfiles#14）。unit は dot_config/systemd/user/ が配り、
+# codexbar 本体は run_once_80 の Brewfile が入れる。after にして、unit が配られた後に走らせる。
+systemctl --user daemon-reload
+systemctl --user enable --now codexbar-serve

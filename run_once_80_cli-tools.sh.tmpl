@@ -9,11 +9,13 @@ echo "CLIツール一括インストール開始（brew bundle）"
 # --verbose が無いと bundle は内側の brew install の出力を溜め込み、失敗時にしか出さない。
 # 345MB 級の bottle（tesseract-lang）を落とす間、固まったように見えるので進捗を流す。
 brew bundle install --verbose --no-upgrade --file=- <<'BREWFILE'
+tap "steipete/tap"    # codexbar の配布元
 brew "aicommit2"      # AI でコミットメッセージ生成
 brew "bats-core"      # Bash のテストランナー（hook 群・morning スキルの *.bats が依存）
 {{ if .isHome -}}
 brew "bitwarden-cli"  # パスワードマネージャ CLI（Bitwarden 関連は自宅 PC だけ）
 {{ end -}}
+brew "steipete/tap/codexbar" # Claude と Codex の利用枠を JSON で返す（usage-route.sh が serve を読む）
 brew "ffmpeg"         # 音声・動画変換（kikimimi / VALL-E X のセットアップが依存）
 brew "fzf"            # ファジーファインダー
 brew "gemini-cli"     # Google Gemini モデルの CLI
