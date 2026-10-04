@@ -42,7 +42,6 @@ call_fail() {
 }
 
 context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$output"; }
-forced() { [ "$(jq -r '.continue' <<< "$output")" = false ]; }
 
 @test "サーバーに届かない -> 何も出さない" {
     export USAGE_ROUTE_URL="http://127.0.0.1:1/usage"
@@ -134,24 +133,18 @@ forced() { [ "$(jq -r '.continue' <<< "$output")" = false ]; }
     [ "$(cut -d' ' -f1 "$STATE")" = split ]
 }
 
-@test "stop-weekly: 知らせたあと4回は黙り、5回目で continue:false、6回目以降は黙る" {
+@test "stop-weekly: 知らせたあとは何度呼んでも打ち切らない" {
     usage 10 95 0 10 10 0
     call
     [ -n "$(context_of)" ]
-    for _ in 1 2 3 4; do
-        call
-        [ -z "$output" ]
-    done
-    call
-    [ "$(jq -r '.continue' <<< "$output")" = false ]
-    [[ "$(jq -r '.stopReason' <<< "$output")" == *"週枠"* ]]
-    for _ in 1 2 3; do
+    [[ "$(context_of)" != *"打ち切"* ]]
+    for _ in 1 2 3 4 5 6 7; do
         call
         [ -z "$output" ]
     done
 }
 
-@test "stop-weekly から戻る -> split を知らせ、再び入ったら2段階をやり直す" {
+@test "stop-weekly から戻る -> split を知らせ、再び入ったらもう一度知らせる" {
     usage 10 95 0 10 10 0
     for _ in 1 2 3 4 5 6; do call; done
     usage 10 10 0 10 10 0
@@ -159,10 +152,7 @@ forced() { [ "$(jq -r '.continue' <<< "$output")" = false ]; }
     [[ "$(context_of)" == *"実装は Codex"* ]]
     usage 10 95 0 10 10 0
     call
-    [ -n "$(context_of)" ]
-    for _ in 1 2 3 4; do call; done
-    call
-    [ "$(jq -r '.continue' <<< "$output")" = false ]
+    [[ "$(context_of)" == *"週枠"* ]]
 }
 
 @test "振り先が同じ -> 黙る" {
@@ -252,7 +242,7 @@ codex_error() {
     [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
 }
 
-@test "Codex が読めないまま戻ったあと、Claude の週枠がまた尽きる -> 再び2段階" {
+@test "Codex が読めないまま戻ったあと、Claude の週枠がまた尽きる -> 再び知らせる" {
     usage 10 95 0 10 10 0
     call
     usage 10 10 0 10 10 0
@@ -263,12 +253,6 @@ codex_error() {
     call
     [ -n "$(context_of)" ]
     [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
-    for _ in 1 2 3 4; do
-        call
-        [ -z "$output" ]
-    done
-    call
-    [ "$(jq -r '.continue' <<< "$output")" = false ]
 }
 
 @test "Codex が読めず、直前が claude-only -> 黙る" {
@@ -280,72 +264,39 @@ codex_error() {
     [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
 }
 
-@test "サブエージェントで打ち切ったら、残りのサブエージェントと次の親の呼び出しも打ち切り、親のあとは黙る" {
+@test "stop-weekly: サブエージェントの呼び出しも打ち切らない" {
     usage 10 95 0 10 10 0
     call
     [ -n "$(context_of)" ]
-    for _ in 1 2 3 4; do
+    for _ in 1 2 3 4 5 6 7; do
         call_sub
         [ -z "$output" ]
     done
-    call_sub
-    forced
-    call_sub
-    forced
     call
-    forced
-    call
-    [ -z "$output" ]
-    call_sub
     [ -z "$output" ]
 }
 
-@test "親で打ち切ったら、そのあとのサブエージェントも打ち切らない" {
-    usage 10 95 0 10 10 0
-    for _ in 1 2 3 4 5 6; do call; done
-    call_sub
-    [ -z "$output" ]
-}
-
-@test "PostToolUseFailure も数え、知らせのイベント名を入力に合わせる" {
+@test "PostToolUseFailure -> 知らせのイベント名を入力に合わせ、何度呼んでも打ち切らない" {
     usage 10 95 0 10 10 0
     call_fail
     [ "$(jq -r '.hookSpecificOutput.hookEventName' <<< "$output")" = PostToolUseFailure ]
     [ -n "$(context_of)" ]
-    for _ in 1 2 3 4; do
+    for _ in 1 2 3 4 5 6 7; do
         call_fail
         [ -z "$output" ]
     done
-    call_fail
-    forced
 }
 
-@test "前の版が打ち切ったあとの状態（stop-weekly 5 1） -> 親もサブエージェントも打ち切らない" {
+@test "打ち切りを持っていた前の版の状態（stop-weekly 4 0、stop-weekly 5 2） -> 振り先を読み、打ち切らない" {
     usage 10 95 0 10 10 0
     mkdir -p "$(dirname "$STATE")"
-    echo "stop-weekly 5 1" > "$STATE"
-    call
-    [ -z "$output" ]
-    call_sub
-    [ -z "$output" ]
-}
-
-@test "サブエージェントで打ち切って親を待つ間に stop-weekly を抜けて戻る -> 数え直す" {
-    usage 10 95 0 10 10 0
-    call
-    for _ in 1 2 3 4 5; do call_sub; done
-    forced
-    usage 10 10 0 10 10 0
-    call
-    usage 10 95 0 10 10 0
-    call
-    [ -n "$(context_of)" ]
-    for _ in 1 2 3 4; do
+    for old in "stop-weekly 4 0" "stop-weekly 5 2"; do
+        echo "$old" > "$STATE"
         call
         [ -z "$output" ]
+        call_sub
+        [ -z "$output" ]
     done
-    call
-    forced
 }
 
 @test "PostToolUse の知らせのイベント名は PostToolUse" {
