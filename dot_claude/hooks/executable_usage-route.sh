@@ -58,7 +58,9 @@ STATE_DIR="${TMPDIR:-/tmp}/claude-usage-route"
 STATE="$STATE_DIR/$SID"
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 if command -v flock >/dev/null 2>&1; then
-  exec 9> "$STATE_DIR/.lock.$SID" 2>/dev/null || exit 0
+  # 状態ファイルと同じく symlink は避け、追記で開いて既存のファイルを切り詰めない
+  [[ -L "$STATE_DIR/.lock.$SID" ]] && exit 0
+  exec 9>> "$STATE_DIR/.lock.$SID" 2>/dev/null || exit 0
   flock -n 9 || exit 0
 fi
 RAW_PREV=""
