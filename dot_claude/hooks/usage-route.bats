@@ -2,29 +2,35 @@
 # usage-route.sh のユニットテスト。本物の codexbar serve は呼ばず、file:// の JSON を読ませる。
 set -u
 
+NOW=1790000000
+
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/executable_usage-route.sh"
     TMPDIR_TEST="$(mktemp -d)"
     export TMPDIR="$TMPDIR_TEST"
+    export XDG_STATE_HOME="$TMPDIR_TEST/state"
+    export USAGE_ROUTE_NOW="$NOW"
     FIXTURE="$TMPDIR_TEST/usage.json"
     export USAGE_ROUTE_URL="file://$FIXTURE"
     STATE="$TMPDIR_TEST/claude-usage-route/sess"
+    LOG="$XDG_STATE_HOME/claude-usage-route/transitions.log"
 }
 
 teardown() {
     rm -rf -- "$TMPDIR_TEST"
 }
 
-# usage <claude5h> <claude週> <claudeペース差> <codex5h> <codex週> <codexペース差>
-# ペース差に - を渡すと pace を省く
+# usage <claude5h> <claude週> <claudeペース差> <codex5h> <codex週> <codexペース差> [<claude5hのリセットまでの分>]
+# ペース差に - を渡すと pace を省く。リセットまでの分の既定は 120。
 usage() {
     jq -n --argjson c5 "$1" --argjson cw "$2" --arg cd "$3" \
-          --argjson x5 "$4" --argjson xw "$5" --arg xd "$6" '
-      def e($p; $h; $w; $d): {provider: $p, source: "oauth",
-        usage: {primary: {usedPercent: $h, resetsAt: "2026-10-01T13:49:59Z"},
+          --argjson x5 "$4" --argjson xw "$5" --arg xd "$6" \
+          --argjson now "$NOW" --argjson left "${7:-120}" '
+      def e($p; $h; $w; $d; $reset): {provider: $p, source: "oauth",
+        usage: {primary: {usedPercent: $h, resetsAt: ($reset | todate)},
                 secondary: {usedPercent: $w, resetsAt: "2026-10-08T07:59:59Z"}}}
         + (if $d == "-" then {} else {pace: {secondary: {deltaPercent: ($d | tonumber)}}} end);
-      [e("codex"; $x5; $xw; $xd), e("claude"; $c5; $cw; $cd)]' > "$FIXTURE"
+      [e("codex"; $x5; $xw; $xd; $now + 7200), e("claude"; $c5; $cw; $cd; $now + $left * 60)]' > "$FIXTURE"
 }
 
 call() {
@@ -42,6 +48,14 @@ call_fail() {
 }
 
 context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$output"; }
+route_of() { cut -d' ' -f1 "$STATE"; }
+
+codex_error() {
+    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
+        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+}
+
+# --- 読めないときは黙る（fail-open） ---
 
 @test "サーバーに届かない -> 何も出さない" {
     export USAGE_ROUTE_URL="http://127.0.0.1:1/usage"
@@ -69,214 +83,330 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 }
 
 @test "session_id が不正 -> 何も出さない" {
-    usage 90 10 0 0 10 0
+    usage 95 10 0 0 10 0
     run bash "$SCRIPT" <<< '{"session_id":"../x"}'
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
 
-@test "初回で両方に余裕 -> 黙って split を記録" {
-    usage 10 10 0 10 10 0
-    call
-    [ -z "$output" ]
-    [ "$(cut -d' ' -f1 "$STATE")" = split ]
-}
-
-@test "初回で Codex の5時間枠が 85% -> claude-only を知らせる" {
-    usage 10 10 0 85 10 0
-    call
-    [[ "$(context_of)" == *"実装も Claude"* ]]
-    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
-}
-
-@test "Codex の週枠のペース差が 25 -> claude-only" {
-    usage 10 10 0 10 50 25
-    call
-    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
-}
-
-@test "Codex の週枠のペース差 24、使用率 89 -> split" {
-    usage 10 10 0 10 89 24
-    call
-    [ "$(cut -d' ' -f1 "$STATE")" = split ]
-}
-
-@test "Claude の5時間枠 85% -> stop-5h を知らせ、その後は何度呼んでも打ち切らない" {
-    usage 10 10 0 10 10 0
-    call
-    usage 85 10 0 10 10 0
-    call
-    [[ "$(context_of)" == *"5時間枠"* ]]
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-5h ]
-    for _ in 1 2 3 4 5 6 7; do
-        call
-        [ -z "$output" ]
-    done
-}
-
-@test "Claude の週枠の使用率 90%（ペース差 0） -> stop-weekly" {
-    usage 10 90 0 10 10 0
-    call
-    [[ "$(context_of)" == *"週枠"* ]]
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
-}
-
-@test "Claude の週枠のペース差 25（使用率 30） -> stop-weekly" {
-    usage 10 30 25 10 10 0
-    call
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
-}
-
-@test "pace が無い -> 使用率だけで判定する" {
-    usage 10 50 - 10 10 -
-    call
-    [ "$(cut -d' ' -f1 "$STATE")" = split ]
-}
-
-@test "stop-weekly: 知らせたあとは何度呼んでも打ち切らない" {
-    usage 10 95 0 10 10 0
-    call
-    [ -n "$(context_of)" ]
-    [[ "$(context_of)" != *"打ち切"* ]]
-    for _ in 1 2 3 4 5 6 7; do
-        call
-        [ -z "$output" ]
-    done
-}
-
-@test "stop-weekly から戻る -> split を知らせ、再び入ったらもう一度知らせる" {
-    usage 10 95 0 10 10 0
-    for _ in 1 2 3 4 5 6; do call; done
-    usage 10 10 0 10 10 0
-    call
-    [[ "$(context_of)" == *"実装は Codex"* ]]
-    usage 10 95 0 10 10 0
-    call
-    [[ "$(context_of)" == *"週枠"* ]]
-}
-
-@test "振り先が同じ -> 黙る" {
-    usage 10 10 0 90 10 0
-    call
-    call
-    [ -z "$output" ]
-}
-
 @test "Claude がエラー -> 振り先も状態も変えない" {
-    usage 10 10 0 10 10 0
+    usage 75 10 0 10 10 0
     call
     jq '(.[] | select(.provider == "claude")) |= {provider: "claude", error: {message: "timed out"}}' \
         "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
     call
     [ -z "$output" ]
-    [ "$(cut -d' ' -f1 "$STATE")" = split ]
+    [ "$(route_of)" = offload ]
+}
+
+# --- normal ---
+
+@test "初回で Claude に余裕 -> 黙って normal を記録" {
+    usage 10 10 0 10 10 0
+    call
+    [ -z "$output" ]
+    [ "$(route_of)" = normal ]
+}
+
+@test "Claude に余裕なら Codex が尽きていても normal（Codex へは投げないので知らせない）" {
+    usage 10 10 0 95 95 30
+    call
+    [ -z "$output" ]
+    [ "$(route_of)" = normal ]
+}
+
+@test "Claude に余裕で Codex が読めない -> normal" {
+    usage 10 10 0 10 10 0
+    codex_error
+    call
+    [ -z "$output" ]
+    [ "$(route_of)" = normal ]
+}
+
+@test "振り先が同じ -> 黙る" {
+    usage 75 10 0 10 10 0
+    call
+    [ -n "$(context_of)" ]
+    call
+    [ -z "$output" ]
+}
+
+# --- offload（5時間枠） ---
+
+@test "Claude の5時間枠 69% -> normal" {
+    usage 69 10 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+}
+
+@test "Claude の5時間枠 70%、リセットまで2時間 -> offload を知らせる" {
+    usage 70 10 0 10 10 0 120
+    call
+    [ "$(route_of)" = offload ]
+    [[ "$(context_of)" == *"codex-delegate.sh"* ]]
+    [[ "$(context_of)" == *"リセットまで 120 分"* ]]
+}
+
+@test "Claude の5時間枠 80%、リセットまで30分 -> 退避せず normal" {
+    usage 80 10 0 10 10 0 30
+    call
+    [ "$(route_of)" = normal ]
+}
+
+@test "Claude の5時間枠 80%、リセットまで45分 -> offload" {
+    usage 80 10 0 10 10 0 45
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "offload 中に 5時間枠 60% -> offload のまま、59% -> normal を知らせる" {
+    usage 75 10 0 10 10 0
+    call
+    usage 60 10 0 10 10 0
+    call
+    [ -z "$output" ]
+    [ "$(route_of)" = offload ]
+    usage 59 10 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+    [[ "$(context_of)" == *"実装は Claude"* ]]
+}
+
+@test "normal から 5時間枠 65% -> normal のまま（入りは 70%）" {
+    usage 10 10 0 10 10 0
+    call
+    usage 65 10 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+}
+
+# --- offload（週枠） ---
+
+@test "Claude の週のペース差 +10 -> offload" {
+    usage 10 40 10 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "Claude の週のペース差 +9、使用率 74% -> normal" {
+    usage 10 74 9 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+}
+
+@test "Claude の週枠の使用率 75%（ペース差 -5） -> offload" {
+    usage 10 75 -5 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "Claude の週のペース差 +25、使用率 80% -> stop ではなく offload" {
+    usage 10 80 25 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "週で offload 中: ペース差 +1 -> offload のまま、ペース差 0 で使用率 69% -> normal" {
+    usage 10 50 12 10 10 0
+    call
+    usage 10 50 1 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+    usage 10 69 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+}
+
+@test "週で offload 中: ペース差 0 でも使用率 70% -> offload のまま" {
+    usage 10 76 0 10 10 0
+    call
+    usage 10 70 0 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "pace が無い -> 使用率だけで判定する" {
+    usage 10 50 - 10 10 -
+    call
+    [ "$(route_of)" = normal ]
+    usage 10 75 - 10 10 -
+    call
+    [ "$(route_of)" = offload ]
+}
+
+# --- lean（Claude が逼迫、Codex も逼迫か読めない） ---
+
+@test "Claude 逼迫で Codex の5時間枠 70% -> lean を知らせる" {
+    usage 75 10 0 70 10 0
+    call
+    [ "$(route_of)" = lean ]
+    [[ "$(context_of)" == *"退避しない"* ]]
+}
+
+@test "Claude 逼迫で Codex の週枠 85% -> lean" {
+    usage 75 10 0 10 85 0
+    call
+    [ "$(route_of)" = lean ]
+}
+
+@test "Claude 逼迫で Codex の週のペース差 +15 -> lean、+14 -> offload" {
+    usage 75 10 0 10 50 15
+    call
+    [ "$(route_of)" = lean ]
+    usage 75 10 0 10 50 14
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "Claude 逼迫で Codex が読めない -> lean で、要約に Codex 読めず" {
+    usage 75 10 0 10 10 0
+    codex_error
+    call
+    [ "$(route_of)" = lean ]
+    [[ "$(context_of)" == *"Codex 読めず"* ]]
+}
+
+@test "Claude 逼迫で Codex のエントリーが無い -> lean" {
+    usage 75 10 0 10 10 0
+    jq '[.[] | select(.provider == "claude")]' "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    call
+    [ "$(route_of)" = lean ]
 }
 
 @test "Codex が2件 -> 先頭の1件で判定する" {
-    usage 10 10 0 90 10 0
+    usage 75 10 0 90 10 0
     jq '[.[0]] + [.[0] | .usage.primary.usedPercent = 0] + [.[1]]' "$FIXTURE" > "$FIXTURE.tmp" \
         && mv "$FIXTURE.tmp" "$FIXTURE"
     call
-    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
+    [ "$(route_of)" = lean ]
 }
 
-@test "Codex がエラーで Claude の週枠が尽きた -> stop-weekly を知らせる" {
-    usage 10 95 0 10 10 0
-    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
-        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+@test "lean 中に Claude の5時間枠 65% -> lean のまま（出るのは 60% 未満）" {
+    usage 75 10 0 90 10 0
     call
+    usage 65 10 0 90 10 0
+    call
+    [ "$(route_of)" = lean ]
+}
+
+@test "lean から Codex に余裕が戻る -> offload を知らせる" {
+    usage 75 10 0 90 10 0
+    call
+    usage 75 10 0 10 10 0
+    call
+    [ "$(route_of)" = offload ]
     [ -n "$(context_of)" ]
-    [[ "$(context_of)" == *"Codex 読めず"* ]]
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
 }
 
-@test "Codex がエラーで Claude の5時間枠 85% -> stop-5h" {
-    usage 85 10 0 10 10 0
-    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
-        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
-    call
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-5h ]
-}
+# --- stop ---
 
-@test "Codex がエラーで Claude に余裕 -> 振り先も状態も変えない" {
+@test "Claude の5時間枠 90% -> stop を知らせ、その後は何度呼んでも黙る" {
     usage 10 10 0 10 10 0
     call
-    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
-        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    usage 90 10 0 10 10 0
     call
-    [ -z "$output" ]
-    [ "$(cut -d' ' -f1 "$STATE")" = split ]
-}
-
-@test "Codex のエントリーが無く Claude の週枠が尽きた -> stop-weekly" {
-    usage 10 95 0 10 10 0
-    jq '[.[] | select(.provider == "claude")]' "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
-    call
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
-}
-
-codex_error() {
-    jq '(.[] | select(.provider == "codex")) |= {provider: "codex", error: {message: "x"}}' \
-        "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
-}
-
-@test "Codex が読めず、stop-weekly から Claude に余裕が戻る -> claude-only を知らせる" {
-    usage 10 95 0 10 10 0
-    call
-    usage 10 10 0 10 10 0
-    codex_error
-    call
-    [[ "$(context_of)" == *"余裕が戻った"* ]]
-    [[ "$(context_of)" == *"読めない"* ]]
-    [[ "$(context_of)" != *"尽きた"* ]]
-    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
-}
-
-@test "Codex が読めず、stop-5h から戻る -> claude-only" {
-    usage 85 10 0 10 10 0
-    call
-    usage 10 10 0 10 10 0
-    codex_error
-    call
-    [[ "$(context_of)" == *"余裕が戻った"* ]]
-    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
-}
-
-@test "Codex が読めないまま戻ったあと、Claude の週枠がまた尽きる -> 再び知らせる" {
-    usage 10 95 0 10 10 0
-    call
-    usage 10 10 0 10 10 0
-    codex_error
-    call
-    usage 10 95 0 10 10 0
-    codex_error
-    call
-    [ -n "$(context_of)" ]
-    [ "$(cut -d' ' -f1 "$STATE")" = stop-weekly ]
-}
-
-@test "Codex が読めず、直前が claude-only -> 黙る" {
-    usage 10 10 0 90 10 0
-    call
-    codex_error
-    call
-    [ -z "$output" ]
-    [ "$(cut -d' ' -f1 "$STATE")" = claude-only ]
-}
-
-@test "stop-weekly: サブエージェントの呼び出しも打ち切らない" {
-    usage 10 95 0 10 10 0
-    call
-    [ -n "$(context_of)" ]
+    [ "$(route_of)" = stop ]
+    [[ "$(context_of)" == *"issue に状態"* ]]
     for _ in 1 2 3 4 5 6 7; do
-        call_sub
+        call
         [ -z "$output" ]
     done
-    call
-    [ -z "$output" ]
 }
 
-@test "PostToolUseFailure -> 知らせのイベント名を入力に合わせ、何度呼んでも打ち切らない" {
+@test "Claude の5時間枠 90% はリセット間際（10分）でも stop" {
+    usage 90 10 0 10 10 0 10
+    call
+    [ "$(route_of)" = stop ]
+}
+
+@test "Claude の週枠 95% -> stop" {
+    usage 10 95 0 10 10 0
+    call
+    [ "$(route_of)" = stop ]
+}
+
+@test "Claude の週枠 94% -> stop ではなく offload" {
+    usage 10 94 0 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "Codex が読めず Claude の週枠 95% -> stop" {
+    usage 10 95 0 10 10 0
+    codex_error
+    call
+    [ "$(route_of)" = stop ]
+    [[ "$(context_of)" == *"Codex 読めず"* ]]
+}
+
+@test "stop 中に5時間枠 85% -> stop のまま、79% -> offload を知らせる" {
+    usage 92 10 0 10 10 0
+    call
+    usage 85 10 0 10 10 0
+    call
+    [ "$(route_of)" = stop ]
+    usage 79 10 0 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+    [ -n "$(context_of)" ]
+}
+
+@test "stop 中に週枠 91% -> stop のまま、89% -> offload（週の使用率 70% 以上なので逼迫のまま）" {
+    usage 10 96 0 10 10 0
+    call
+    usage 10 91 0 10 10 0
+    call
+    [ "$(route_of)" = stop ]
+    usage 10 89 0 10 10 0
+    call
+    [ "$(route_of)" = offload ]
+}
+
+@test "stop から一気に余裕が戻る -> normal を知らせる" {
+    usage 95 10 0 10 10 0
+    call
+    usage 10 10 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+    [[ "$(context_of)" == *"余裕が戻った"* ]]
+}
+
+@test "stop から normal に戻り、再び入ったらもう一度知らせる" {
+    usage 95 10 0 10 10 0
+    call
+    usage 10 10 0 10 10 0
+    call
+    usage 95 10 0 10 10 0
+    call
+    [ "$(route_of)" = stop ]
+    [ -n "$(context_of)" ]
+}
+
+# --- サブエージェント ---
+
+@test "サブエージェントの呼び出し -> 判定も状態の更新もせず黙る" {
+    usage 75 10 0 10 10 0
+    call_sub
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [ ! -e "$STATE" ]
+}
+
+@test "サブエージェントが先に呼ばれても、親の次の呼び出しで遷移を知らせる" {
+    usage 10 10 0 10 10 0
+    call
+    usage 75 10 0 10 10 0
+    call_sub
+    [ -z "$output" ]
+    [ "$(route_of)" = normal ]
+    call
+    [ "$(route_of)" = offload ]
+    [ -n "$(context_of)" ]
+}
+
+# --- イベント名 ---
+
+@test "PostToolUseFailure -> 知らせのイベント名を入力に合わせ、何度呼んでも黙る" {
     usage 10 95 0 10 10 0
     call_fail
     [ "$(jq -r '.hookSpecificOutput.hookEventName' <<< "$output")" = PostToolUseFailure ]
@@ -287,20 +417,55 @@ codex_error() {
     done
 }
 
-@test "打ち切りを持っていた前の版の状態（stop-weekly 4 0、stop-weekly 5 2） -> 振り先を読み、打ち切らない" {
-    usage 10 95 0 10 10 0
-    mkdir -p "$(dirname "$STATE")"
-    for old in "stop-weekly 4 0" "stop-weekly 5 2"; do
-        echo "$old" > "$STATE"
-        call
-        [ -z "$output" ]
-        call_sub
-        [ -z "$output" ]
-    done
-}
-
 @test "PostToolUse の知らせのイベント名は PostToolUse" {
     usage 10 95 0 10 10 0
     call
     [ "$(jq -r '.hookSpecificOutput.hookEventName' <<< "$output")" = PostToolUse ]
+}
+
+# --- 前の版の状態ファイル ---
+
+@test "前の版の状態 split / claude-only -> normal として読み、黙って normal を記録" {
+    usage 10 10 0 10 10 0
+    mkdir -p "$(dirname "$STATE")"
+    for old in "split" "claude-only"; do
+        echo "$old" > "$STATE"
+        call
+        [ -z "$output" ]
+        [ "$(route_of)" = normal ]
+    done
+}
+
+@test "前の版の状態 stop-5h / stop-weekly（打ち切りの数つき） -> stop として読み、黙る" {
+    usage 10 95 0 10 10 0
+    mkdir -p "$(dirname "$STATE")"
+    for old in "stop-5h" "stop-weekly 4 0" "stop-weekly 5 2"; do
+        echo "$old" > "$STATE"
+        call
+        [ -z "$output" ]
+        [ "$(route_of)" = stop ]
+    done
+}
+
+# --- 遷移のログ ---
+
+@test "遷移のたびにログへ1行、変わらなければ書かない" {
+    usage 10 10 0 10 10 0
+    call
+    call
+    usage 75 10 0 10 10 0
+    call
+    call
+    [ "$(wc -l < "$LOG")" -eq 2 ]
+    [[ "$(sed -n 1p "$LOG")" == *$'\tsess\t\tnormal\t'* ]]
+    [[ "$(sed -n 2p "$LOG")" == *$'\tsess\tnormal\toffload\t'* ]]
+}
+
+@test "ログに書けなくても知らせは出る" {
+    export XDG_STATE_HOME="/proc/nonexistent"
+    usage 75 10 0 10 10 0
+    call
+    [ "$status" -eq 0 ]
+    [ "$(route_of)" = offload ]
+    [ -n "$(context_of)" ]
 }
