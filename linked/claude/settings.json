@@ -194,6 +194,7 @@
   },
   "inputNeededNotifEnabled": true,
   "language": "japanese",
+  "model": "opus",
   "outputStyle": "エクシア（能天使）",
   "permissions": {
     "allow": [
