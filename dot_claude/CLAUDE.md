@@ -97,8 +97,13 @@
 - Codex への指示には、キャッシュとログの置き場を明示する（テストの収集対象にならない、ドットで始まるディレクトリの下にし、`PRE_COMMIT_HOME` と `UV_CACHE_DIR` を指定させる）。指定しないと、ワークツリーの gitignore 済みの場所に置かれて、テストの収集を壊すことがある。戻ってきたら `git status --short --ignored` で、増えた ignored のディレクトリも確かめる。
 - 一次情報（issue、spec、コミット）を正とする。そこから二次的な要約を作らない。
 - 進行状態は issue のラベルで持つ（`status:設計中` / `status:承認待ち` / `status:実装中`。未着手はラベル無し）。状態が変わったら更新し、承認待ちで止まるときは止まる前に付ける。着手できるものを探す側は、依存（GitHub の issue dependencies）とこのラベルの2つを見れば足りる。
+- セッションをまたぐ作業の状態（済んだこと、決定、次の一手）は、issue の本文を書き換えず、`## 状態` で始まるコメントとして積む。見出しの下に「済んだこと」「決定」「次の一手」を置く。書いたら、一つ前の状態コメントを GitHub の minimize（理由 `OUTDATED`）でたたむ。たたんだコメントは消えず、経緯として残る。
+  - たたむ: `gh api graphql -f query='mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}' -f id=<一つ前の状態コメントの node_id>`
+- issue を読み返すときは、スレッド全体を読まず、bot（`penguinex-agent[bot]`）が書いた最新の `## 状態` コメントと、それより後の人間のコメントだけを読む。
+  - `gh api repos/<owner>/<repo>/issues/<番号>/comments --paginate | jq -rs 'add as $c | ([$c[] | select(.user.login=="penguinex-agent[bot]" and (.body|startswith("## 状態")))] | last) as $s | ([$s] + [$c[] | select(.user.type!="Bot" and .created_at > ($s.created_at // ""))]) | map(select(. != null) | "--- \(.user.login) \(.created_at)\n\(.body)") | .[]'`
+  - 状態コメントが無い issue や、bot の名義を入れる前に書かれた状態は、従来どおり全体を読む。
 - 実装の担い手は、利用枠のフック（`usage-route.sh`）の知らせに従う。平常は Claude が実装する。Claude の枠が逼迫し Codex に余裕があると知らされたら（offload）、これから着手する実装の単位を `~/.codex/codex-delegate.sh` へ退避する。Codex も逼迫していると知らされたら（lean）、退避せず、着手中の単位を仕上げることを優先して並列の切り出しやレビューの往復を増やさない。
-- 止めると知らされたら、issue に状態（どこまで進んだか、次の一手）を書いてからターンを終える。フックは知らせるだけで、強制的には打ち切らない。
+- 止めると知らされたら、issue に状態コメント（どこまで進んだか、次の一手）を書いてからターンを終える。フックは知らせるだけで、強制的には打ち切らない。
 - Codex の無料リセットの権利は、リーダーの許可なく使わない。
 
 ## Herdr でのセッションの立て方
