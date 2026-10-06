@@ -10,6 +10,7 @@ echo "CLIツール一括インストール開始（brew bundle）"
 # 345MB 級の bottle（tesseract-lang）を落とす間、固まったように見えるので進捗を流す。
 brew bundle install --verbose --no-upgrade --file=- <<'BREWFILE'
 tap "steipete/tap"    # codexbar の配布元
+brew "age"            # ファイル暗号化（gh-bot-token.sh が GitHub App の秘密鍵を復号する）
 brew "aicommit2"      # AI でコミットメッセージ生成
 brew "bats-core"      # Bash のテストランナー（hook 群・morning スキルの *.bats が依存）
 {{ if .isHome -}}
