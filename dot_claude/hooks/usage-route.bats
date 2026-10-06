@@ -139,12 +139,35 @@ codex_error() {
     [ "$(route_of)" = normal ]
 }
 
-@test "Claude の5時間枠 70%、リセットまで2時間 -> offload を知らせる" {
-    usage 70 10 0 10 10 0 120
+@test "Claude の5時間枠 70%、リセットまで100分 -> offload を知らせ、要約に Claude のリセットまでの分" {
+    usage 70 10 0 10 10 0 100
     call
     [ "$(route_of)" = offload ]
     [[ "$(context_of)" == *"codex-delegate.sh"* ]]
-    [[ "$(context_of)" == *"リセットまで 120 分"* ]]
+    [[ "$(context_of)" == *"Claude 5時間枠 70%（リセットまで 100 分）"* ]]
+}
+
+@test "Claude の5時間枠 80%、リセットまで44分 -> 退避せず normal" {
+    usage 80 10 0 10 10 0 44
+    call
+    [ "$(route_of)" = normal ]
+}
+
+@test "offload 中に5時間枠 85% のままリセットまで30分 -> offload のまま（45分の条件は入るときだけ）" {
+    usage 85 10 0 10 10 0 120
+    call
+    usage 85 10 0 10 10 0 30
+    call
+    [ -z "$output" ]
+    [ "$(route_of)" = offload ]
+}
+
+@test "stop 中に5時間枠 79%、リセットまで30分 -> offload（逼迫のまま）" {
+    usage 92 10 0 10 10 0 30
+    call
+    usage 79 10 0 10 10 0 30
+    call
+    [ "$(route_of)" = offload ]
 }
 
 @test "Claude の5時間枠 80%、リセットまで30分 -> 退避せず normal" {
@@ -271,6 +294,25 @@ codex_error() {
     jq '[.[] | select(.provider == "claude")]' "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
     call
     [ "$(route_of)" = lean ]
+}
+
+@test "配列にオブジェクトでない要素が混ざっても判定する" {
+    usage 95 10 0 10 10 0
+    jq '["junk", 3] + .' "$FIXTURE" > "$FIXTURE.tmp" && mv "$FIXTURE.tmp" "$FIXTURE"
+    call
+    [ "$(route_of)" = stop ]
+}
+
+@test "同じセッションの並列の呼び出しでは、遷移を一度だけ知らせ、ログも1行" {
+    usage 75 10 0 10 10 0
+    for i in 1 2 3 4 5 6 7 8; do
+        bash "$SCRIPT" <<< '{"session_id":"sess","hook_event_name":"PostToolUse","tool_name":"Bash"}' \
+            > "$TMPDIR_TEST/out.$i" &
+    done
+    wait
+    [ "$(cat "$TMPDIR_TEST"/out.* | grep -c additionalContext)" -eq 1 ]
+    [ "$(wc -l < "$LOG")" -eq 1 ]
+    [ "$(route_of)" = offload ]
 }
 
 @test "Codex が2件 -> 先頭の1件で判定する" {
@@ -425,15 +467,33 @@ codex_error() {
 
 # --- 前の版の状態ファイル ---
 
-@test "前の版の状態 split / claude-only -> normal として読み、黙って normal を記録" {
+@test "前の版の状態 split -> 方針が変わったことを一度だけ知らせて normal を記録" {
     usage 10 10 0 10 10 0
     mkdir -p "$(dirname "$STATE")"
-    for old in "split" "claude-only"; do
-        echo "$old" > "$STATE"
-        call
-        [ -z "$output" ]
-        [ "$(route_of)" = normal ]
-    done
+    echo split > "$STATE"
+    call
+    [[ "$(context_of)" == *"平常は Claude が実装"* ]]
+    [ "$(route_of)" = normal ]
+    call
+    [ -z "$output" ]
+}
+
+@test "前の版の状態 claude-only -> normal として読み、黙って normal を記録" {
+    usage 10 10 0 10 10 0
+    mkdir -p "$(dirname "$STATE")"
+    echo claude-only > "$STATE"
+    call
+    [ -z "$output" ]
+    [ "$(route_of)" = normal ]
+}
+
+@test "前の版の状態 split で Claude が逼迫 -> offload を知らせる" {
+    usage 75 10 0 10 10 0
+    mkdir -p "$(dirname "$STATE")"
+    echo split > "$STATE"
+    call
+    [ "$(route_of)" = offload ]
+    [[ "$(context_of)" == *"codex-delegate.sh"* ]]
 }
 
 @test "前の版の状態 stop-5h / stop-weekly（打ち切りの数つき） -> stop として読み、黙る" {

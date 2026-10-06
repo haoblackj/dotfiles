@@ -14,8 +14,9 @@
 #
 # しきい値（#34 の初期値。遷移ログを見て見直す）。逼迫と stop は、直前の状態で入りと出を分ける
 # （ヒステリシス）。出る側の値は、直前が逼迫の側（offload、lean、stop）のときに使う。
-#   Claude 逼迫・5時間枠: 使用率 70% 以上（出るのは 60% 未満）、かつリセットまで 45 分以上。
-#     リセット間際は、退避の手間（ブリーフ、統合）のほうが高くつくので逼迫としない。
+#   Claude 逼迫・5時間枠: 使用率 70% 以上、かつリセットまで 45 分以上で入る。出るのは 60% 未満。
+#     リセット間際に新しく退避を始めると、退避の手間（ブリーフ、統合）のほうが高くつくので、
+#     45 分の条件は入るときだけに掛ける。逼迫の最中にリセットが近づいても、余裕が戻ったとは言わない。
 #   Claude 逼迫・週枠: ペース差 +10 以上か使用率 75% 以上（出るのはペース差 0 以下かつ使用率 70% 未満）。
 #     ペース差は pace.secondary.deltaPercent（使用率 − 経過率）。ペースの超過は「消費を減らせ」の
 #     合図なので、止めずに退避の条件にする。
@@ -27,7 +28,10 @@
 #
 # 状態ファイル: ${TMPDIR:-/tmp}/claude-usage-route/<session_id> に "<route>"。先頭の語だけを読む。
 # 前の版の名前（split、claude-only、stop-5h、stop-weekly。打ち切りの数つきもある）は、
-# normal と stop に読み替える。
+# normal と stop に読み替える。split のまま動いているセッションは、起動時に読んだ前の方針
+# （両方に余裕があれば実装は Codex）を持っているので、normal になるときに一度だけ方針の変更を知らせる。
+# 状態の読みから書きまでを session ごとのロック（flock -n）で囲む。並列のツール呼び出しが同じ遷移を
+# 重ねて知らせ、遷移ログに同じ行を重ねるのを防ぐ。ロックを取れなかった呼び出しは黙って抜ける。
 # 遷移ログ: ${XDG_STATE_HOME:-~/.local/state}/claude-usage-route/transitions.log に、振り先が
 # 変わるたびに「時刻<TAB>session_id<TAB>前<TAB>後<TAB>要約」を1行。書けなくても知らせは出す。
 #
@@ -52,6 +56,11 @@ EVENT=$(jq -r '.hook_event_name // empty' <<< "$INPUT" 2>/dev/null)
 
 STATE_DIR="${TMPDIR:-/tmp}/claude-usage-route"
 STATE="$STATE_DIR/$SID"
+mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+if command -v flock >/dev/null 2>&1; then
+  exec 9> "$STATE_DIR/.lock.$SID" 2>/dev/null || exit 0
+  flock -n 9 || exit 0
+fi
 RAW_PREV=""
 if [[ -f "$STATE" && ! -L "$STATE" ]]; then
   read -r RAW_PREV _ < "$STATE" 2>/dev/null
@@ -67,7 +76,7 @@ esac
 BODY=$(curl -s -f -m 2 "$URL" 2>/dev/null) || exit 0
 
 VERDICT=$(jq -r --arg prev "$PREV_ROUTE" --argjson now "$NOW" '
-  def first_of($n): [.[] | select(.provider == $n)][0];
+  def first_of($n): [.[] | select(type == "object" and .provider == $n)][0];
   def ok($e): $e != null and $e.error == null
     and ($e.usage.primary.usedPercent | type) == "number"
     and ($e.usage.secondary.usedPercent | type) == "number";
@@ -86,7 +95,7 @@ VERDICT=$(jq -r --arg prev "$PREV_ROUTE" --argjson now "$NOW" '
       else h5($e) >= 90 or wk($e) >= 95 end;
     def claude_tight($e):
       (h5_left($e)) as $left
-      | ((h5($e) >= (if $was_tight then 60 else 70 end)) and ($left == null or $left >= 45))
+      | (if $was_tight then h5($e) >= 60 else h5($e) >= 70 and ($left == null or $left >= 45) end)
         or (if $was_tight then delta_gt($e; 0) or wk($e) >= 70
             else delta_ge($e; 10) or wk($e) >= 75 end);
     def codex_room($e): ok($e) and h5($e) < 70 and wk($e) < 85 and (delta_ge($e; 15) | not);
@@ -130,8 +139,11 @@ notify() {
 }
 
 if [[ "$ROUTE" == "$PREV_ROUTE" ]]; then
-  # 前の版の名前で残っていたら、振り先は同じなので黙って新しい名前に書き直す
+  # 前の版の名前で残っていたら、振り先は同じなので新しい名前に書き直す
   [[ "$RAW_PREV" == "$ROUTE" ]] || save "$ROUTE"
+  if [[ "$RAW_PREV" == split ]]; then
+    notify "利用枠: 振り分けの方針が変わった（$SUMMARY）。平常は Claude が実装する。Codex へ退避するのは、Claude の枠が逼迫したとこのフックが知らせたときだけ。"
+  fi
   exit 0
 fi
 
