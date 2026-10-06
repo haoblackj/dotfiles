@@ -40,10 +40,6 @@ wsl-static-dns.service
 .claude/hooks/*.test.sh
 # 層4a で .bats へ移行した後も同じ理由（配置先の命名規則が合わない）で対象外。
 .claude/hooks/*.bats
-# compact-plus-backend の単体テストも同じ理由で対象外。
-# 配置先ではソース名（executable_ 接頭辞つき）が解決せず、何も検証しない複製になるため。
-.claude/compact-plus-backend/*.test.sh
-.claude/compact-plus-backend/*.bats
 # ~/.local/bin のスクリプトの単体テストも同じ理由（ソース名で本体を参照する）で対象外。
 .local/bin/*.bats
 
