@@ -170,5 +170,11 @@ mkdir -p "$NONGIT"
   build "$BRIEF" && has_token "$NONGIT"
 ) && pass "git 外では cwd を使う" || fail "git 外で cwd を使えない"
 
+echo "=== 14. effort は既定で medium、--effort の値で置き換わり、値が無ければ止まる ==="
+build --repo "$REPO" "$BRIEF" && has_token model_reasoning_effort=medium && pass "既定で medium が付く" || fail "既定で medium が付かない"
+build --repo "$REPO" --effort high "$BRIEF" && has_token model_reasoning_effort=high && ! has_token model_reasoning_effort=medium && pass "--effort high で置き換わる" || fail "--effort high で置き換わらない"
+CODEX_DELEGATE_EFFORT=low build --repo "$REPO" "$BRIEF" && has_token model_reasoning_effort=low && pass "CODEX_DELEGATE_EFFORT で既定を変えられる" || fail "CODEX_DELEGATE_EFFORT が効かない"
+build --repo "$REPO" --effort "" "$BRIEF" && fail "空の --effort を通した" || pass "空の --effort で止まる"
+
 echo
 [ "$FAILED" -eq 0 ] && echo "すべて通った。" || { echo "落ちた判定がある。" >&2; exit 1; }
