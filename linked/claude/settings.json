@@ -7,7 +7,6 @@
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "codex@openai-codex": true,
-    "compact-plus@compact-plus-local": true,
     "pr-review-toolkit@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true,
     "reviewable-html-workbench@reviewable-html-workbench-local": true,
@@ -17,19 +16,9 @@
   },
   "env": {
     "CLAUDE_CODE_THRIFTY_SONIC": "0",
-    "COMPACT_PLUS_FALLBACK_BACKEND": "tmp=$(mktemp \"${TMPDIR:-/tmp}/compact-plus-codex.XXXXXX\"); { printf \"%s\\n\\n\" \"$SYSTEM_PROMPT\"; cat; } | codex exec --model gpt-5.4-mini --sandbox read-only --skip-git-repo-check --dangerously-bypass-hook-trust --ignore-user-config --ephemeral --output-last-message \"$tmp\" - >/dev/null && cat \"$tmp\"; status=$?; rm -f \"$tmp\"; exit \"$status\"",
-    "COMPACT_PLUS_TRANSCRIPT_MODE": "tail",
-    "COMPACT_PLUS_TRANSCRIPT_TAIL_KB": "120",
-    "COMPACT_PLUS_TRANSCRIPT_TAIL_TURNS": "60",
     "ENABLE_COMMIT_REVIEW": "0"
   },
   "extraKnownMarketplaces": {
-    "compact-plus-local": {
-      "source": {
-        "repo": "u-ichi/compact-plus",
-        "source": "github"
-      }
-    },
     "karpathy-skills": {
       "source": {
         "repo": "forrestchang/andrej-karpathy-skills",
@@ -183,14 +172,6 @@
       }
     ],
     "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "command": "~/.claude/hooks/userpromptsubmit-compact-prep-reminder.sh",
-            "type": "command"
-          }
-        ]
-      },
       {
         "hooks": [
           {
