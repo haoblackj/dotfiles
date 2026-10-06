@@ -156,6 +156,17 @@ PY
 }
 
 # bats test_tags=production-asset
+@test "gh-bot-token.sh session がSessionStartに配線されている" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
+cmds=[x.get("command","") for g in h.get("SessionStart",[]) for x in g.get("hooks",[])]
+assert any("gh-bot-token.sh" in c and c.rstrip().endswith("session") for c in cmds), "SessionStart に無い"
+print("PASS")
+PY
+}
+
+# bats test_tags=production-asset
 @test "statusLineは従来どおりstatusline-context-window.shを指す" {
     python3 - "$S" <<'PY'
 import json,sys
