@@ -132,6 +132,14 @@
       {
         "hooks": [
           {
+            "command": "bash \"$HOME/.claude/hooks/gh-bot-token.sh\" session",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
             "command": "~/.claude/hooks/claude-private-sync.sh pull",
             "type": "command"
           }

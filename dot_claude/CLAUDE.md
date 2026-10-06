@@ -6,7 +6,7 @@
 
 クラウドでは、このファイルは dotfiles の `install-cloud.sh` が配ったもの。手元の WSL 前提の記述を次のとおり読み替える。
 
-- 「ホーム配下の設定ファイルはchezmoi前提で扱う」「Herdr でのセッションの立て方」「環境の境界（WSL/Windows）」と、Codex への委譲と利用枠のフックの記述は適用しない。chezmoi / herdr / codex / trash-put と利用枠のフックはコンテナに無い。
+- 「ホーム配下の設定ファイルはchezmoi前提で扱う」「Herdr でのセッションの立て方」「GitHub の名義（bot）」「環境の境界（WSL/Windows）」と、Codex への委譲と利用枠のフックの記述は適用しない。chezmoi / herdr / codex / trash-put と利用枠のフック、bot の鍵はコンテナに無く、GitHub への書き込みは本人の名義になる。
 - superpowers などのプラグインは入っていない。スキル名での指定は、同じ手順を自分で踏む指示として読む。
 - auto memory は無い。memory に残すはずの教訓や退けられた判断は、issue か PR の説明に書くか、リーダーへ報告する。
 - 削除は `trash-put` の代わりに、追跡されたファイルなら `git rm`（git で戻せる）。追跡外のファイルは消す前にリーダーに確かめる。
@@ -50,6 +50,15 @@
 
 - 実装作業はワークツリーを使う（`superpowers:using-git-worktrees` の手順に従う。先に公式の `EnterWorktree` を使い、`git worktree add` は無いときの代替）。新規ブランチ作成込みでデフォルト許可とし、都度の確認は不要。サブエージェントは既定で `isolation` を付けず、親のワークツリーで動かす（本チェックアウトへの書き込みは Claude Code が止める）。複数のサブエージェントが同時に別々のファイルを編集するときだけ `isolation: "worktree"` を使い、切る前に親の作業をコミットし、返ってきた `worktree-agent-*` ブランチを親のブランチへマージする。
 - 軽微な修正（typo修正・ドキュメント追記など、コードの挙動やリポジトリ構造に影響しない変更）はmain/masterに直接コミットしてよい。ただし ruleset で main への直接 push を止めているリポジトリでは、軽微でも pull request 経由。
+
+## GitHub の名義（bot）
+
+手元の Claude Code のセッションでは、SessionStart フック（`~/.claude/hooks/gh-bot-token.sh`）が GitHub App `penguinex-agent` の installation token を `GH_TOKEN` に入れる。gh と git push は `penguinex-agent[bot]` の名義になり、リーダー（haoblackj）の書き込みと書き手で区別できる。token は Bash の実行のたびに読み直され、期限前に作り直される。
+
+- Claude Code の中でリーダーが `!` で打つ gh と git にも同じ `GH_TOKEN` が入り、bot の名義になる。リーダー本人の名義が要る操作（bot が開いた PR の approve、ruleset やリポジトリの設定の変更、`gh auth login` などの認証の操作）をリーダーに頼むときは、`!` で打たせない。別の端末で打つよう案内するか、`! env -u GH_TOKEN <command>` の形で示す。
+- 「完遂責任」の「自分で実行できない操作は `! <command>` で打ってもらう」も、この形で示す。
+- App が入っていないリポジトリ（他人のリポジトリへの issue や PR など）への書き込みは bot の token では通らない。そのときは `env -u GH_TOKEN` を付けて本人の名義で行い、そうしたことを報告に書く。
+- bot の名義で書けなかったとき（鍵が無い、token を作れない）は、フックは何もせず本人の名義のまま動く。名義が想定と違うと気づいたら、黙って続けずに報告する。
 
 ## ホーム配下の設定ファイルはchezmoi前提で扱う
 
