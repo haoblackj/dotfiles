@@ -1,8 +1,8 @@
 developer_instructions = '''
 {{ include "dot_codex/voice.md" }}
 '''
-model = "gpt-5.6-sol"
-model_reasoning_effort = "low"
+model = "gpt-6-sol"
+model_reasoning_effort = "medium"
 
 [tui]
 # Claude Code の ccstatusline に寄せる。Codex は任意コマンドや複数行を使えないため、
@@ -24,7 +24,7 @@ terminal_title = ["activity", "thread-name", "project-name"]
 [tui.model_availability_nux]
 "gpt-5.5" = 1
 gpt-6-astra = 4
-"gpt-6.1-sol" = 3
+"gpt-6.1-sol" = 4
 
 [projects."/home/yagu001/repo/github.com/haoblackj/zmk-workspace"]
 trust_level = "trusted"
