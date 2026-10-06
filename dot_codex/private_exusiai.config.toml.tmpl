@@ -4,6 +4,27 @@ developer_instructions = '''
 model = "gpt-5.6-sol"
 model_reasoning_effort = "low"
 
+[tui]
+# Claude Code の ccstatusline に寄せる。Codex は任意コマンドや複数行を使えないため、
+# 組み込み項目のうち同じ情報を持つものを Claude 側と同じ順序で並べる。
+animations = true
+screen_reader_detection_done = true
+status_line = [
+  "model-with-reasoning",
+  "git-branch",
+  "five-hour-limit",
+  "weekly-limit",
+  "context-used",
+  "task-progress",
+]
+status_line_use_colors = true
+# activity は作業中に回転し、入力待ちでは要対応表示になる。
+terminal_title = ["activity", "thread-name", "project-name"]
+
 [tui.model_availability_nux]
 "gpt-5.5" = 1
 gpt-6-astra = 4
+"gpt-6.1-sol" = 3
+
+[projects."/home/yagu001/repo/github.com/haoblackj/zmk-workspace"]
+trust_level = "trusted"
