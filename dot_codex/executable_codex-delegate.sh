@@ -14,6 +14,11 @@ die() { echo "NG: $*" >&2; exit 1; }
 
 CONTRACT="${CODEX_DELEGATE_CONTRACT:-$HOME/.codex/delegation-contract.md}"
 MODEL="${CODEX_DELEGATE_MODEL:-gpt-5.6-sol}"
+# --ignore-user-config で走るので、指定しないとモデルの既定（gpt-5.6-sol は low）になる。
+# 退避で渡すのは文章の仕様からの実装で、low で失敗して Claude が直す往復が増えると、
+# Claude の枠を守るという退避の目的に反するので medium を既定にする（haoblackj/dotfiles#34）。
+# 受け付ける値はモデルが申告するもので固定の列挙ではないため、ここでは空だけを弾き、検証は Codex に任せる。
+EFFORT="${CODEX_DELEGATE_EFFORT:-medium}"
 SANDBOX="workspace-write"
 REPO=""
 OUTFILE=""
@@ -25,6 +30,7 @@ while [ $# -gt 0 ]; do
     --print-command) PRINT_ONLY=1; shift ;;
     --repo)    REPO="${2:-}";    [ -n "$REPO" ]    || die "--repo に値がない"; shift 2 ;;
     -m|--model)   MODEL="${2:-}";   [ -n "$MODEL" ]   || die "-m に値がない";   shift 2 ;;
+    -e|--effort)  EFFORT="${2:-}";  [ -n "$EFFORT" ]  || die "--effort に値がない"; shift 2 ;;
     -s|--sandbox) SANDBOX="${2:-}"; [ -n "$SANDBOX" ] || die "-s に値がない"; shift 2 ;;
     -o|--output-last-message) OUTFILE="${2:-}"; [ -n "$OUTFILE" ] || die "-o に値がない"; shift 2 ;;
     --) shift
@@ -40,7 +46,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$BRIEF" ] || die "ブリーフのファイルを渡すこと。使い方: $(basename "$0") [--repo DIR] [-m MODEL] [-s SANDBOX] [-o FILE] [--print-command] <brief-file>"
+[ -n "$BRIEF" ] || die "ブリーフのファイルを渡すこと。使い方: $(basename "$0") [--repo DIR] [-m MODEL] [-e EFFORT] [-s SANDBOX] [-o FILE] [--print-command] <brief-file>"
 [ -f "$BRIEF" ] || die "ブリーフがファイルとして読めない: $BRIEF"
 
 # 契約が無いまま委譲を走らせない。chezmoi apply が済んでいない状態が主な原因である。
@@ -78,6 +84,7 @@ cmd=(codex exec
   -c "developer_instructions=$INSTRUCTIONS"
   -c project_doc_max_bytes=0
   -m "$MODEL"
+  -c "model_reasoning_effort=$EFFORT"
   -s "$SANDBOX"
   -C "$REPO"
   --json)
