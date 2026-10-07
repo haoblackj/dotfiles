@@ -42,6 +42,7 @@ wsl-static-dns.service
 .claude/hooks/*.bats
 # ~/.local/bin のスクリプトの単体テストも同じ理由（ソース名で本体を参照する）で対象外。
 .local/bin/*.bats
+.config/ccstatusline/*.bats
 
 {{- if .isDevcontainer }}
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi apply の対象から外す
