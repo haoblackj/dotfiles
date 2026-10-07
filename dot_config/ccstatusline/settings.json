@@ -29,6 +29,13 @@
         "commandPath": "$HOME/.config/ccstatusline/usage-battery.sh",
         "timeout": 1000,
         "preserveColors": true
+      },
+      {
+        "id": "claude-transcripts-backup-status",
+        "type": "custom-command",
+        "commandPath": "$HOME/.config/ccstatusline/claude-transcripts-backup-status.sh",
+        "timeout": 1000,
+        "color": "hex:ff5555"
       }
     ],
     [

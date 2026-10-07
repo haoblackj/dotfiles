@@ -1,0 +1,68 @@
+#!/bin/bash
+# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42）を、resticprofile のフックから見張る。
+#
+#   check <マウント> <リポジトリ> <パスワード>  run-before。退避先とパスワードを確かめ、
+#       このマシンでまだ戻していなければ、最初の backup の前に最新の世代を戻す
+#   ok    run-after。失敗の理由を消し、成功の時刻を残す
+#   fail  run-after-fail。restic 自体の失敗を書く
+#
+# 失敗の理由は状態ファイルに書き、ステータスラインの枠（claude-transcripts-backup-status.sh）が読む。
+# D が初期化されたときに空から積み直さないよう、リポジトリが無ければ作らずに失敗する。
+
+set -uo pipefail
+
+# systemd --user から呼ばれると brew の PATH が無い。末尾に足して、呼び出し側の PATH を優先する
+export PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"
+STATE="${CLAUDE_TRANSCRIPTS_BACKUP_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/claude-transcripts-backup}"
+TARGET="${CLAUDE_TRANSCRIPTS_RESTORE_TARGET:-/}"
+mkdir -p "$STATE"
+
+fail_with() {
+    echo "$1" > "$STATE/failure"
+    echo "$1" >&2
+    exit 1
+}
+
+check() {
+    local mount="$1" repo="$2" pw="$3"
+    ls -- "$mount" >/dev/null 2>&1 || fail_with "D ドライブに届かない"
+    [ -f "$repo/config" ] || fail_with "退避先のリポジトリが無い"
+    [ -r "$pw" ] || fail_with "パスワードが無い"
+
+    # 戻すのは backup の前だけ。forget の前に戻すと、退避より先に古い世代を書き戻しうる
+    [ "${PROFILE_COMMAND:-}" = backup ] || return 0
+    [ -e "$STATE/restored" ] && return 0
+
+    local snapshots
+    snapshots=$(restic -r "local:$repo" --password-file "$pw" snapshots --json --latest 1) \
+        || fail_with "スナップショットを読めない"
+    if [ "$snapshots" != "[]" ]; then
+        # 手元のファイルは上書きしない。戻す前に Claude Code を使っていても、その分は残る
+        echo "このマシンでは未復元なので、最新の世代を戻す"
+        restic -r "local:$repo" --password-file "$pw" restore latest --target "$TARGET" --overwrite never \
+            || fail_with "復元に失敗"
+    fi
+    touch "$STATE/restored"
+}
+
+case "${1:-}" in
+    check)
+        [ $# -eq 4 ] || { echo "usage: $0 check <mount> <repo> <password-file>" >&2; exit 2; }
+        check "$2" "$3" "$4"
+        ;;
+    ok)
+        : > "$STATE/failure"
+        touch "$STATE/last-success"
+        ;;
+    fail)
+        # run-before の失敗でも呼ばれる。そのときは check が書いた理由を残す
+        case "${ERROR_MESSAGE:-}" in
+            run-before*) ;;
+            *) echo "restic ${PROFILE_COMMAND:-backup} が失敗（終了コード ${ERROR_EXIT_CODE:-?}）" > "$STATE/failure" ;;
+        esac
+        ;;
+    *)
+        echo "usage: $0 check|ok|fail" >&2
+        exit 2
+        ;;
+esac

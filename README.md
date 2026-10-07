@@ -112,6 +112,11 @@ claude-private の repo 本体は chezmoi の external（`.chezmoiexternal.toml`
 
 `ssh-add -l` が空のときは Windows 側の Bitwarden がロックされているか、SSH agent の設定が無効になっている。
 
+### 6. Claude Code のトランスクリプトが戻ったか確かめる
+
+D ドライブへ退避してあるトランスクリプトは、手順 4 の `chezmoi apply` が自動で戻す。
+戻ったことの確かめ方と、手で古い世代から戻す手順、トラブルシューティングは [docs/claude-transcripts-backup.md](docs/claude-transcripts-backup.md)。
+
 ## 自動で入るもの
 
 一覧は各スクリプトが正で、ここには写さない。

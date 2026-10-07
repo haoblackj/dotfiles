@@ -1,0 +1,50 @@
+{{- $repo := "/mnt/d/claude-transcripts-backup/restic" -}}
+{{- $password := joinPath .chezmoi.homeDir ".local/share/claude-private/secrets/restic-claude-transcripts" -}}
+{{- $guard := joinPath .chezmoi.homeDir ".local/bin/claude-transcripts-backup-guard" -}}
+# Claude Code のトランスクリプトを WSL の外（D ドライブ）へ退避する（haoblackj/dotfiles#42）。
+# スケジュールは resticprofile が systemd --user のユニットを生成して受け持つ。
+# 生成と再生成は run_onchange_after_88_claude-transcripts-backup.sh が行う。
+# 復元の手順は docs/claude-transcripts-backup.md。
+version: "1"
+
+claude-transcripts:
+  repository: "local:{{ $repo }}"
+  # claude-private の clone で届く。WSL を初期化しても GitHub から戻る
+  password-file: "{{ $password }}"
+  # initialize は付けない。D が初期化されたときに、気づかないまま空のリポジトリへ積み直さないため。
+  # リポジトリが無ければ guard が失敗として知らせる
+
+  backup:
+    source:
+      # resume が読む jsonl と subagents/、tool-results/
+      - "{{ .chezmoi.homeDir }}/.claude/projects"
+      # rewind の巻き戻し
+      - "{{ .chezmoi.homeDir }}/.claude/file-history"
+      # 上矢印と Ctrl+R のプロンプト履歴
+      - "{{ .chezmoi.homeDir }}/.claude/history.jsonl"
+    tag:
+      - claude-transcripts
+    # 退避先とパスワードを確かめ、このマシンで未復元なら最新の世代を戻してから backup する
+    run-before: "{{ $guard }} check /mnt/d {{ $repo }} {{ $password }}"
+    run-after: "{{ $guard }} ok"
+    run-after-fail: "{{ $guard }} fail"
+    schedule: hourly
+    # user は Linux ではシステムのユニットになり、作るのに root が要る
+    schedule-permission: user_logged_on
+    schedule-lock-wait: 15m
+    schedule-priority: background
+
+  # 書きかけの jsonl を写すことは避けられないので、世代を残して一つ前から戻せるようにする。
+  # 追記で伸びるだけのファイルなので、最新の世代に全セッションが揃っている。
+  forget:
+    keep-hourly: 48
+    keep-daily: 30
+    keep-weekly: 52
+    keep-monthly: unlimited
+    prune: true
+    run-before: "{{ $guard }} check /mnt/d {{ $repo }} {{ $password }}"
+    run-after-fail: "{{ $guard }} fail"
+    schedule: weekly
+    schedule-permission: user_logged_on
+    schedule-lock-wait: 1h
+    schedule-priority: background

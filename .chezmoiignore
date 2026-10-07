@@ -42,6 +42,7 @@ wsl-static-dns.service
 .claude/hooks/*.bats
 # ~/.local/bin のスクリプトの単体テストも同じ理由（ソース名で本体を参照する）で対象外。
 .local/bin/*.bats
+.config/ccstatusline/*.bats
 
 {{- if .isDevcontainer }}
 # devcontainer は自動でホストの .gitconfig をコンテナ内にコピーするため、chezmoi apply の対象から外す
@@ -52,6 +53,17 @@ wsl-static-dns.service
 # Bitwarden の SSH agent（npiperelay.exe 経由）は自宅 PC だけ。職場機ではマルウェア検知に
 # 当たるので unit を配らない。既に配った機は run_once_99 が disable --now で止める。
 .config/systemd/user/bitwarden-ssh-agent.service
+{{- end }}
+
+{{- if not (hasPrefix "HIRO-DESKTOP" (upper .chezmoi.hostname)) }}
+# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42）は、データ用の D ドライブがある
+# HIRO-DESKTOP 系列だけ。ほかのマシンに D があっても退避先のリポジトリは無いので、配ると
+# 失敗の表示が出続ける。ステータスラインの枠（claude-transcripts-backup-status.sh）は
+# ccstatusline の設定が全マシン共通なので配る。タイマーが無ければ何も出さない。
+.config/resticprofile/profiles.yaml
+.local/bin/claude-transcripts-backup-guard
+88_claude-transcripts-backup.sh
+89_claude-transcripts-restore.sh
 {{- end }}
 
 {{- if or (not .isWSL) .isDevcontainer }}
