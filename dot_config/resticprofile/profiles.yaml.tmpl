@@ -1,0 +1,39 @@
+# Claude Code のトランスクリプトを WSL の外（D ドライブ）へ退避する（haoblackj/dotfiles#42）。
+# スケジュールは resticprofile が systemd --user のユニットを生成して受け持つ。
+# 生成と再生成は run_onchange_after_88_claude-transcripts-backup.sh が行う。
+# 復元の手順は docs/claude-transcripts-backup.md。
+version: "1"
+
+claude-transcripts:
+  repository: "local:/mnt/d/claude-transcripts-backup/restic"
+  # claude-private の clone で届く。WSL を初期化しても GitHub から戻る
+  password-file: "{{ .chezmoi.homeDir }}/.local/share/claude-private/secrets/restic-claude-transcripts"
+  initialize: true
+
+  backup:
+    source:
+      # resume が読む jsonl と subagents/、tool-results/
+      - "{{ .chezmoi.homeDir }}/.claude/projects"
+      # rewind の巻き戻し
+      - "{{ .chezmoi.homeDir }}/.claude/file-history"
+      # 上矢印と Ctrl+R のプロンプト履歴
+      - "{{ .chezmoi.homeDir }}/.claude/history.jsonl"
+    tag:
+      - claude-transcripts
+    schedule: hourly
+    schedule-permission: user_logged_on
+    schedule-lock-wait: 15m
+    schedule-priority: background
+
+  # 書きかけの jsonl を写すことは避けられないので、世代を残して一つ前から戻せるようにする。
+  # 追記で伸びるだけのファイルなので、最新の世代に全セッションが揃っている。
+  forget:
+    keep-hourly: 48
+    keep-daily: 30
+    keep-weekly: 52
+    keep-monthly: unlimited
+    prune: true
+    schedule: weekly
+    schedule-permission: user_logged_on
+    schedule-lock-wait: 1h
+    schedule-priority: background

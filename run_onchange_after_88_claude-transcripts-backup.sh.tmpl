@@ -1,0 +1,20 @@
+#!/bin/bash
+set -eu
+
+{{ template "brew-env.sh" }}
+# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42）を systemd --user に登録する。
+# 設定は dot_config/resticprofile/profiles.yaml.tmpl、restic と resticprofile は run_once_80 の
+# Brewfile が入れる。after にして、設定が配られた後に走らせる。設定が変わったらユニットを作り直す。
+# profiles.yaml hash: {{ include "dot_config/resticprofile/profiles.yaml.tmpl" | sha256sum }}
+if [ ! -d /mnt/d ]; then
+  echo "D ドライブ（/mnt/d）が無いので、トランスクリプトの退避を登録しない"
+  exit 0
+fi
+# パスワードが未着（claude-private の clone 前）でもユニットは作れる。届くまで backup が失敗し続け、
+# 届いた次の回から通る
+resticprofile --name claude-transcripts schedule --reload --no-start
+# --no-start は「すぐに backup を走らせない」に加えてタイマーも止めたまま残すので、タイマーだけ動かす。
+# 動かさないと、次に WSL を起動し直すまで退避が始まらない
+systemctl --user start \
+  'resticprofile-backup@profile-claude-transcripts.timer' \
+  'resticprofile-forget@profile-claude-transcripts.timer'
