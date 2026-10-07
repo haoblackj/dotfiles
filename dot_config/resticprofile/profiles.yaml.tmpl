@@ -7,6 +7,11 @@
 # 復元の手順は docs/claude-transcripts-backup.md。
 version: "1"
 
+global:
+  # 生成された systemd --user のユニットは brew の PATH を持たず、restic を探せずに失敗する。
+  # この失敗は run-before より手前で起きるので guard を通らず、失敗の表示も出ない
+  restic-binary: "/home/linuxbrew/.linuxbrew/bin/restic"
+
 claude-transcripts:
   repository: "local:{{ $repo }}"
   # claude-private の clone で届く。WSL を初期化しても GitHub から戻る
