@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42）が失敗しているか止まっている間だけ、
+# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42、#45）が失敗しているか止まっている間だけ、
 # ステータスラインに出す。正常なら何も出さない。状態は claude-transcripts-backup-guard が書く。
 set -uo pipefail
 
@@ -11,10 +11,13 @@ STALE_SECONDS=$((3 * 3600))
 # タイマーを入れていないマシン（D ドライブが無い等）では見張らない
 [ -e "$TIMER" ] || exit 0
 
-if [ -s "$STATE/failure" ]; then
-    printf '⚠ 退避失敗: %s' "$(head -n 1 "$STATE/failure")"
-    exit 0
-fi
+# 原因に近いものから出す。環境（D、リポジトリ、パスワード）が欠けると backup も check も落ちる
+for kind in env backup check forget; do
+    if [ -s "$STATE/failure-$kind" ]; then
+        printf '⚠ 退避失敗: %s' "$(head -n 1 "$STATE/failure-$kind")"
+        exit 0
+    fi
+done
 
 # WSL が止まっている間はタイマーも止まる。起動して間もないうちは、次の毎時の回を待つ
 uptime=$(awk '{printf "%d", $1}' "$UPTIME_FILE")

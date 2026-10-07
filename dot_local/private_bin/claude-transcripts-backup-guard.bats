@@ -1,11 +1,12 @@
 #!/usr/bin/env bats
-# claude-transcripts-backup-guard のユニットテスト。本物の restic と D ドライブは使わない。
+# claude-transcripts-backup-guard のユニットテスト。本物の restic、systemctl と D ドライブは使わない。
 set -u
 
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/executable_claude-transcripts-backup-guard"
     TMPDIR_TEST="$(mktemp -d)"
-    export CLAUDE_TRANSCRIPTS_BACKUP_STATE="$TMPDIR_TEST/state"
+    STATE="$TMPDIR_TEST/state"
+    export CLAUDE_TRANSCRIPTS_BACKUP_STATE="$STATE"
     export CLAUDE_TRANSCRIPTS_RESTORE_TARGET="$TMPDIR_TEST/target"
     MOUNT="$TMPDIR_TEST/d"
     REPO="$MOUNT/claude-transcripts-backup/restic"
@@ -37,27 +38,36 @@ teardown() {
 }
 
 failure() {
-    cat "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/failure"
+    cat "$STATE/failure-$1"
 }
 
-@test "check: D に届かなければ失敗し、理由を書く" {
+@test "check: D に届かなければ失敗し、環境の失敗として書く" {
     run "$SCRIPT" check "$TMPDIR_TEST/missing" "$REPO" "$PW"
     [ "$status" -ne 0 ]
-    [[ "$(failure)" == *"D ドライブに届かない"* ]]
+    [[ "$(failure env)" == *"D ドライブに届かない"* ]]
 }
 
 @test "check: 退避先のリポジトリが無ければ失敗し、新しく作らない" {
     rm -- "$REPO/config"
     run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
     [ "$status" -ne 0 ]
-    [[ "$(failure)" == *"退避先のリポジトリが無い"* ]]
+    [[ "$(failure env)" == *"退避先のリポジトリが無い"* ]]
     [ ! -s "$RESTIC_LOG" ]
 }
 
 @test "check: パスワードが無ければ失敗する" {
     run "$SCRIPT" check "$MOUNT" "$REPO" "$TMPDIR_TEST/no-pw"
     [ "$status" -ne 0 ]
-    [[ "$(failure)" == *"パスワードが無い"* ]]
+    [[ "$(failure env)" == *"パスワードが無い"* ]]
+}
+
+@test "check: 環境が揃えば、前の環境の失敗を消す" {
+    mkdir -p "$STATE"
+    touch "$STATE/restored"
+    echo "D ドライブに届かない" > "$STATE/failure-env"
+    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
+    [ "$status" -eq 0 ]
+    [ ! -s "$STATE/failure-env" ]
 }
 
 @test "check: 未復元なら最新の世代を上書きせずに戻し、印を付ける" {
@@ -65,7 +75,7 @@ failure() {
     run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
     [ "$status" -eq 0 ]
     grep -q "restore latest --target $CLAUDE_TRANSCRIPTS_RESTORE_TARGET --overwrite never" "$RESTIC_LOG"
-    [ -e "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/restored" ]
+    [ -e "$STATE/restored" ]
 }
 
 @test "check: 世代が一つも無ければ戻さずに印だけ付ける" {
@@ -73,54 +83,92 @@ failure() {
     [ "$status" -eq 0 ]
     run grep -q " restore " "$RESTIC_LOG"
     [ "$status" -ne 0 ]
-    [ -e "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/restored" ]
+    [ -e "$STATE/restored" ]
 }
 
-@test "check: 復元に失敗したら印を付けずに失敗する" {
+@test "check: 復元に失敗したら印を付けずに、backup の失敗として書く" {
     export FAKE_SNAPSHOTS='[{"id":"abc"}]' FAKE_RESTORE_EXIT=1
     run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
     [ "$status" -ne 0 ]
-    [[ "$(failure)" == *"復元に失敗"* ]]
-    [ ! -e "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/restored" ]
+    [[ "$(failure backup)" == *"復元に失敗"* ]]
+    [ ! -e "$STATE/restored" ]
 }
 
 @test "check: 復元済みなら restic を呼ばない" {
-    mkdir -p "$CLAUDE_TRANSCRIPTS_BACKUP_STATE"
-    touch "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/restored"
+    mkdir -p "$STATE"
+    touch "$STATE/restored"
     run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
     [ "$status" -eq 0 ]
     [ ! -s "$RESTIC_LOG" ]
 }
 
-@test "check: forget の前では戻さない" {
-    export PROFILE_COMMAND=forget FAKE_SNAPSHOTS='[{"id":"abc"}]'
-    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
-    [ "$status" -eq 0 ]
+@test "check: backup 以外の前では戻さない" {
+    export FAKE_SNAPSHOTS='[{"id":"abc"}]'
+    for cmd in forget check; do
+        PROFILE_COMMAND=$cmd run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
+        [ "$status" -eq 0 ]
+    done
     [ ! -s "$RESTIC_LOG" ]
-    [ ! -e "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/restored" ]
+    [ ! -e "$STATE/restored" ]
 }
 
-@test "ok: 失敗の理由を消し、成功の時刻を残す" {
-    mkdir -p "$CLAUDE_TRANSCRIPTS_BACKUP_STATE"
-    echo "前の失敗" > "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/failure"
+@test "ok: backup の成功は backup の失敗だけを消し、成功の時刻を残す" {
+    mkdir -p "$STATE"
+    echo "前の失敗" > "$STATE/failure-backup"
+    echo "壊れている" > "$STATE/failure-check"
     run "$SCRIPT" ok
     [ "$status" -eq 0 ]
-    [ ! -s "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/failure" ]
-    [ -e "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/last-success" ]
+    [ ! -s "$STATE/failure-backup" ]
+    [ "$(failure check)" = "壊れている" ]
+    [ -e "$STATE/last-success" ]
 }
 
-@test "fail: restic が失敗したら終了コードつきで書く" {
-    ERROR_MESSAGE="backup on profile 'claude-transcripts': exit status 10" ERROR_EXIT_CODE=10 \
+@test "ok: check の成功は check の失敗を消し、成功の時刻は動かさない" {
+    mkdir -p "$STATE"
+    echo "壊れている" > "$STATE/failure-check"
+    PROFILE_COMMAND=check run "$SCRIPT" ok
+    [ "$status" -eq 0 ]
+    [ ! -s "$STATE/failure-check" ]
+    [ ! -e "$STATE/last-success" ]
+}
+
+@test "fail: restic が失敗したら、そのコマンドの失敗として終了コードつきで書く" {
+    PROFILE_COMMAND=check ERROR_MESSAGE="check on profile 'claude-transcripts': exit status 1" ERROR_EXIT_CODE=1 \
         run "$SCRIPT" fail
     [ "$status" -eq 0 ]
-    [[ "$(failure)" == *"restic backup が失敗（終了コード 10）"* ]]
+    [[ "$(failure check)" == *"restic check が失敗（終了コード 1）"* ]]
 }
 
-@test "fail: run-before の失敗では、確認が書いた理由を残す" {
-    mkdir -p "$CLAUDE_TRANSCRIPTS_BACKUP_STATE"
-    echo "D ドライブに届かない" > "$CLAUDE_TRANSCRIPTS_BACKUP_STATE/failure"
+@test "fail: run-before の失敗では何も書かない（check が理由を書いている）" {
     ERROR_MESSAGE="run-before backup on profile 'claude-transcripts': exit status 1" ERROR_EXIT_CODE=1 \
         run "$SCRIPT" fail
     [ "$status" -eq 0 ]
-    [ "$(failure)" = "D ドライブに届かない" ]
+    [ ! -s "$STATE/failure-backup" ]
+}
+
+@test "systemd-fail: その回に理由が書かれていなければ、ユニットの失敗として書く" {
+    CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(date +%s)
+    export CLAUDE_TRANSCRIPTS_UNIT_STARTED
+    run "$SCRIPT" systemd-fail resticprofile-backup
+    [ "$status" -eq 0 ]
+    [[ "$(failure backup)" == *"backup のユニットが失敗"* ]]
+}
+
+@test "systemd-fail: その回に書かれた理由は残す" {
+    mkdir -p "$STATE"
+    export CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(($(date +%s) - 60))
+    echo "D ドライブに届かない" > "$STATE/failure-env"
+    run "$SCRIPT" systemd-fail resticprofile-backup
+    [ "$status" -eq 0 ]
+    [ ! -s "$STATE/failure-backup" ]
+}
+
+@test "systemd-fail: 前の回より古い理由しか無ければ、ユニットの失敗として書く" {
+    mkdir -p "$STATE"
+    echo "前の回の失敗" > "$STATE/failure-env"
+    touch -d '2 hours ago' "$STATE/failure-env"
+    export CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(($(date +%s) - 60))
+    run "$SCRIPT" systemd-fail resticprofile-forget
+    [ "$status" -eq 0 ]
+    [[ "$(failure forget)" == *"forget のユニットが失敗"* ]]
 }

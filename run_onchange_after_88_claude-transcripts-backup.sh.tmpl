@@ -6,6 +6,8 @@ set -eu
 # 設定は dot_config/resticprofile/profiles.yaml.tmpl、restic と resticprofile は run_once_80 の
 # Brewfile が入れる。after にして、設定が配られた後に走らせる。設定が変わったらユニットを作り直す。
 # profiles.yaml hash: {{ include "dot_config/resticprofile/profiles.yaml.tmpl" | sha256sum }}
+# OnFailure の drop-in（#45）hash: {{ include "dot_config/resticprofile/90-claude-transcripts-onfailure.conf" | sha256sum }}
+# OnFailure の受け手のユニット hash: {{ include "dot_config/systemd/user/claude-transcripts-backup-failed@.service" | sha256sum }}
 if [ ! -d /mnt/d ]; then
   echo "D ドライブ（/mnt/d）が無いので、トランスクリプトの退避を登録しない"
   exit 0
@@ -17,4 +19,5 @@ resticprofile --name claude-transcripts schedule --reload --no-start
 # 動かさないと、次に WSL を起動し直すまで退避が始まらない
 systemctl --user start \
   'resticprofile-backup@profile-claude-transcripts.timer' \
-  'resticprofile-forget@profile-claude-transcripts.timer'
+  'resticprofile-forget@profile-claude-transcripts.timer' \
+  'resticprofile-check@profile-claude-transcripts.timer'

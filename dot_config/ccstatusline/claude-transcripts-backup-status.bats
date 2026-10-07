@@ -28,7 +28,21 @@ teardown() {
 
 @test "失敗している間は理由を出す" {
     touch "$STATE/last-success"
-    echo "D ドライブに届かない" > "$STATE/failure"
+    echo "D ドライブに届かない" > "$STATE/failure-env"
+    run "$SCRIPT"
+    [ "$output" = "⚠ 退避失敗: D ドライブに届かない" ]
+}
+
+@test "検査の失敗は、backup が成功していても出す" {
+    touch "$STATE/last-success"
+    echo "restic check が失敗（終了コード 1）" > "$STATE/failure-check"
+    run "$SCRIPT"
+    [ "$output" = "⚠ 退避失敗: restic check が失敗（終了コード 1）" ]
+}
+
+@test "失敗が複数あれば、原因に近い環境の失敗を先に出す" {
+    echo "backup のユニットが失敗" > "$STATE/failure-backup"
+    echo "D ドライブに届かない" > "$STATE/failure-env"
     run "$SCRIPT"
     [ "$output" = "⚠ 退避失敗: D ドライブに届かない" ]
 }
@@ -58,7 +72,7 @@ teardown() {
 }
 
 @test "タイマーの無いマシンでは何も出さない" {
-    echo "D ドライブに届かない" > "$STATE/failure"
+    echo "D ドライブに届かない" > "$STATE/failure-env"
     rm -- "$CLAUDE_TRANSCRIPTS_BACKUP_TIMER"
     run "$SCRIPT"
     [ -z "$output" ]

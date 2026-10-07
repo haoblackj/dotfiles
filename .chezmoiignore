@@ -60,7 +60,9 @@ wsl-static-dns.service
 # HIRO-DESKTOP 系列だけ。ほかのマシンに D があっても退避先のリポジトリは無いので、配ると
 # 失敗の表示が出続ける。ステータスラインの枠（claude-transcripts-backup-status.sh）は
 # ccstatusline の設定が全マシン共通なので配る。タイマーが無ければ何も出さない。
-.config/resticprofile/profiles.yaml
+.config/resticprofile
+.config/resticprofile/**
+.config/systemd/user/claude-transcripts-backup-failed@.service
 .local/bin/claude-transcripts-backup-guard
 88_claude-transcripts-backup.sh
 89_claude-transcripts-restore.sh
