@@ -1,0 +1,8 @@
+[Unit]
+Description=Record a failure of %i for the Claude Code transcript backup (haoblackj/dotfiles#45)
+
+# resticprofile が生成するユニットの OnFailure から呼ばれる（dot_config/resticprofile/ の drop-in）。
+# %i は失敗したユニット名の接頭辞（resticprofile-backup など）
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/claude-transcripts-backup-guard systemd-fail %i

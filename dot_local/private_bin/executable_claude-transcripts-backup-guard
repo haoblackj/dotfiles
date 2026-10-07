@@ -1,12 +1,16 @@
 #!/bin/bash
-# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42）を、resticprofile のフックから見張る。
+# Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42、#45）を見張る。
 #
-#   check <マウント> <リポジトリ> <パスワード>  run-before。退避先とパスワードを確かめ、
-#       このマシンでまだ戻していなければ、最初の backup の前に最新の世代を戻す
-#   ok    run-after。失敗の理由を消し、成功の時刻を残す
+#   check <マウント> <リポジトリ> <パスワード>  resticprofile の run-before。退避先とパスワードを
+#       確かめ、このマシンでまだ戻していなければ、最初の backup の前に最新の世代を戻す
+#   ok    run-after。そのコマンドの失敗の理由を消す。backup なら成功の時刻を残す
 #   fail  run-after-fail。restic 自体の失敗を書く
+#   systemd-fail <ユニット名の接頭辞>  systemd の OnFailure から。resticprofile が restic を
+#       起こせないなど、上のフックより手前で落ちた回も記録する
 #
-# 失敗の理由は状態ファイルに書き、ステータスラインの枠（claude-transcripts-backup-status.sh）が読む。
+# 失敗の理由は原因ごとの状態ファイル（failure-env、failure-backup、failure-forget、failure-check）に
+# 書き、ステータスラインの枠（claude-transcripts-backup-status.sh）が読む。分けているのは、
+# 週次の check の失敗を毎時の backup の成功で消さないため。
 # D が初期化されたときに空から積み直さないよう、リポジトリが無ければ作らずに失敗する。
 
 set -uo pipefail
@@ -15,34 +19,47 @@ set -uo pipefail
 export PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"
 STATE="${CLAUDE_TRANSCRIPTS_BACKUP_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/claude-transcripts-backup}"
 TARGET="${CLAUDE_TRANSCRIPTS_RESTORE_TARGET:-/}"
+COMMAND="${PROFILE_COMMAND:-backup}"
 mkdir -p "$STATE"
 
 fail_with() {
-    echo "$1" > "$STATE/failure"
-    echo "$1" >&2
+    echo "$2" > "$STATE/failure-$1"
+    echo "$2" >&2
     exit 1
 }
 
 check() {
     local mount="$1" repo="$2" pw="$3"
-    ls -- "$mount" >/dev/null 2>&1 || fail_with "D ドライブに届かない"
-    [ -f "$repo/config" ] || fail_with "退避先のリポジトリが無い"
-    [ -r "$pw" ] || fail_with "パスワードが無い"
+    ls -- "$mount" >/dev/null 2>&1 || fail_with env "D ドライブに届かない"
+    [ -f "$repo/config" ] || fail_with env "退避先のリポジトリが無い"
+    [ -r "$pw" ] || fail_with env "パスワードが無い"
+    : > "$STATE/failure-env"
 
-    # 戻すのは backup の前だけ。forget の前に戻すと、退避より先に古い世代を書き戻しうる
-    [ "${PROFILE_COMMAND:-}" = backup ] || return 0
+    # 戻すのは backup の前だけ。forget や check の前に戻すと、退避より先に古い世代を書き戻しうる
+    [ "$COMMAND" = backup ] || return 0
     [ -e "$STATE/restored" ] && return 0
 
     local snapshots
     snapshots=$(restic -r "local:$repo" --password-file "$pw" snapshots --json --latest 1) \
-        || fail_with "スナップショットを読めない"
+        || fail_with backup "スナップショットを読めない"
     if [ "$snapshots" != "[]" ]; then
         # 手元のファイルは上書きしない。戻す前に Claude Code を使っていても、その分は残る
         echo "このマシンでは未復元なので、最新の世代を戻す"
         restic -r "local:$repo" --password-file "$pw" restore latest --target "$TARGET" --overwrite never \
-            || fail_with "復元に失敗"
+            || fail_with backup "復元に失敗"
     fi
     touch "$STATE/restored"
+}
+
+systemd_fail() {
+    local cmd="${1#resticprofile-}" started f
+    # その回のフックが理由を書いていれば、そちらを残す。回の始まりはユニットの起動時刻で見る
+    started="${CLAUDE_TRANSCRIPTS_UNIT_STARTED:-$(date -d "$(systemctl --user show "$1@profile-claude-transcripts.service" \
+        -p ExecMainStartTimestamp --value)" +%s 2>/dev/null || echo 0)}"
+    for f in "$STATE"/failure-*; do
+        [ -s "$f" ] && [ "$(stat -c %Y "$f")" -ge "$started" ] && return 0
+    done
+    echo "$cmd のユニットが失敗（journalctl で確認）" > "$STATE/failure-$cmd"
 }
 
 case "${1:-}" in
@@ -51,18 +68,23 @@ case "${1:-}" in
         check "$2" "$3" "$4"
         ;;
     ok)
-        : > "$STATE/failure"
-        touch "$STATE/last-success"
+        : > "$STATE/failure-$COMMAND"
+        [ "$COMMAND" = backup ] && touch "$STATE/last-success"
+        exit 0
         ;;
     fail)
-        # run-before の失敗でも呼ばれる。そのときは check が書いた理由を残す
+        # run-before の失敗でも呼ばれる。そのときは check が理由を書いている
         case "${ERROR_MESSAGE:-}" in
             run-before*) ;;
-            *) echo "restic ${PROFILE_COMMAND:-backup} が失敗（終了コード ${ERROR_EXIT_CODE:-?}）" > "$STATE/failure" ;;
+            *) echo "restic $COMMAND が失敗（終了コード ${ERROR_EXIT_CODE:-?}）" > "$STATE/failure-$COMMAND" ;;
         esac
         ;;
+    systemd-fail)
+        [ $# -eq 2 ] || { echo "usage: $0 systemd-fail <unit-prefix>" >&2; exit 2; }
+        systemd_fail "$2"
+        ;;
     *)
-        echo "usage: $0 check|ok|fail" >&2
+        echo "usage: $0 check|ok|fail|systemd-fail" >&2
         exit 2
         ;;
 esac

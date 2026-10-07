@@ -18,6 +18,9 @@ claude-transcripts:
   password-file: "{{ $password }}"
   # initialize は付けない。D が初期化されたときに、気づかないまま空のリポジトリへ積み直さないため。
   # リポジトリが無ければ guard が失敗として知らせる
+  # 生成するユニットが失敗したら、フックより手前の失敗も記録する（#45）
+  systemd-drop-in-files:
+    - "90-claude-transcripts-onfailure.conf"
 
   backup:
     source:
@@ -48,8 +51,21 @@ claude-transcripts:
     keep-monthly: unlimited
     prune: true
     run-before: "{{ $guard }} check /mnt/d {{ $repo }} {{ $password }}"
+    run-after: "{{ $guard }} ok"
     run-after-fail: "{{ $guard }} fail"
     schedule: weekly
+    schedule-permission: user_logged_on
+    schedule-lock-wait: 1h
+    schedule-priority: background
+
+  # 戻すときに初めて壊れに気づく、を防ぐ（#45）。データの一部を実際に読む。
+  # 1.5GB のリポジトリで週に数十 MB の読み出し。forget（月曜 0 時）と重ならない曜日にする
+  check:
+    read-data-subset: "5%"
+    run-before: "{{ $guard }} check /mnt/d {{ $repo }} {{ $password }}"
+    run-after: "{{ $guard }} ok"
+    run-after-fail: "{{ $guard }} fail"
+    schedule: "Thu *-*-* 12:00:00"
     schedule-permission: user_logged_on
     schedule-lock-wait: 1h
     schedule-priority: background
