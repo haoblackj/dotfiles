@@ -169,6 +169,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/japanese-guard.py",
+            "type": "command"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
