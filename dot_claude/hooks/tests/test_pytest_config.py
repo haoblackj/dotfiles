@@ -16,8 +16,8 @@ REPO_ROOT = os.path.dirname(
 )
 PYPROJECT = os.path.join(REPO_ROOT, "pyproject.toml")
 
-# このリポジトリのテストは1ディレクトリに集まっている。
-EXPECTED_TESTPATHS = ["dot_claude/hooks/tests"]
+# このリポジトリのテストは、対象のコードの隣のディレクトリに置く。
+EXPECTED_TESTPATHS = ["dot_claude/hooks/tests", "skills/research-design/tests"]
 
 
 def _load(path):
@@ -58,11 +58,11 @@ class PytestConfigTest(unittest.TestCase):
                 f"許した警告の直前行に理由のコメントが無い: {entry!r}",
             )
 
-    def test_testpaths_points_at_the_single_test_directory(self):
+    def test_testpaths_lists_the_test_directories(self):
         self.assertEqual(_ini()["testpaths"], EXPECTED_TESTPATHS)
 
     def test_no_pythonpath_is_needed_here(self):
-        # **このリポジトリのテスト2本はどちらも素の兄弟 import に依存しない**
+        # **このリポジトリのテストはどれも素の兄弟 import に依存しない**
         # （importlib.util で自前に読む）。penguinEx 側と違って pythonpath は
         # 要らない。足すと「なぜ要るのか」の根拠が無い設定が残る。
         self.assertNotIn("pythonpath", _ini())
