@@ -5,6 +5,14 @@ url = "https://github.com/virgiliojr94/book-to-skill.git"
 refreshPeriod = "168h"
 clone.args = ["--depth", "1"]
 
+# 応答が英語に切り替わったら日本語で書き直させる Stop hook（dotfiles#56）。
+# 第三者の実行ファイルがターンの終わりのたびに走るので、upstream の main を追わずコミットに固定する。
+# 上げるときは upstream の差分を読んでから URL のコミットを替える。
+[".claude/hooks/japanese-guard.py"]
+type = "file"
+url = "https://raw.githubusercontent.com/minorun365/claude-code-japanese-guard/e68864a6709768e14d437800ba1bad1cea3cd1a8/hooks/japanese-guard.py"
+executable = true
+
 # 機密 private repo（memory + 著作権配慮スキル）をステージング地点へ clone。
 # pull のみ（push は Stop hook の claude-private-sync.sh が担当）。
 [".local/share/claude-private"]

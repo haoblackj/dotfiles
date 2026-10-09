@@ -56,7 +56,7 @@ setup() {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     run jq -c 'keys' "$HOME/.claude/settings.json"
-    [ "$output" = '["language","outputStyle","spinnerVerbs"]' ]
+    [ "$output" = '["hooks","language","outputStyle","spinnerVerbs"]' ]
     run jq -r '.outputStyle' "$HOME/.claude/settings.json"
     [ "$output" = "$(jq -r '.outputStyle' "$SRC/linked/claude/settings.json")" ]
     run jq -c '.spinnerVerbs' "$HOME/.claude/settings.json"
@@ -81,6 +81,34 @@ setup() {
     [ "$status" -eq 0 ]
     run jq -r '.language' "$HOME/.claude/settings.json"
     [ "$output" = "japanese" ]
+}
+
+@test "hooks.Stop には CLOUD_HOOK_COMMANDS のものだけを入れる" {
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    run jq -c '[.hooks.Stop[].hooks[].command]' "$HOME/.claude/settings.json"
+    [ "$output" = '["~/.claude/hooks/japanese-guard.py"]' ]
+    run jq -c '.hooks | keys' "$HOME/.claude/settings.json"
+    [ "$output" = '["Stop"]' ]
+}
+
+@test "既存の hooks を残して hooks.Stop をマージする" {
+    mkdir -p "$HOME/.claude"
+    echo '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}],"PreToolUse":[]}}' >"$HOME/.claude/settings.json"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    run jq -c '[.hooks.Stop[].hooks[].command]' "$HOME/.claude/settings.json"
+    [ "$output" = '["mine","~/.claude/hooks/japanese-guard.py"]' ]
+    run jq -c '.hooks.PreToolUse' "$HOME/.claude/settings.json"
+    [ "$output" = '[]' ]
+}
+
+@test "二度走らせても hooks.Stop の要素が重複しない" {
+    bash "$SCRIPT" 2>/dev/null
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    run jq '.hooks.Stop | length' "$HOME/.claude/settings.json"
+    [ "$output" = 1 ]
 }
 
 @test "二度走らせても同じ結果になる（消した agent が残らない）" {
@@ -111,6 +139,41 @@ EOF
     [[ "$output" == *"https://invalid.example/pub.git"* ]]
     [[ "$output" != *"secret.git"* ]]
     [[ "$output" == *"git-repo 以外の external は飛ばす: .claude/skills/arc"* ]]
+}
+
+@test "~/.claude/hooks 配下の file の external を取って置く" {
+    printf '#!/usr/bin/env python3\n' >"$BATS_TEST_TMPDIR/guard.py"
+    printf 'x\n' >"$BATS_TEST_TMPDIR/other.txt"
+    cat >"$SRC/.chezmoiexternal.toml" <<EOF
+[".claude/hooks/guard.py"]
+type = "file"
+url = "file://$BATS_TEST_TMPDIR/guard.py"
+executable = true
+
+[".claude/other.txt"]
+type = "file"
+url = "file://$BATS_TEST_TMPDIR/other.txt"
+EOF
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    cmp "$BATS_TEST_TMPDIR/guard.py" "$HOME/.claude/hooks/guard.py"
+    [ -x "$HOME/.claude/hooks/guard.py" ]
+    [ ! -e "$HOME/.claude/other.txt" ]
+    [[ "$output" == *"git-repo 以外の external は飛ばす: .claude/other.txt"* ]]
+}
+
+@test "file の external の取得に失敗しても既存のものを残す" {
+    cat >"$SRC/.chezmoiexternal.toml" <<EOF
+[".claude/hooks/guard.py"]
+type = "file"
+url = "file://$BATS_TEST_TMPDIR/missing.py"
+EOF
+    mkdir -p "$HOME/.claude/hooks"
+    echo keep >"$HOME/.claude/hooks/guard.py"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.claude/hooks/guard.py")" = keep ]
+    [ ! -e "$HOME/.claude/hooks/guard.py.tmp" ]
 }
 
 @test "external の clone に失敗しても既存のものを残す" {

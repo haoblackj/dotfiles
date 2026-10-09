@@ -266,7 +266,8 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
 | リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。写したスキルがクラウドのセッションのスキル一覧に出ることは、`research-design` で確かめた（dotfiles#48） |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
-| hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
+| hooks / statusLine / keybindings | 配らない（下の japanese-guard を除く） | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
+| japanese-guard（Stop hook）。`.chezmoiexternal.toml` の `.claude/hooks/` 配下の file external と、settings.json の `hooks.Stop` のうち `CLOUD_HOOK_COMMANDS` に挙げたもの | 配る | 応答が英語に切り替わったら日本語で書き直させる（dotfiles#56）。Python 3 だけで動き、手元の道具に依存しない。既存の `hooks.Stop` は残し、同じ command があれば足さない |
 | `permissions` | 配らない | `deny` の `rm` を持ち込むと、`trash-put` の無いクラウドで削除の手段が無くなる。`defaultMode` はセッション側で決まる |
 | プラグイン（`enabledPlugins`） | 配らない | クラウドは settings 経由のプラグインを入れない（公式）。codex は CLI 自体が無い |
 
@@ -275,7 +276,8 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 - `dot_claude/` に何かを足したら、クラウドへ配るかをこの表で決める。配るなら `install-cloud.sh` の `COPY_ITEMS`（ディレクトリやファイル）か `SETTINGS_KEYS`（settings のキー）に足し、この表と `install-cloud.bats` を合わせる。
 - `COPY_ITEMS` はそのまま写すので、chezmoi の属性つきの名前（`executable_` / `dot_` / `*.tmpl` など）は入れられない。混ざるとスクリプトが警告を出す。
 - `dot_claude/CLAUDE.md` に手元専用の道具（chezmoi / herdr / codex / memory など）を前提にした節を足したら、冒頭の「クラウドセッションでの読み替え」節にも足す。
-- `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external は自動で配られる（`archive` / `file` は飛ばし、`clone.args` などのオプションは読まない）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
+- `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external と、`.claude/hooks/` 配下に足した `type = "file"` の external は自動で配られる（`archive` とそれ以外の `file` は飛ばし、`clone.args` などのオプションは読まない）。
+- クラウドへも配る hook を足すときは、本体を `.claude/hooks/` 配下の file external にし、command を `install-cloud.sh` の `CLOUD_HOOK_COMMANDS` に足す（今は `hooks.Stop` だけを扱う）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
 - `skills/` に足したスキルは、`install-cloud.sh` が自動で写す。非公開のスキルを `skills/` に置かない（公開リポジトリなので境界を越える）。
 - 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。
 - 取得に失敗しても exit 0 で抜ける（環境のセットアップ全体を落とさない）。効いていないと感じたら、セッションの Setup script のログに出る `[install-cloud]` の行を見る。
