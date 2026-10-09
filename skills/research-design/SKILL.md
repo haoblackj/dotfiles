@@ -31,10 +31,18 @@ allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/post_design.py *)
 
 ### 1. 置き場の確定
 
-依頼のタスクに対応する issue を、そのリポジトリで探す。
+まず、作業ディレクトリが GitHub のリポジトリかを確かめる。
+
+```
+gh repo view --json nameWithOwner --jq .nameWithOwner
+```
+
+`owner/name` が出たら、それが投稿先のリポジトリ（手順8 の `--repo`）になる。
+失敗したら（git のリポジトリでない、GitHub の remote が無い、gh が認証されていない）、どこへ立てるかをリーダーに聞く。
+
+投稿先のリポジトリで、依頼のタスクに対応する issue を探す。
 あれば、そこへデザインを投稿する。
 無ければ、そのリポジトリに issue を新しく立てる（確認は取らない）。
-作業ディレクトリが GitHub のリポジトリでないときは、どこへ立てるかをリーダーに聞く。
 
 ### 2. 目的の言い直し（関門1）
 
@@ -68,6 +76,7 @@ allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/post_design.py *)
 | `unclassified` | どれにも当てはまらない | `references/unclassified.md` |
 
 むりに当てはめない。迷ったら `unclassified` にして、関門2 で相談する。
+`type` には表の値だけを書く。`unclassified` のときの近い種類と当てはまらない点は、`unclassified.md` のとおり `evidence` の冒頭に書く。
 
 ### 5. 分野の特定
 
@@ -80,6 +89,9 @@ allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/post_design.py *)
 - その現象を研究対象にしている分野の候補と、根拠の URL を並べるところで止める。
 - 問いの答えを探さない。文献の中身を要約しない。
 - 候補ごとに、その分野がその現象を扱っているとした根拠を一文で添える。
+
+指示には問いの本文を書かず、問いを構成する現象の一覧だけを渡す。
+問いを渡すと、分野の候補を並べる代わりに答えを探しに行きやすい。
 
 候補から、`interdisciplinary.md` の基準で数分野に絞り、理由を `disciplines[].reason` に書く。
 分野どうしで知見が対立したときの扱いを決め、`conflict_handling` に書く。
@@ -142,6 +154,13 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/post_design.py <design.json> --repo <owner/n
 
 投稿したら、リーダーの承認で止まる。
 直しを求められたら、JSON を直して投稿し直す。
+前の版のコメントは消さず、GitHub の minimize（理由 `OUTDATED`）でたたむ。たたんだコメントは開けば読めるので、何を直したかの経緯が残る。
+投稿のときに gh が出したコメントの URL の末尾の番号（`#issuecomment-<番号>`）から、たたむのに要る node_id を取る。
+
+```
+gh api repos/<owner>/<name>/issues/comments/<番号> --jq .node_id
+gh api graphql -f query='mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}' -f id=<node_id>
+```
 
 ### 9. 渡し（このスキルの範囲外）
 

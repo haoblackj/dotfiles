@@ -228,6 +228,17 @@ class PostDesignTest(unittest.TestCase):
             mod.render(d),
         )
 
+    def test_multiline_values_in_headings_and_bullets_are_joined_into_one_line(self):
+        # 見出しと箇条書きは1行でしか成り立たない。改行が残ると2行目が地の文になる。
+        d = _design()
+        d["questions"][0]["question"] = "一行目\n  二行目"
+        d["questions"][0]["disciplines"] = [{"name": "分野\nA", "reason": "理由\n\n続き"}]
+        d["discarded_questions"] = [{"question": "捨てた\n問い", "reason": "捨てた\r\n理由"}]
+        body = mod.render(d)
+        self.assertIn("#### Q1. 一行目 二行目\n", body)
+        self.assertIn("- 分野 A: 理由 続き\n", body)
+        self.assertIn("- 捨てた 問い: 捨てた 理由\n", body)
+
     def test_questions_are_numbered_in_order(self):
         d = _design()
         second = copy.deepcopy(d["questions"][0])

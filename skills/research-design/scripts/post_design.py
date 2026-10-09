@@ -31,6 +31,11 @@ def _blank(value):
     return not isinstance(value, str) or not value.strip()
 
 
+def _one_line(value):
+    """見出しと箇条書きは1行でしか成り立たないので、改行を含む空白の並びを空白1つにまとめる。"""
+    return " ".join(value.split())
+
+
 def find_missing(design):
     """欠けている項目のパスを、見つけた順に返す。空の文字列と文字列でない値も欠けとみなす。"""
     if not isinstance(design, dict):
@@ -98,12 +103,12 @@ def render(design):
 
     out += ["### 問いの一覧", ""]
     for n, q in enumerate(design["questions"], 1):
-        out += [f"#### Q{n}. {q['question'].strip()}", ""]
+        out += [f"#### Q{n}. {_one_line(q['question'])}", ""]
         for key, label in QUESTION_FIELDS:
             out += [f"##### {label}", "", q[key].strip(), ""]
         out += ["##### 関係する分野とその選定理由", ""]
         for d in q["disciplines"]:
-            out.append(f"- {d['name'].strip()}: {d['reason'].strip()}")
+            out.append(f"- {_one_line(d['name'])}: {_one_line(d['reason'])}")
         out.append("")
 
     if not _blank(design.get("conflict_handling")):
@@ -112,7 +117,7 @@ def render(design):
     out += ["### 捨てた問いとその理由", ""]
     if design["discarded_questions"]:
         for d in design["discarded_questions"]:
-            out.append(f"- {d['question'].strip()}: {d['reason'].strip()}")
+            out.append(f"- {_one_line(d['question'])}: {_one_line(d['reason'])}")
     else:
         out.append("なし")
     out.append("")
