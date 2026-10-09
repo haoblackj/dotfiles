@@ -9,7 +9,7 @@ docs/superpowers/specs/2026-10-09-research-design-skill-design.md「スクリプ
     post_design.py <design.json> --repo <owner/name> --issue <番号> [--dry-run]
 
 終了コード: 0 投稿した（--dry-run なら整形を標準出力へ出した）、1 必須の項目が欠けている、
-2 入力を読めない、それ以外は gh の終了コードをそのまま返す。
+2 入力を読めない、3 投稿に失敗した（gh を起動できない、または gh が 0 以外で終わった）。
 """
 import argparse
 import json
@@ -161,12 +161,24 @@ def main(argv=None, run=subprocess.run):
         sys.stdout.write(body)
         return 0
 
-    result = run(
-        ["gh", "issue", "comment", str(args.issue), "--repo", args.repo, "--body-file", "-"],
-        input=body,
-        text=True,
-    )
-    return result.returncode
+    # gh は一般の失敗を 1 で返すので、そのまま返すと欠けの 1 と区別できない。投稿の失敗は 3 に揃える。
+    try:
+        result = run(
+            ["gh", "issue", "comment", str(args.issue), "--repo", args.repo, "--body-file", "-"],
+            input=body,
+            text=True,
+        )
+    except OSError as e:
+        print(f"投稿に失敗した（gh を起動できない）: {e}", file=sys.stderr)
+        return 3
+    if result.returncode != 0:
+        print(
+            f"投稿に失敗した（gh の終了コード {result.returncode}）。gh の出力を見て、"
+            "issue の番号、リポジトリ、認証を確かめる。",
+            file=sys.stderr,
+        )
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

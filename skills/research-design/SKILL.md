@@ -137,6 +137,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/post_design.py <design.json> --repo <owner/n
 ```
 
 終了コードが 1 なら、標準エラーに並んだ欠けた項目を埋めて、もう一度走らせる。
+3 なら投稿に失敗している。JSON は直さず、gh の出力を見て issue の番号、リポジトリ、認証を確かめる。
 整形の結果を投稿の前に見たいときは `--dry-run` を付ける。
 
 投稿したら、リーダーの承認で止まる。

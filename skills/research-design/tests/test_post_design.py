@@ -254,9 +254,20 @@ class PostDesignTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(run.calls, [])
 
-    def test_gh_failure_is_returned(self):
-        code, _, _, _ = self._main(_design(), run=FakeRun(returncode=4))
-        self.assertEqual(code, 4)
+    def test_gh_failure_exits_3_not_1(self):
+        # gh は一般の失敗を 1 で返す。そのまま返すと「必須の項目が欠けている」の 1 と区別できない。
+        code, _, _, err = self._main(_design(), run=FakeRun(returncode=1))
+        self.assertEqual(code, 3)
+        self.assertIn("投稿に失敗した", err)
+        self.assertIn("1", err)
+
+    def test_missing_gh_exits_3(self):
+        def no_gh(cmd, **kwargs):
+            raise FileNotFoundError("gh")
+
+        code, _, _, err = self._main(_design(), run=no_gh)
+        self.assertEqual(code, 3)
+        self.assertIn("投稿に失敗した", err)
 
 
 if __name__ == "__main__":

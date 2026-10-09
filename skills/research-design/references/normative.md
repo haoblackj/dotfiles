@@ -35,5 +35,5 @@
 
 ## 出典
 
-- Stanford Encyclopedia of Philosophy, "Reflective Equilibrium": https://plato.stanford.edu/entries/reflective-equilibrium/ 。照合済み（2026-10-09）: "Wide reflective equilibrium is, furthermore, an exemplar of the broadly coherentist idea that beliefs can be justified by their coherence with a system of beliefs"、"The deliberator is not expected to consider a principle in isolation, but rather to consider its connections with other principles as well as a wide range of moral and non-moral background theories."
+- Stanford Encyclopedia of Philosophy, "Reflective Equilibrium": https://plato.stanford.edu/entries/reflective-equilibrium/ 。照合済み（2026-10-09）: "Equilibrium is reached where principles and judgments have been revised such that they agree with each other. In short, the method of reflective equilibrium is the mutual adjustment of principles and judgments in the light of relevant argument and theory."、"Wide reflective equilibrium is, furthermore, an exemplar of the broadly coherentist idea that beliefs can be justified by their coherence with a system of beliefs"、"The deliberator is not expected to consider a principle in isolation, but rather to consider its connections with other principles as well as a wide range of moral and non-moral background theories."
 - 「証拠の階層が無い」「事実の問いを切り出す」「原則ごとの答えを並べて依頼者に返す」は、このスキルの設計上の判断で、上の出典の主張ではない。
