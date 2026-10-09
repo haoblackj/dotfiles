@@ -124,4 +124,16 @@ EOF
   done <<<"$targets"
 fi
 
+# 4. リポジトリ直下の skills/（公開の自作スキル）。手元では chezmoi が
+#    dot_claude/skills/symlink_<名前>.tmpl で本チェックアウトへの symlink を張るが、
+#    クラウドには chezmoi が無いので実体を写す。SKILL.md を持たないものは写さない。
+for sk in "$SRC"/skills/*/; do
+  [ -f "${sk}SKILL.md" ] || continue
+  name=$(basename "$sk")
+  mkdir -p "$HOME/.claude/skills"
+  rm -rf "${HOME:?}/.claude/skills/$name"
+  cp -R "${sk%/}" "$HOME/.claude/skills/$name"
+  log "配置: ~/.claude/skills/$name"
+done
+
 exit 0
