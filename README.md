@@ -264,7 +264,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | settings.json の `outputStyle` / `language` / `spinnerVerbs` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
 | settings.json の `effortLevel` | 配らない（手元でも持たない） | ユーザー設定の最上位の `effortLevel` は Opus 5.5 以降のモデルで無視される（公式の settings reference）。モデルの既定値（Opus 5.5 / Sonnet 5.5 は `medium`）に任せる |
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
-| リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。クラウドで読まれるかは最初のスキルで確かめる（dotfiles#48） |
+| リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。写したスキルがクラウドのセッションのスキル一覧に出ることは、`research-design` で確かめた（dotfiles#48） |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
 | hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
 | `permissions` | 配らない | `deny` の `rm` を持ち込むと、`trash-put` の無いクラウドで削除の手段が無くなる。`defaultMode` はセッション側で決まる |
