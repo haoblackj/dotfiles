@@ -150,3 +150,30 @@ EOF
     [ "$status" -eq 1 ]
     [ ! -e "$HOME/.claude/CLAUDE.md" ]
 }
+
+@test "skills/ のスキルを ~/.claude/skills へ写す" {
+    mkdir -p "$SRC/skills/demo/references"
+    echo '---' >"$SRC/skills/demo/SKILL.md"
+    echo ref >"$SRC/skills/demo/references/a.md"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    diff -r "$SRC/skills/demo" "$HOME/.claude/skills/demo"
+}
+
+@test "二度走らせても skills/ から消したファイルが残らない" {
+    mkdir -p "$SRC/skills/demo"
+    echo '---' >"$SRC/skills/demo/SKILL.md"
+    bash "$SCRIPT" 2>/dev/null
+    echo stale >"$HOME/.claude/skills/demo/stale.md"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/skills/demo/stale.md" ]
+}
+
+@test "SKILL.md の無いディレクトリはスキルとして写さない" {
+    mkdir -p "$SRC/skills/notaskill"
+    echo x >"$SRC/skills/notaskill/README.md"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/skills/notaskill" ]
+}

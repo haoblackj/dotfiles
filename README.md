@@ -169,6 +169,32 @@ Windows 側の環境構築手順（scoop 本体や chezmoi の導入）は `haob
 memory と機密スキル（自作改変分を含む）は private repo `claude-private` に置き、`~/.local/share/claude-private` へ clone したものを hook が `~/.claude/` へ symlink する。
 `book-to-skill` だけは公開スキルなので git external で upstream から直接 clone する。
 
+#### 公開の自作スキル
+
+自作スキルは原則公開とし、リポジトリ直下の `skills/<名前>/SKILL.md` に置く（dotfiles#48）。
+著作権に触れるものや私的な内容のものは claude-private に置く。
+
+スキルごとに `dot_claude/skills/symlink_<名前>.tmpl` を置き、中身を次の1行にする。
+
+```
+{{ .chezmoi.sourceDir }}/skills/<名前>
+```
+
+`chezmoi apply` で `~/.claude/skills/<名前>` が本チェックアウトの `skills/<名前>` への symlink になる。
+symlink なので、同期フックの `migrate_new` は claude-private へ吸い込まない。
+名前は `~/.claude/skills/` に既にある名前と重ならないものにする。claude-private のスキルと重なると、同期フックと chezmoi のうち先に張った側が残る。
+
+開発の流れ:
+
+1. ワークツリーで `skills/<名前>/` と `dot_claude/skills/symlink_<名前>.tmpl` を書く。
+2. `claude --plugin-dir <ワークツリーのルート>` の別セッションで試す。スキルは `<プラグイン名>:<名前>` で読まれ、本番の版とぶつからない。編集の後は `/reload-plugins`。
+3. PR を出して main へマージする。
+4. 本チェックアウトで `git pull` と `chezmoi apply`。起動中のセッションでは、新しい名前は `/reload-skills` で読まれ、既存のスキルの編集はそのまま効く。
+5. 他のマシンは `chezmoi update`。
+
+リポジトリ直下に、プラグインが自動で拾うディレクトリ（`agents/`、`commands/`、`hooks/`、`bin/`、`.mcp.json` など）を足すと、手順 2 で余計なものまで読まれる。
+本チェックアウトを main 以外へ切り替えると、全セッションのスキルがそのブランチの版になる。
+
 同期は `dot_claude/hooks/executable_claude-private-sync.sh` が担う。
 
 | タイミング | 動作 |
@@ -238,6 +264,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | settings.json の `outputStyle` / `language` / `spinnerVerbs` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
 | settings.json の `effortLevel` | 配らない（手元でも持たない） | ユーザー設定の最上位の `effortLevel` は Opus 5.5 以降のモデルで無視される（公式の settings reference）。モデルの既定値（Opus 5.5 / Sonnet 5.5 は `medium`）に任せる |
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
+| リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。クラウドで読まれるかは最初のスキルで確かめる（dotfiles#48） |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
 | hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
 | `permissions` | 配らない | `deny` の `rm` を持ち込むと、`trash-put` の無いクラウドで削除の手段が無くなる。`defaultMode` はセッション側で決まる |
@@ -249,6 +276,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 - `COPY_ITEMS` はそのまま写すので、chezmoi の属性つきの名前（`executable_` / `dot_` / `*.tmpl` など）は入れられない。混ざるとスクリプトが警告を出す。
 - `dot_claude/CLAUDE.md` に手元専用の道具（chezmoi / herdr / codex / memory など）を前提にした節を足したら、冒頭の「クラウドセッションでの読み替え」節にも足す。
 - `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external は自動で配られる（`archive` / `file` は飛ばし、`clone.args` などのオプションは読まない）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
+- `skills/` に足したスキルは、`install-cloud.sh` が自動で写す。非公開のスキルを `skills/` に置かない（公開リポジトリなので境界を越える）。
 - 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。
 - 取得に失敗しても exit 0 で抜ける（環境のセットアップ全体を落とさない）。効いていないと感じたら、セッションの Setup script のログに出る `[install-cloud]` の行を見る。
 - 手元で走らせると chezmoi 管理の `~/.claude` を上書きしうるので、`~/.claude/settings.json` が symlink、chezmoi のソースがある、chezmoi が PATH にある、のどれかなら何もせず exit 1 で抜ける。
