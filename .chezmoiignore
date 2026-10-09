@@ -16,6 +16,9 @@ pyproject.toml
 # ターゲットから symlink で参照されるファイルの置き場（例: ~/.claude/settings.json →
 # linked/claude/settings.json）。アプリが書き戻す設定をソースで直接受ける公式の型。
 linked
+# 公開の自作スキルの実体。dot_claude/skills/symlink_<名前>.tmpl が
+# ~/.claude/skills/<名前> からここへの symlink を張る。~/skills へは配らない
+skills
 # /etc と /usr/local/bin に置くファイル。run_onchange_12 がソースからコピーするので、
 # ホームへは配らない
 wsl.conf
