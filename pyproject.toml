@@ -8,9 +8,9 @@
 minversion = "9"
 strict = true
 
-testpaths = ["dot_claude/hooks/tests"]
+testpaths = ["dot_claude/hooks/tests", "skills/research-design/tests"]
 
-# **`pythonpath` は置かない。**このリポジトリのテスト2本はどちらも
+# **`pythonpath` は置かない。**このリポジトリのテストはどれも
 # importlib.util で対象を自前に読み込んでおり、素の兄弟 import に
 # 依存していない（penguinEx 側とはここが違う）。
 
