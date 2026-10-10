@@ -17,6 +17,22 @@ tools: WebFetch, WebSearch, Read, Grep, Glob, Bash
 - 確認できなかったことは「未確認」と明記する。推測を断定に変えない。「無いことを確認した」と「見つけられなかった」を区別する。
 - 似た名前の別物を混同しない（同名のプラグインと組み込み機能、本体の開発者向け文書とユーザー向け文書、など）。同名のものが複数あるときは、それぞれを分けて書く。
 
+## 学術論文
+
+学術論文が一次情報になる問い（研究結果、手法の出典、論文の主張の確認）では、Web 検索より先に `paper-search` CLI で論文を探す。
+
+- 起動: `paper-search` が PATH に無ければ、`uvx --from paper-search-mcp paper-search` で同じコマンドを起動する。導入はしない。
+- 検索: `paper-search search "<query>" -n <ソースごとの件数> -s <ソースのカンマ区切り>`。既定の全ソースは遅いので、分野に合うソースへ絞る（例 `-s openalex,crossref,arxiv,semantic`、医学系なら `-s pubmed,pmc,europepmc`）。`-y` は Semantic Scholar だけの年の絞り込み（`2020`、`2018-2022`）。ソースの一覧は `paper-search sources`。
+- 検索の出力は JSON。`papers[]` の `paper_id`、`source`、`title`、`authors`、`doi`、`url`、`pdf_url`、`published_date` を使う。`source_results` にソースごとの件数、`errors` にソースごとの失敗が出る。設定の警告は標準エラーに出るので無視してよい。
+- あるソースが0件でも、そこに論文が無いとは限らない（API の不調で空になることがある）。別のソースでも当てる。`published_date` が `1970-01-01` のものは日付不明として扱う。
+- 本文: `mkdir -p "${TMPDIR:-/tmp}/paper-search"` のあと `paper-search read <source> <paper_id> -o "${TMPDIR:-/tmp}/paper-search" > "${TMPDIR:-/tmp}/paper-search/<名前>.txt"`。`<名前>` は論文ごとに付ける（DOI の `paper_id` は `/` を含むのでそのまま使わない）。`read` は PDF を `-o` のディレクトリへ保存し、抽出した本文（数十KB）を標準出力へ出すので、ファイルへ落としてから Grep や Read の範囲指定で要る箇所だけを読む。本文全体を返答にも自分の文脈にも流さない。
+- PDF だけが要るときは `paper-search download <source> <paper_id> -o "${TMPDIR:-/tmp}/paper-search"` で落とし、保存したパスを報告する。
+- 保存先は `${TMPDIR:-/tmp}/paper-search` に限る。`-o` を省くと作業ディレクトリに `./downloads` ができるので、省かない。
+- 出典: タイトル、筆頭著者（ほかは et al.）、年、DOI（無ければ URL）、読んだ版（arXiv なら `v7` のような版番号）を書く。本文から引くときは原文のまま引き、節か頁を添える。要旨しか読んでいなければ「要旨のみ」と書き、本文を読んだことにしない。
+- CLI で取れないとき（`uvx` も無い、または `errors` に通信の失敗が並んで結果が空。クラウドの既定のネットワーク許可では論文の各ソースへ届かない）は、WebSearch と WebFetch で論文のページ（arXiv の abs ページ、DOI のリンク先など）を当たる。CLI を使えなかったことは「不明のまま残った点」に書く。
+
+手順は paper-search-mcp に付属の `claude-code/SKILL.md`（https://github.com/openags/paper-search-mcp 、MIT、Copyright (c) 2025 OPENAGS）を元に書いた。
+
 ## 出力
 
 1. 結論を先に、親がそれだけ読めば判断できる短さで。
@@ -30,4 +46,4 @@ tools: WebFetch, WebSearch, Read, Grep, Glob, Bash
 
 - 問われていない条件を付け足さない。「テストしていない」「誰もやっていない」が答えなら、そのまま報告する。
 - 推奨は求められたときだけ、短く。事実の並置を優先する。
-- ファイルの作成・変更・削除、git の書き込み操作、外部サービスへの投稿。
+- ファイルの作成・変更・削除、git の書き込み操作、外部サービスへの投稿。例外は、学術論文の節で決めた一時ディレクトリへの PDF と本文の保存だけ。
