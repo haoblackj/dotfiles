@@ -14,7 +14,7 @@ haoblackj のdotfilesをchezmoiで管理するリポジトリ。Claude Code設�
 | `dot_claude/` (このrepo) | settings / hooks / keybindings |
 | リポジトリ直下の `skills/` (このrepo) | 公開の自作スキル。`dot_claude/skills/symlink_<名前>.tmpl` で `~/.claude/skills/<名前>` へ symlink する |
 | `.chezmoiexternal.toml` の git external | `book-to-skill`（公開・upstream追跡。著作権はupstream） |
-| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（`idenshi-hakase-diet` / `learning-efficiency-book` / `report-skills` など）/ 移行前の自作スキル（dotfiles#49） |
+| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（`idenshi-hakase-diet` / `learning-efficiency-book` / `report-skills` など） |
 
 **非公開データ（memory内容・書籍スキル・自作改変したスキル）を `dot_claude/` に書いてはいけない。**
 
