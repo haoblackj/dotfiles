@@ -13,8 +13,8 @@ set -uo pipefail
 die() { echo "NG: $*" >&2; exit 1; }
 
 CONTRACT="${CODEX_DELEGATE_CONTRACT:-$HOME/.codex/delegation-contract.md}"
-MODEL="${CODEX_DELEGATE_MODEL:-gpt-5.6-sol}"
-# --ignore-user-config で走るので、指定しないとモデルの既定（gpt-5.6-sol は low）になる。
+MODEL="${CODEX_DELEGATE_MODEL:-gpt-6.1-sol}"
+# --ignore-user-config で走るので、指定しないとモデルの既定（gpt-6.1-sol は low）になる。
 # 退避で渡すのは文章の仕様からの実装で、low で失敗して Claude が直す往復が増えると、
 # Claude の枠を守るという退避の目的に反するので medium を既定にする（haoblackj/dotfiles#34）。
 # 受け付ける値はモデルが申告するもので固定の列挙ではないため、ここでは空だけを弾き、検証は Codex に任せる。
