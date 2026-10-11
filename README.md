@@ -292,7 +292,7 @@ Claude がどう動くかの規律は、グローバルの `dot_claude/CLAUDE.md
 
 ```zsh
 ~/.codex/codex-delegate.sh --repo <ワークツリー> -o <報告の書き出し先> <ブリーフのファイル>
-# -m でモデル（既定 gpt-5.6-sol）、-e で effort（既定 medium）、--print-command で起動コマンドを出すだけ
+# -m でモデル（既定 gpt-6.1-sol）、-e で effort（既定 medium）、--print-command で起動コマンドを出すだけ
 ```
 
 ラッパーは次の3本をこの順に連結し、`-c developer_instructions=` で渡す。後ろほど優先される。
