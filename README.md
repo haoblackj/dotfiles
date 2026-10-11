@@ -246,6 +246,81 @@ echo '{"prompt": "背が高い人に合う家具を探したい"}' | \
 
 1 件注入されれば動いている。空なら `memory-recall.log` を見る。
 
+### Codex への退避（利用枠の見張りと委譲）
+
+平常は Claude が実装する。
+Claude の利用枠が逼迫し、Codex に余裕があるときだけ、実装の単位を Codex へ退避する（決定は haoblackj/dotfiles#34）。
+仕組みは「枠を読む」「振り先を知らせる」「Codex へ渡す」の3段に分かれる。
+
+```
+codexbar-serve（systemd の常駐）
+  │  Claude と Codex の 5時間枠、週枠、ペースを JSON で返す（127.0.0.1:8080）
+  ▼
+usage-route.sh（PostToolUse / PostToolUseFailure、全ツール）
+  │  振り先 normal / offload / lean / stop を決め、変わったときだけ親の Claude に知らせる
+  ▼  offload のとき
+Claude がブリーフを書いて ~/.codex/codex-delegate.sh へ渡す
+  │  委譲契約 + リポジトリの AGENTS.md + AGENTS.delegate.md を連結して codex exec を起動
+  ▼
+Codex が実装し、決まった形で報告する → Claude が差分を読み、全件テスト、コミット、レビュー
+```
+
+**枠を読む。**
+値とペースの計算は既製品の [CodexBar](https://github.com/steipete/CodexBar) に任せる。
+`codexbar serve` を `dot_config/systemd/user/codexbar-serve.service` で常駐させ、キャッシュも serve 側が持つ。
+Claude の値は OAuth でしか取れないので、`~/.config/codexbar/config.json` で Claude の `source` を `oauth` に固定している。
+
+**振り先を知らせる。**
+`dot_claude/hooks/executable_usage-route.sh` がツール呼び出しのたびに serve を読み、4つの振り先を決める。
+
+| 振り先 | 条件 | Claude の動き |
+|---|---|---|
+| normal | Claude に余裕 | Claude が実装する（知らせない） |
+| offload | Claude が逼迫、Codex に余裕 | これから着手する実装の単位を `codex-delegate.sh` へ渡す |
+| lean | Claude が逼迫、Codex も逼迫か読めない | 退避せず、着手中の単位を仕上げる |
+| stop | Claude が尽きる手前 | issue に状態を書いてターンを終える |
+
+しきい値と、入りと出を分ける判定は、スクリプト冒頭のコメントにある。
+知らせるだけで、ツールの呼び出しを打ち切りはしない。
+serve に届かないときは黙って何もしない。
+サブエージェントのツール呼び出しでは判定しない（知らせが親に届かなくなるため）。
+状態は `${TMPDIR}/claude-usage-route/<session_id>`、遷移の履歴は `~/.local/state/claude-usage-route/transitions.log` に残る。
+Claude がどう動くかの規律は、グローバルの `dot_claude/CLAUDE.md`「委譲と情報の流通」にある。
+
+**Codex へ渡す。**
+`dot_codex/executable_codex-delegate.sh`（配置先 `~/.codex/codex-delegate.sh`）が Codex への唯一の入口。
+
+```zsh
+~/.codex/codex-delegate.sh --repo <ワークツリー> -o <報告の書き出し先> <ブリーフのファイル>
+# -m でモデル（既定 gpt-5.6-sol）、-e で effort（既定 medium）、--print-command で起動コマンドを出すだけ
+```
+
+ラッパーは次の3本をこの順に連結し、`-c developer_instructions=` で渡す。後ろほど優先される。
+
+1. `~/.codex/delegation-contract.md`（ソースは `dot_codex/delegation-contract.md`）: 全リポジトリ共通の約束。範囲を変えない、詰まったら回避せず止まって報告する、完了を宣言しない、コミットしない、キャッシュとログを作業ディレクトリの外へ書かない、報告の形
+2. リポジトリの `AGENTS.md`（無くてよい）
+3. リポジトリの `AGENTS.delegate.md`（無くてよい。委譲のときだけ効かせたい規約）
+
+起動には `--ignore-user-config` と `-c project_doc_max_bytes=0` を必ず付ける。
+前者は対話用の Codex の設定（`~/.codex/config.toml` など）を混ぜないため、後者は Codex 自身に AGENTS.md を読ませず二重に入るのを防ぐため。
+ブリーフは stdin で渡す。
+契約が無いと止まるので、契約を消したり名前を変えたりしたら、ラッパーの `CONTRACT` も合わせる。
+
+Codex は最終メッセージを、状態（`DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT`）と、変更したファイル、実行した検査、仕様との食い違い、確かめていないことの4つの見出しで返す。
+`-o` で書き出したこの報告は判定の材料で、完了の根拠にはしない。
+Codex のサンドボックスはソケットを使うテストを止めることがあり、ワークツリーの `.git` へ書けないので、全件テストとコミットは Claude が持つ。
+
+動作確認:
+
+```zsh
+~/.codex/codex-delegate-selfcheck.sh                 # ラッパーの判定（契約が無いと止まる、連結の順など）
+~/.codex/codex-delegate.sh --print-command <brief>   # 実際に渡る指示の中身を見る
+curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を返すか
+```
+
+フックのテストは `dot_claude/hooks/usage-route.bats`。
+クラウドセッションには Codex も CodexBar も無いので、この仕組みは手元の WSL でだけ動く。
+
 ### クラウドセッション（Claude Code on the web）
 
 クラウドのコンテナは手元の `~/.claude` を読まない（公式: https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup ）。
