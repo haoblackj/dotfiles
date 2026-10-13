@@ -99,7 +99,7 @@
 - Codex への指示には、キャッシュとログの置き場を明示する（テストの収集対象にならない、ドットで始まるディレクトリの下にし、`PRE_COMMIT_HOME` と `UV_CACHE_DIR` を指定させる）。指定しないと、ワークツリーの gitignore 済みの場所に置かれて、テストの収集を壊すことがある。戻ってきたら `git status --short --ignored` で、増えた ignored のディレクトリも確かめる。
 - 一次情報（issue、spec、コミット）を正とする。そこから二次的な要約を作らない。
 - 進行状態は issue のラベルで持つ（`status:設計中` / `status:承認待ち` / `status:実装中`。未着手はラベル無し）。状態が変わったら更新し、承認待ちで止まるときは止まる前に付ける。着手できるものを探す側は、依存（GitHub の issue dependencies）とこのラベルの2つを見れば足りる。
-- CLAUDE.md には決まりだけを書く。進行状態、着手中の事項、決定の日付や経緯、issue 番号は書かず、issue に置く（2026-10-14、プロジェクトの CLAUDE.md に移行待ちの事項を書いて退けられた）。
+- CLAUDE.md には決まりだけを書く（2026-10-14、プロジェクトの CLAUDE.md に移行待ちの事項を書いて退けられた）。
 - セッションをまたぐ作業の状態（済んだこと、決定、次の一手）は、issue の本文を書き換えず、`## 状態` で始まるコメントとして積む。見出しの下に「済んだこと」「決定」「次の一手」を置く。書いたら、一つ前の状態コメントを GitHub の minimize（理由 `OUTDATED`）でたたむ。たたんだコメントは消えず、経緯として残る。
   - たたむ: `gh api graphql -f query='mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}' -f id=<一つ前の状態コメントの node_id>`
 - issue を読み返すときは、スレッド全体を読まず、bot（`penguinex-agent[bot]`）が書いた最新の `## 状態` コメントと、それより後の人間のコメントだけを読む。
