@@ -70,6 +70,22 @@ failure() {
     [ ! -s "$STATE/failure-env" ]
 }
 
+@test "check: 指定された退避の対象の一覧が無ければ失敗する" {
+    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW" "$TMPDIR_TEST/no-list"
+    [ "$status" -ne 0 ]
+    [[ "$(failure env)" == *"退避の対象の一覧が無い"* ]]
+}
+
+@test "check: 指定された退避の対象の一覧があれば、前の環境の失敗を消す" {
+    mkdir -p "$STATE"
+    touch "$STATE/restored"
+    echo "退避の対象の一覧が無い" > "$STATE/failure-env"
+    : > "$TMPDIR_TEST/list"
+    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW" "$TMPDIR_TEST/list"
+    [ "$status" -eq 0 ]
+    [ ! -s "$STATE/failure-env" ]
+}
+
 @test "check: 未復元なら最新の世代を上書きせずに戻し、印を付ける" {
     export FAKE_SNAPSHOTS='[{"id":"abc"}]'
     run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"

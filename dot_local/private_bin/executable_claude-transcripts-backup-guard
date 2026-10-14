@@ -1,8 +1,9 @@
 #!/bin/bash
 # Claude Code のトランスクリプトの退避（haoblackj/dotfiles#42、#45）を見張る。
 #
-#   check <マウント> <リポジトリ> <パスワード>  resticprofile の run-before。退避先とパスワードを
-#       確かめ、このマシンでまだ戻していなければ、最初の backup の前に最新の世代を戻す
+#   check <マウント> <リポジトリ> <パスワード> [<追加の対象の一覧>]  resticprofile の run-before。
+#       退避先とパスワード、指定された一覧を確かめる。
+#       このマシンでまだ戻していなければ、最初の backup の前に最新の世代を戻す。
 #   ok    run-after。そのコマンドの失敗の理由を消す。backup なら成功の時刻を残す
 #   fail  run-after-fail。restic 自体の失敗を書く
 #   systemd-fail <ユニット名の接頭辞>  systemd の OnFailure から。resticprofile が restic を
@@ -33,6 +34,10 @@ check() {
     ls -- "$mount" >/dev/null 2>&1 || fail_with env "D ドライブに届かない"
     [ -f "$repo/config" ] || fail_with env "退避先のリポジトリが無い"
     [ -r "$pw" ] || fail_with env "パスワードが無い"
+    if [ $# -eq 4 ]; then
+        local list="$4"
+        [ -r "$list" ] || fail_with env "退避の対象の一覧が無い"
+    fi
     : > "$STATE/failure-env"
 
     # 戻すのは backup の前だけ。forget や check の前に戻すと、退避より先に古い世代を書き戻しうる
@@ -64,8 +69,8 @@ systemd_fail() {
 
 case "${1:-}" in
     check)
-        [ $# -eq 4 ] || { echo "usage: $0 check <mount> <repo> <password-file>" >&2; exit 2; }
-        check "$2" "$3" "$4"
+        [ $# -eq 4 ] || [ $# -eq 5 ] || { echo "usage: $0 check <mount> <repo> <password-file> [<extra-sources-list>]" >&2; exit 2; }
+        check "${@:2}"
         ;;
     ok)
         : > "$STATE/failure-$COMMAND"

@@ -1,5 +1,6 @@
 {{- $repo := "/mnt/d/claude-transcripts-backup/restic" -}}
 {{- $password := joinPath .chezmoi.homeDir ".local/share/claude-private/secrets/restic-claude-transcripts" -}}
+{{- $extra := joinPath .chezmoi.homeDir ".local/share/claude-private/restic/claude-transcripts-extra-sources" -}}
 {{- $guard := joinPath .chezmoi.homeDir ".local/bin/claude-transcripts-backup-guard" -}}
 # Claude Code のトランスクリプトを WSL の外（D ドライブ）へ退避する（haoblackj/dotfiles#42）。
 # スケジュールは resticprofile が systemd --user のユニットを生成して受け持つ。
@@ -30,10 +31,14 @@ claude-transcripts:
       - "{{ .chezmoi.homeDir }}/.claude/file-history"
       # 上矢印と Ctrl+R のプロンプト履歴
       - "{{ .chezmoi.homeDir }}/.claude/history.jsonl"
+    # 公開リポジトリに名前を出したくない対象（非公開のプロジェクトのデータなど）は、claude-private のこの一覧に一行ずつ書く。
+    # 一覧にあって存在しないパスは restic が飛ばす。
+    files-from:
+      - "{{ $extra }}"
     tag:
       - claude-transcripts
     # 退避先とパスワードを確かめ、このマシンで未復元なら最新の世代を戻してから backup する
-    run-before: "{{ $guard }} check /mnt/d {{ $repo }} {{ $password }}"
+    run-before: "{{ $guard }} check /mnt/d {{ $repo }} {{ $password }} {{ $extra }}"
     run-after: "{{ $guard }} ok"
     run-after-fail: "{{ $guard }} fail"
     schedule: hourly
