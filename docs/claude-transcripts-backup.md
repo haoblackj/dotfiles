@@ -9,7 +9,7 @@ WSL を入れ直したら、README の導入手順の `chezmoi apply` が元の�
 
 | 項目 | 中身 |
 |---|---|
-| 退避するもの | `~/.claude/projects`（resume が読む jsonl と `subagents/`、`tool-results/`）、`~/.claude/file-history`（rewind）、`~/.claude/history.jsonl`（上矢印の履歴） |
+| 退避するもの | `~/.claude/projects`（resume が読む jsonl と `subagents/`、`tool-results/`）、`~/.claude/file-history`（rewind）、`~/.claude/history.jsonl`（上矢印の履歴）、claude-private の一覧 `~/.local/share/claude-private/restic/claude-transcripts-extra-sources` に書いた対象 |
 | 退避先 | `D:\claude-transcripts-backup\restic`（restic のリポジトリ。暗号化済み） |
 | パスワード | `~/.local/share/claude-private/secrets/restic-claude-transcripts`（claude-private の clone で届く） |
 | 設定 | `~/.config/resticprofile/profiles.yaml`（ソースは `dot_config/resticprofile/profiles.yaml.tmpl`） |
@@ -33,9 +33,17 @@ guard は backup、forget、check の前に次を確かめ、欠けていれば�
 1. D ドライブに届くか。
 2. 退避先に restic のリポジトリがあるか。無くても新しくは作らない。D が初期化されたときに、気づかないまま空から積み直さないため。
 3. パスワードのファイルがあるか。
+4. backup の前だけ、退避の対象の一覧があるか。
 
 backup の前で、このマシンにまだ `restored` の印が無ければ、最新の世代を `--overwrite never` で戻してから印を付ける。
 手元にすでにあるファイルは上書きしないので、戻す前に Claude Code を使っていても、その分は残る。
+
+## 退避する対象を足す
+
+公開リポジトリに名前を出したくない対象は、`~/.local/share/claude-private/restic/claude-transcripts-extra-sources` に一行ずつ絶対パスを書き、claude-private にコミットする。
+設定の再適用は要らない。
+`#` で始まる行にコメントを書ける。
+一覧にあって存在しないパスは restic が飛ばす。
 
 ## 失敗の知らせ
 
