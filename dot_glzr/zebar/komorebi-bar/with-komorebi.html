@@ -36,8 +36,14 @@
       function App() {
         const [output, setOutput] = useState(providers.outputMap);
 
+        // 右クリックで出す komorebi の起動と停止のメニュー
+        const [menuOpen, setMenuOpen] = useState(false);
+
         useEffect(() => {
           providers.onOutput(() => setOutput(providers.outputMap));
+          // komorebi が止まると、プロバイダーは出力を null にして onError だけを呼ぶ。
+          // onOutput だけでは止まったことに気づけない。
+          providers.onError(() => setOutput(providers.outputMap));
         }, []);
 
         function isWorkspaceEmpty(workspace) {
@@ -54,23 +60,79 @@
           ]);
         }
 
+        // 起動と停止は komorebi-ctl.ps1 を通す。停止のあとに半透明を外す後始末が要る
+        // （komorebi#1749）。$HOME の展開は pwsh に任せる。
+        function komorebiCtl(action) {
+          setMenuOpen(false);
+          zebar.shellExec('pwsh.exe', [
+            '-NoProfile',
+            '-WindowStyle',
+            'Hidden',
+            '-Command',
+            `& "$HOME\\.config\\komorebi\\komorebi-ctl.ps1" ${action}`,
+          ]);
+        }
+
+        // フォーカス表示と絞り込みは、このバーのモニターに映っているワークスペース
+        // （displayedWorkspace）で判定する。focusedWorkspace は全モニターのうちフォーカスの
+        // あるものなので、別のモニターのバーで使うと、映っている空のワークスペースが消え、
+        // フォーカス表示もずれる（2026-10-15、zebar 3.3.1 の create-komorebi-provider.ts）。
+        const displayedName = output.komorebi?.displayedWorkspace?.name;
+
         const session = output.media?.currentSession;
 
         return (
           <div className="app">
-            <div className="left">
-              {output.komorebi && (
+            <div
+              className="left"
+              onContextMenu={e => {
+                e.preventDefault();
+                setMenuOpen(!menuOpen);
+              }}
+            >
+              {menuOpen && (
+                <div className="workspaces">
+                  <button
+                    className="workspace"
+                    onClick={() => komorebiCtl('start')}
+                  >
+                    Komorebi 起動
+                  </button>
+                  <button
+                    className="workspace"
+                    onClick={() => komorebiCtl('stop')}
+                  >
+                    Komorebi 停止
+                  </button>
+                  <button
+                    className="workspace"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {!menuOpen && !output.komorebi && (
+                <div className="workspaces">
+                  <button
+                    className="workspace"
+                    onClick={() => komorebiCtl('start')}
+                  >
+                    Komorebi 起動
+                  </button>
+                </div>
+              )}
+              {!menuOpen && output.komorebi && (
                 <div className="workspaces">
                   {output.komorebi.currentWorkspaces
                     .filter(
                       workspace =>
                         !isWorkspaceEmpty(workspace) ||
-                        workspace.name ===
-                          output.komorebi.focusedWorkspace.name,
+                        workspace.name === displayedName,
                     )
                     .map(workspace => (
                       <button
-                        className={`workspace ${workspace.name === output.komorebi.focusedWorkspace.name && 'focused'}`}
+                        className={`workspace ${workspace.name === displayedName ? 'focused' : ''}`}
                         key={workspace.name}
                         onClick={() => focusWorkspace(workspace.name)}
                       >

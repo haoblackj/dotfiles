@@ -32,6 +32,10 @@
           {
             "program": "komorebic.exe",
             "argsRegex": "^focus-named-workspace .+$"
+          },
+          {
+            "program": "pwsh.exe",
+            "argsRegex": "^-NoProfile -WindowStyle Hidden -Command & \"\\$HOME\\\\\\.config\\\\komorebi\\\\komorebi-ctl\\.ps1\" (start|stop)$"
           }
         ]
       },
