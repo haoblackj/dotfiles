@@ -114,10 +114,11 @@ function Install-RdpTask {
         UserId      = "$env:USERDOMAIN\$env:USERNAME"
         Enabled     = $true
     }
-    $action = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -WindowStyle Hidden -File `"$script`" stop"
+    # $action だと引数の $Action と同じ変数になる（PowerShell は大小を区別しない）
+    $taskAction = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -WindowStyle Hidden -File `"$script`" stop"
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
     $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
-    Register-ScheduledTask -TaskName $TaskName -Trigger $trigger -Action $action -Settings $settings -Principal $principal -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Trigger $trigger -Action $taskAction -Settings $settings -Principal $principal -Force | Out-Null
     Write-Log "タスク $TaskName を登録した"
 }
 
