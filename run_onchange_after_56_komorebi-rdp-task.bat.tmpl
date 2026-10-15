@@ -1,0 +1,16 @@
+{{- if and (eq .chezmoi.os "windows") (eq .location "home") }}
+@echo off
+setlocal EnableExtensions
+
+rem RDP で接続したら komorebi を止めて窓を不透明に戻すタスクを登録する。
+rem 中身は komorebi-ctl.ps1 の install-rdp-task。ps1 が変わったら登録し直す。
+rem komorebi-ctl.ps1 hash: {{ include "dot_config/komorebi/komorebi-ctl.ps1" | sha256sum }}
+
+where komorebic.exe >nul 2>nul
+if errorlevel 1 exit /b 0
+where pwsh.exe >nul 2>nul
+if errorlevel 1 exit /b 0
+
+pwsh.exe -NoProfile -File "%USERPROFILE%\.config\komorebi\komorebi-ctl.ps1" install-rdp-task
+exit /b %ERRORLEVEL%
+{{- end }}
