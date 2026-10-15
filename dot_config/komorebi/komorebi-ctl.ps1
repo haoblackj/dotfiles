@@ -4,6 +4,7 @@
 #   komorebi-ctl.ps1 stop             komorebi を止め、窓を不透明に戻す
 #   komorebi-ctl.ps1 restore-opacity  窓を不透明に戻すだけ
 #   komorebi-ctl.ps1 install-rdp-task RDP で接続したら stop を走らせるタスクを登録する
+#   komorebi-ctl.ps1 restart-zebar    zebar を止めて起動し直す
 #
 # なぜ: komorebi v0.1.41 は、管理から外れた窓に付けた半透明（WS_EX_LAYERED と alpha）を
 # 外さない。komorebi を止めても、komorebic transparency disable でも戻らない
@@ -12,7 +13,7 @@
 # 起きるので、RDP 中は komorebi を止めて、手元に戻ったら手で起動する運用にした。
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('start', 'stop', 'restore-opacity', 'install-rdp-task')]
+    [ValidateSet('start', 'stop', 'restore-opacity', 'install-rdp-task', 'restart-zebar')]
     [string]$Action
 )
 
@@ -130,9 +131,28 @@ function Install-RdpTask {
     Write-Log "タスク $TaskName を登録した"
 }
 
+function Restart-Zebar {
+    # なぜ: zebar 3.3.1 の komorebi の受信は、1本のスレッドが接続を受け入れては相手が
+    # 閉じるまで読む作りで、読み取りにタイムアウトが無い（crates/komorebi-util の
+    # client.rs）。閉じられない接続が1本来ると、そのスレッドは recv で止まり、以後の
+    # ワークスペース切替を表示しない。直すには zebar の再起動が要る（2026-10-15、
+    # 止まったスレッドを cdb で確認。相手のプロセスは特定できていない）。
+    # zebar はシェルコマンドをジョブオブジェクトに入れないので、zebar のボタンから
+    # 起こしたこのスクリプトは zebar を止めても残り、起動し直せる。
+    Get-Process -Name zebar -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Process -Name zebar -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 200
+    }
+    $zebar = (Get-Command zebar.exe).Source
+    Start-Process -FilePath $zebar -ArgumentList startup -WorkingDirectory (Split-Path $zebar)
+    Write-Log 'zebar を起動し直した'
+}
+
 switch ($Action) {
     'start' { Start-Komorebi }
     'stop' { Stop-Komorebi }
     'restore-opacity' { Restore-Opacity }
     'install-rdp-task' { Install-RdpTask }
+    'restart-zebar' { Restart-Zebar }
 }

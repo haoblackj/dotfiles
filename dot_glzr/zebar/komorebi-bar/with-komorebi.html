@@ -104,6 +104,14 @@
                   >
                     Komorebi 停止
                   </button>
+                  {/* zebar が komorebi の通知を受けられなくなり、表示が固まったときの
+                      逃げ道（komorebi-ctl.ps1 の Restart-Zebar に経緯）。 */}
+                  <button
+                    className="workspace"
+                    onClick={() => komorebiCtl('restart-zebar')}
+                  >
+                    Zebar 再起動
+                  </button>
                   <button
                     className="workspace"
                     onClick={() => setMenuOpen(false)}

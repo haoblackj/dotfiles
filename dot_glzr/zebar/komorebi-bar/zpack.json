@@ -35,7 +35,7 @@
           },
           {
             "program": "pwsh.exe",
-            "argsRegex": "^-NoProfile -WindowStyle Hidden -Command & \"\\$HOME\\\\\\.config\\\\komorebi\\\\komorebi-ctl\\.ps1\" (start|stop)$"
+            "argsRegex": "^-NoProfile -WindowStyle Hidden -Command & \"\\$HOME\\\\\\.config\\\\komorebi\\\\komorebi-ctl\\.ps1\" (start|stop|restart-zebar)$"
           }
         ]
       },
