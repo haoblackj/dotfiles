@@ -100,7 +100,15 @@ function Start-Komorebi {
         return
     }
     Restore-Opacity
-    komorebic.exe start --whkd 2>&1 | ForEach-Object { Write-Log "komorebic: $_" }
+    # 設定の置き場所は PowerShell のプロファイルでしか決めていない。このスクリプトは
+    # -NoProfile で呼ばれるので、ここで入れないと komorebi.json も whkdrc も読まれず、
+    # zebar のバーまでタイルに入る（2026-10-15、zebar から起動して発生）。
+    $env:KOMOREBI_CONFIG_HOME = Join-Path $HOME '.config\komorebi'
+    $env:WHKD_CONFIG_HOME = Join-Path $HOME '.config\whkd'
+    # --clean-state: 止めたときに書き出した状態を読み直さない。RDP 中に止めると、
+    # 仮想1画面の名前なしの BSP の状態が書き出され、手元の3画面に戻って起動しても
+    # それが当たって komorebi.json のワークスペースが外れる（2026-10-15 に発生）。
+    komorebic.exe start --whkd --clean-state 2>&1 | ForEach-Object { Write-Log "komorebic: $_" }
 }
 
 function Install-RdpTask {
