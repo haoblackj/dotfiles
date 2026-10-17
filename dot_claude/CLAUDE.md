@@ -52,6 +52,8 @@
 
 - 実装作業はワークツリーを使う（`superpowers:using-git-worktrees` の手順に従う。先に公式の `EnterWorktree` を使い、`git worktree add` は無いときの代替）。新規ブランチ作成込みでデフォルト許可とし、都度の確認は不要。サブエージェントは既定で `isolation` を付けず、親のワークツリーで動かす（本チェックアウトへの書き込みは Claude Code が止める）。複数のサブエージェントが同時に別々のファイルを編集するときだけ `isolation: "worktree"` を使い、切る前に親の作業をコミットし、返ってきた `worktree-agent-*` ブランチを親のブランチへマージする。
 - 軽微な修正（typo修正・ドキュメント追記など、コードの挙動やリポジトリ構造に影響しない変更）はmain/masterに直接コミットしてよい。ただし ruleset で main への直接 push を止めているリポジトリでは、軽微でも pull request 経由。
+- ワークツリーを切ったら、コミットや push の前に依存を入れる（`uv sync` 等）。入れずに push すると pre-push の pytest が依存の取得から走って 5 分の上限を超え、コマンドが背景へ送られたまま index.lock が残る（2026-10-17、cbr）。
+- commit、push、PR 作成を 1 本のコマンドにつながず、`git commit` の出力を grep で隠さない。途中で止まると後続の git 操作がロックで詰まる。背景へ送られたコマンドは、次の git 操作の前に止めて結果を確かめる。
 
 ## GitHub の名義（bot）
 
