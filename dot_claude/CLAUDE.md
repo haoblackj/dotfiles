@@ -110,7 +110,7 @@
 - issue を読み返すときは、スレッド全体を読まず、bot（`penguinex-agent[bot]`）が書いた最新の `## 状態` コメントと、それより後の人間のコメントだけを読む。
   - `gh api repos/<owner>/<repo>/issues/<番号>/comments --paginate | jq -rs 'add as $c | ([$c[] | select(.user.login=="penguinex-agent[bot]" and (.body|startswith("## 状態")))] | last) as $s | ([$s] + [$c[] | select(.user.type!="Bot" and .created_at > ($s.created_at // ""))]) | map(select(. != null) | "--- \(.user.login) \(.created_at)\n\(.body)") | .[]'`
   - 状態コメントが無い issue や、bot の名義を入れる前に書かれた状態は、従来どおり全体を読む。
-- 実装の担い手は、利用枠のフック（`usage-route.sh`）の知らせに従う。平常は Claude が実装する。Claude の枠が逼迫し Codex に余裕があると知らされたら（offload）、これから着手する実装の単位を `~/.codex/codex-delegate.sh` へ退避する。Codex も逼迫していると知らされたら（lean）、退避せず、着手中の単位を仕上げることを優先して並列の切り出しやレビューの往復を増やさない。
+- 実装の担い手は、利用枠のフック（`usage-route.sh`）の知らせに従う。平常は Claude が実装する。Claude の枠が逼迫し Codex に余裕があると知らされたら（offload）、これから着手する実装の単位を `~/.codex/codex-delegate.sh` へ退避する。Codex も逼迫していると知らされたら（lean）、退避せず、着手中の単位を仕上げることを優先して並列の切り出しやレビューの往復を増やさない。どちらの知らせも実装の担い手を決めるだけで、実装でない作業（調べる、数える、設計する、レビューする）は縮めずに続ける。
 - 止めると知らされたら、issue に状態コメント（どこまで進んだか、次の一手）を書いてからターンを終える。フックは知らせるだけで、強制的には打ち切らない。
 - Codex の無料リセットの権利は、リーダーの許可なく使わない。
 
