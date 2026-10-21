@@ -229,6 +229,7 @@
   "remoteControlAtStartup": true,
   "skillOverrides": {
     "book-to-skill": "off",
+    "imozuru": "user-invocable-only",
     "report-skills": "off"
   },
   "skipWorkflowUsageWarning": true,
