@@ -144,7 +144,8 @@ codex_error() {
     call
     [ "$(route_of)" = offload ]
     [[ "$(context_of)" == *"codex-delegate.sh"* ]]
-    [[ "$(context_of)" == *"Claude 5時間枠 70%（リセットまで 100 分）"* ]]
+    [[ "$(context_of)" == *"Claude 5時間枠 使用 70%（リセットまで 100 分）"* ]]
+    [[ "$(context_of)" == *"実装でない作業"*"縮めずに続ける"* ]]
 }
 
 @test "Claude の5時間枠 80%、リセットまで44分 -> 退避せず normal" {
@@ -217,10 +218,19 @@ codex_error() {
     [ "$(route_of)" = normal ]
 }
 
-@test "Claude の週枠の使用率 75%（ペース差 -5） -> offload" {
-    usage 10 75 -5 10 10 0
+@test "Claude の週枠の使用率 75%（ペース差 +1） -> offload" {
+    usage 10 75 1 10 10 0
     call
     [ "$(route_of)" = offload ]
+}
+
+@test "Claude の週枠の使用率 81%でもペース差 0 以下 -> normal（尽きる見込みが無い）" {
+    usage 3 81 -8 10 10 0
+    call
+    [ "$(route_of)" = normal ]
+    usage 3 81 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
 }
 
 @test "Claude の週のペース差 +25、使用率 80% -> stop ではなく offload" {
@@ -240,12 +250,12 @@ codex_error() {
     [ "$(route_of)" = normal ]
 }
 
-@test "週で offload 中: ペース差 0 でも使用率 70% -> offload のまま" {
-    usage 10 76 0 10 10 0
+@test "週で offload 中: ペース差 0 なら使用率 80% でも normal" {
+    usage 10 76 1 10 10 0
     call
-    usage 10 70 0 10 10 0
+    usage 10 80 0 10 10 0
     call
-    [ "$(route_of)" = offload ]
+    [ "$(route_of)" = normal ]
 }
 
 @test "pace が無い -> 使用率だけで判定する" {
@@ -255,6 +265,12 @@ codex_error() {
     usage 10 75 - 10 10 -
     call
     [ "$(route_of)" = offload ]
+    usage 10 70 - 10 10 -
+    call
+    [ "$(route_of)" = offload ]
+    usage 10 69 - 10 10 -
+    call
+    [ "$(route_of)" = normal ]
 }
 
 # --- lean（Claude が逼迫、Codex も逼迫か読めない） ---
@@ -264,6 +280,7 @@ codex_error() {
     call
     [ "$(route_of)" = lean ]
     [[ "$(context_of)" == *"退避しない"* ]]
+    [[ "$(context_of)" == *"実装でない作業"*"縮めずに続ける"* ]]
 }
 
 @test "Claude 逼迫で Codex の週枠 85% -> lean" {
@@ -368,7 +385,7 @@ codex_error() {
 }
 
 @test "Claude の週枠 94% -> stop ではなく offload" {
-    usage 10 94 0 10 10 0
+    usage 10 94 1 10 10 0
     call
     [ "$(route_of)" = offload ]
 }
@@ -393,15 +410,18 @@ codex_error() {
     [ -n "$(context_of)" ]
 }
 
-@test "stop 中に週枠 91% -> stop のまま、89% -> offload（週の使用率 70% 以上なので逼迫のまま）" {
+@test "stop 中に週枠 91% -> stop のまま、89% -> ペース差 +1 なら offload、0 なら normal" {
     usage 10 96 0 10 10 0
     call
     usage 10 91 0 10 10 0
     call
     [ "$(route_of)" = stop ]
-    usage 10 89 0 10 10 0
+    usage 10 89 1 10 10 0
     call
     [ "$(route_of)" = offload ]
+    usage 10 89 0 10 10 0
+    call
+    [ "$(route_of)" = normal ]
 }
 
 @test "stop から一気に余裕が戻る -> normal を知らせる" {

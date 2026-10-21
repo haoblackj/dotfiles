@@ -17,9 +17,11 @@
 #   Claude 逼迫・5時間枠: 使用率 70% 以上、かつリセットまで 45 分以上で入る。出るのは 60% 未満。
 #     リセット間際に新しく退避を始めると、退避の手間（ブリーフ、統合）のほうが高くつくので、
 #     45 分の条件は入るときだけに掛ける。逼迫の最中にリセットが近づいても、余裕が戻ったとは言わない。
-#   Claude 逼迫・週枠: ペース差 +10 以上か使用率 75% 以上（出るのはペース差 0 以下かつ使用率 70% 未満）。
+#   Claude 逼迫・週枠: ペース差 +10 以上か、ペース差が正で使用率 75% 以上（出るのはペース差 0 以下）。
 #     ペース差は pace.secondary.deltaPercent（使用率 − 経過率）。ペースの超過は「消費を減らせ」の
-#     合図なので、止めずに退避の条件にする。
+#     合図なので、止めずに退避の条件にする。ペース差 0 以下は週の終わりまでに尽きない見込みなので、
+#     使用率が高くても逼迫としない（ペースに余裕のある週 75% での offload が、実装でない作業まで
+#     止めていた。#34）。ペース差が読めないときだけ、使用率 75% 以上で入り 70% 未満で出る。
 #   Claude stop: 5時間枠 90% 以上か週枠 95% 以上（出るのは 5時間枠 80% 未満かつ週枠 90% 未満）。
 #   Codex に余裕: 5時間枠 70% 未満、週枠 85% 未満、週のペース差 +15 未満のすべて。
 #
@@ -87,6 +89,7 @@ VERDICT=$(jq -r --arg prev "$PREV_ROUTE" --argjson now "$NOW" '
   def delta($e): ($e.pace.secondary.deltaPercent // null);
   def delta_ge($e; $t): (delta($e) | type) == "number" and delta($e) >= $t;
   def delta_gt($e; $t): (delta($e) | type) == "number" and delta($e) > $t;
+  def no_delta($e): (delta($e) | type) != "number";
   # 5時間枠のリセットまでの分。読めなければ null（逼迫の判定ではリセットが遠いものとして扱う）
   def h5_left($e): ($e.usage.primary.resetsAt // null)
     | if type == "string" then (try ((sub("\\.[0-9]+"; "") | fromdateiso8601) - $now | . / 60 | floor) catch null)
@@ -98,12 +101,12 @@ VERDICT=$(jq -r --arg prev "$PREV_ROUTE" --argjson now "$NOW" '
     def claude_tight($e):
       (h5_left($e)) as $left
       | (if $was_tight then h5($e) >= 60 else h5($e) >= 70 and ($left == null or $left >= 45) end)
-        or (if $was_tight then delta_gt($e; 0) or wk($e) >= 70
-            else delta_ge($e; 10) or wk($e) >= 75 end);
+        or (if $was_tight then delta_gt($e; 0) or (no_delta($e) and wk($e) >= 70)
+            else delta_ge($e; 10) or ((delta_gt($e; 0) or no_delta($e)) and wk($e) >= 75) end);
     def codex_room($e): ok($e) and h5($e) < 70 and wk($e) < 85 and (delta_ge($e; 15) | not);
-    def fmt($name; $e): "\($name) 5時間枠 \(h5($e))%"
+    def fmt($name; $e): "\($name) 5時間枠 使用 \(h5($e))%"
       + (if (h5_left($e) | type) == "number" then "（リセットまで \(h5_left($e)) 分）" else "" end)
-      + "、週枠 \(wk($e))%"
+      + "、週枠 使用 \(wk($e))%"
       + (if (delta($e) | type) == "number" then "（ペース差 \(if delta($e) >= 0 then "+" else "" end)\(delta($e))）" else "" end);
   if type != "array" then empty else
     first_of("claude") as $c | first_of("codex") as $x
@@ -159,9 +162,9 @@ case "$ROUTE" in
   normal)
     notify "利用枠: Claude の枠に余裕が戻った（$SUMMARY）。実装は Claude で行う。" ;;
   offload)
-    notify "利用枠: Claude の枠が逼迫している（$SUMMARY）。Codex に余裕があるので、これから着手する実装の単位は ~/.codex/codex-delegate.sh へブリーフで渡す。着手中の編集は仕上げてよい。全件テスト、統合、コミット、レビューは Claude が持つ。" ;;
+    notify "利用枠: Claude の枠が逼迫している（$SUMMARY）。Codex に余裕があるので、これから着手する実装の単位は ~/.codex/codex-delegate.sh へブリーフで渡す。着手中の編集は仕上げてよい。全件テスト、統合、コミット、レビューは Claude が持つ。実装でない作業（調べる、数える、設計する、レビューする）は縮めずに続ける。作業を止めるのは、枠が尽きる手前と知らせたときだけ。" ;;
   lean)
-    notify "利用枠: Claude の枠が逼迫しているが、Codex も逼迫しているか読めない（$SUMMARY）。Codex へは退避しない。Claude が実装を続け、着手中の単位を仕上げることを優先する。新しい並列のサブエージェントやレビューの往復は増やさない。Codex の無料リセットの権利は、リーダーの許可なく使わない。" ;;
+    notify "利用枠: Claude の枠が逼迫しているが、Codex も逼迫しているか読めない（$SUMMARY）。Codex へは退避しない。Claude が実装を続け、着手中の単位を仕上げることを優先する。新しい並列のサブエージェントやレビューの往復は増やさない。Codex の無料リセットの権利は、リーダーの許可なく使わない。実装でない作業（調べる、数える、設計する、レビューする）は縮めずに続ける。作業を止めるのは、枠が尽きる手前と知らせたときだけ。" ;;
   stop)
     notify "利用枠: Claude の枠が尽きる手前（$SUMMARY）。issue に状態（どこまで進んだか、次の一手）を書いてから、ターンを終える。" ;;
 esac
