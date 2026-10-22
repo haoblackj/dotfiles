@@ -1,0 +1,9 @@
+#!/bin/bash
+set -eu
+
+# Claude Code の一時ディレクトリを年齢で掃除する（2026-10-23）。規則は
+# dot_config/user-tmpfiles.d/cc-tmp.conf が配る。タイマーはユーザー版 systemd に標準で
+# 入っているが既定で無効なので、ここで有効にする。規則が変わったら走らせ直して作成も確かめる。
+# cc-tmp.conf hash: {{ include "dot_config/user-tmpfiles.d/cc-tmp.conf" | sha256sum }}
+systemd-tmpfiles --user --create
+systemctl --user enable --now systemd-tmpfiles-clean.timer
