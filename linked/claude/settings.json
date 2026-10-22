@@ -16,6 +16,7 @@
   },
   "env": {
     "CLAUDE_CODE_THRIFTY_SONIC": "0",
+    "CLAUDE_CODE_TMPDIR": "/home/yagu001/.cache/cc-tmp",
     "ENABLE_COMMIT_REVIEW": "0"
   },
   "extraKnownMarketplaces": {
