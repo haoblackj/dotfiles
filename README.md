@@ -340,8 +340,23 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 Claude が渡すのは状態コメントの URL、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
 状態コメントへのリンク（`#issuecomment-<数字>`）でなければ止まる。
 
-閾値は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
+コンテキストの閾値は `CONTEXT_GUARD_*`、逼迫の間隔と固定間隔の許可は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
 テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
+
+**ループ以外の対話セッションの見張り。**
+`dot_claude/hooks/executable_chat-context-guard.sh`（UserPromptSubmit）が、自動の compact より先に、状態を書き出して `/clear` へ誘導する知らせを入れる（決定は haoblackj/dotfiles#71）。
+フックからは `/clear` を打てないので、打つのはリーダー。
+
+| コンテキスト | 知らせ |
+|---|---|
+| 一段目（1M の窓で 300K、使用率 50%） | 依頼を片付けたあと、状態の書き出しと `/clear` を勧めさせる |
+| 二段目（1M の窓で 400K、使用率 75%） | 依頼に入る前に状態を書き出させ、`/clear` を勧めて止まらせる |
+
+どちらも一度だけ出し、一段目を下回ったら次に越えたときにまた出す。
+ループの予約を通したことのあるセッションと、`/loop` で始まる prompt では何もしない（ループは上の `loop-guard.sh` が受け持つ）。
+閾値の計算とループのセッションの判定は、両方のフックが `source` する `dot_claude/hooks/context-level.sh` にある。
+知らせは `~/.local/state/claude-chat-context-guard/decisions.log` に残る。
+テストは `dot_claude/hooks/chat-context-guard.bats`。
 
 ### クラウドセッション（Claude Code on the web）
 

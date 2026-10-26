@@ -8,7 +8,7 @@ setup() {
     export TMPDIR="$TMPDIR_TEST"
     export XDG_STATE_HOME="$TMPDIR_TEST/state"
     LOG="$XDG_STATE_HOME/claude-loop-guard/decisions.log"
-    for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT TIGHT_MIN_SECONDS; do unset "LOOP_GUARD_$v"; done
+    unset LOOP_GUARD_TIGHT_MIN_SECONDS; for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT; do unset "CONTEXT_GUARD_$v"; done
     # 繰り返しの CronCreate は既定で止める。その判定は「固定間隔のループ」の節で見る。
     # ほかの節では、許したときの判定（stop、二段目、逼迫の間隔）を確かめるため許しておく
     export LOOP_GUARD_ALLOW_RECURRING_CRON=1
@@ -264,7 +264,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 
 @test "閾値は環境変数で差し替えられる" {
     ctx 30
-    LOOP_GUARD_STATE_TOKENS=350000 LOOP_GUARD_HANDOFF_TOKENS=500000 wakeup
+    CONTEXT_GUARD_STATE_TOKENS=350000 CONTEXT_GUARD_HANDOFF_TOKENS=500000 wakeup
     [ -z "$output" ]
 }
 
@@ -332,79 +332,5 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     route normal
     ctx 40
     prompt "/loop z"
-    [ -z "$output" ]
-}
-
-# --- ループ以外の対話セッション（UserPromptSubmit、#71） ---
-
-@test "対話で一段目 -> 依頼のあとに /clear を勧めさせる。一度だけ" {
-    ctx 32
-    prompt "ふつうの依頼"
-    [[ "$(context_of)" == "[loop-guard] "*"一段目"*"/clear"* ]]
-    [[ "$(context_of)" == *"片付けたら"* ]]
-    prompt "次の依頼"
-    [ -z "$output" ]
-    grep -q "notice:chat-state" "$LOG"
-}
-
-@test "対話で二段目 -> 依頼の前に状態を書き出し、/clear を勧めて止まらせる。一度だけ" {
-    ctx 45
-    prompt "ふつうの依頼"
-    [[ "$(context_of)" == *"二段目"*"入る前に"*"/clear"* ]]
-    [[ "$(context_of)" != *"Herdr"* ]]
-    prompt "このまま続けて"
-    [ -z "$output" ]
-}
-
-@test "対話で一段目の知らせのあとに二段目を越えたら、二段目も一度出す" {
-    ctx 32
-    prompt "a"
-    ctx 45
-    prompt "b"
-    [[ "$(context_of)" == *"二段目"* ]]
-}
-
-@test "対話で一段目を下回ったら、次に越えたときにまた知らせる" {
-    ctx 32
-    prompt "a"
-    ctx 5
-    prompt "b"
-    [ -z "$output" ]
-    ctx 32
-    prompt "c"
-    [[ "$(context_of)" == *"一段目"* ]]
-}
-
-@test "対話で閾値の下か、使用率が測れない -> 黙る" {
-    ctx 10
-    prompt "a"
-    [ -z "$output" ]
-    rm -f "$TMPDIR/claude-status-context-usage/sess"
-    prompt "b"
-    [ -z "$output" ]
-}
-
-@test "/loop で始まる prompt には対話の知らせを出さない" {
-    ctx 45
-    prompt "/loop check ci"
-    [ -z "$output" ]
-    prompt "  /loop"
-    [ -z "$output" ]
-    prompt "/loopy は別のコマンド"
-    [[ "$(context_of)" == *"二段目"* ]]
-}
-
-@test "予約を通したことのあるセッションでは、手打ちの prompt に対話の知らせを出さない" {
-    wakeup 1800 "/loop w"
-    ctx 45
-    prompt "ループの合間の質問"
-    [ -z "$output" ]
-    prompt "/loop w"
-    [[ "$(context_of)" == *"Herdr"* ]]
-}
-
-@test "対話でサブエージェントの入力 -> 何もしない" {
-    ctx 45
-    run bash "$SCRIPT" <<< '{"session_id":"sess","agent_id":"a1","hook_event_name":"UserPromptSubmit","prompt":"x"}'
     [ -z "$output" ]
 }

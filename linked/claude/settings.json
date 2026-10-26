@@ -216,6 +216,15 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/chat-context-guard.sh\"",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
       }
     ]
   },
