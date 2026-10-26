@@ -14,14 +14,20 @@
 #                             一段目を下回ったら（圧縮のあとなど）、次に越えたときにまた一度 deny する。
 #   4. 振り先が offload か lean → 間隔が 20 分より短い予約を deny（ScheduleWakeup の delaySeconds、
 #                             繰り返しの CronCreate の cron の分の欄から求めた最短の間隔）。
-#   繰り返しの CronCreate（固定間隔のループ）は、上の判定より前に、どの状態でも deny する。
-#   固定間隔のループの発火はフックから止められず、逼迫や引き継ぎを強制できないため（#69 の決定）。
-#   LOOP_GUARD_ALLOW_RECURRING_CRON=1 のときだけ通し、上の 1、2、4 で判定する。
+#   CronCreate は、1 と 2 では一度きり（recurring: false）も deny する（ScheduleWakeup の代わりに
+#   一度きりの予約で次の回を取れば、止めたはずのループが続くため）。それ以外の一度きりは通す。
+#   繰り返しの CronCreate（固定間隔のループ）は、1 と 2 に当たらなくても deny する。固定間隔の
+#   発火はフックから止められず、逼迫や引き継ぎを強制できないため（#69 の決定）。
+#   LOOP_GUARD_ALLOW_RECURRING_CRON=1 のときだけ通し、4 で判定する。
 #   通した予約の prompt は、ハッシュにしてセッションごとに覚える。
 #
-# UserPromptSubmit では、prompt が覚えた予約のどれかと同じとき（ループの発火）だけ、上の 1〜4 に
-# 当たる知らせを additionalContext で入れる。固定間隔のループは ScheduleWakeup を呼ばないので、
-# 発火の側で知らせないと止める合図が届かない。発火そのものは止めない。
+# UserPromptSubmit では、prompt が覚えた予約のどれかと同じとき（ループの発火）だけ、知らせを
+# additionalContext で入れる。発火そのものは止めない。
+#   コンテキストの二段目と一段目は、その回の作業の前に知らせる（作業を一回分むだにしないため）。
+#   一段目の知らせは一度だけで、予約の deny の一度きりとは別に数える。
+#   振り先（stop、逼迫）の知らせは、固定間隔を許したときだけ出す。振り先のファイルはツールを
+#   呼んだときにしか書き換わらず、眠っている間の発火の時点では古いことがある。自己ペースの
+#   ループは、その回のツール呼び出しで新しくなった振り先を予約の時点で読むので、それで足りる。
 #
 # 閾値（#69 の決定。環境変数で差し替えられる。記録を見て見直す）。1M の窓のトークン数は、実践者の
 # 経験則（300K を確認点にする、300〜400K を上限にする）から取った。測定に基づく値ではない。
@@ -64,6 +70,7 @@ T="${TMPDIR:-/tmp}"
 GUARD_DIR="$T/claude-loop-guard"
 PROMPTS="$GUARD_DIR/$SID.prompts"
 NOTED="$GUARD_DIR/$SID.noted"
+NOTICED="$GUARD_DIR/$SID.noticed"
 
 # 通常のファイルの先頭の語だけを読む（FIFO やリンクを読んで固まったり他を読んだりしない）
 read_word() {
@@ -98,8 +105,8 @@ if [[ "$PCT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
   fi
 fi
 
-# 一段目を下回ったら、一度だけの deny を次に越えたときのために戻す
-[[ "$CTX" == low ]] && rm -f -- "$NOTED" 2>/dev/null
+# 一段目を下回ったら、一度だけの deny と知らせを、次に越えたときのために戻す
+[[ "$CTX" == low ]] && rm -f -- "$NOTED" "$NOTICED" 2>/dev/null
 
 log() {
   local dir="${XDG_STATE_HOME:-$HOME/.local/state}/claude-loop-guard"
@@ -114,10 +121,10 @@ ctx_desc() {
   else printf 'コンテキスト 使用率 %s%%' "$PCT"; fi
 }
 
-# 一段目の一度だけを使ったことにする。すでに使っていたら 1 を返す
-take_note() {
-  [[ -e "$NOTED" ]] && return 1
-  mkdir -p "$GUARD_DIR" 2>/dev/null && : > "$NOTED" 2>/dev/null
+# 一段目の一度だけ（印のファイル $1）を使ったことにする。すでに使っていたら 1 を返す
+take_once() {
+  [[ -e "$1" ]] && return 1
+  mkdir -p "$GUARD_DIR" 2>/dev/null && : > "$1" 2>/dev/null
   return 0
 }
 
@@ -145,40 +152,49 @@ notify() {
   exit 0
 }
 
-# cron の分の欄から、発火の最短の間隔（分）を出す。読めなければ何も出さない。
-# 時の欄が * のときだけ、毎時の境目をまたぐ間隔も数える。
-cron_min_gap() {
-  local min_f="$1" hour_f="$2" item base step a b m
-  local -a mins=() items=()
+# cron の 1 つの欄を数の並びに開く。読めない形なら 1 を返す。
+expand_field() {
+  local f="$1" max="$2" item base step a b m
+  local -a items=()
   # for で回すと * がファイル名に展開されるので、read で配列に割る
-  IFS=, read -ra items <<< "$min_f"
+  IFS=, read -ra items <<< "$f"
+  (( ${#items[@]} > 0 )) || return 1
   for item in "${items[@]}"; do
     step=1
     if [[ "$item" == */* ]]; then step=${item#*/}; base=${item%%/*}; else base=$item; fi
-    [[ "$step" =~ ^[0-9]+$ ]] && (( step >= 1 )) || return 0
-    if [[ "$base" == "*" ]]; then a=0; b=59
+    [[ "$step" =~ ^[0-9]+$ ]] && (( step >= 1 )) || return 1
+    if [[ "$base" == "*" ]]; then a=0; b=$max
     elif [[ "$base" =~ ^([0-9]+)-([0-9]+)$ ]]; then a=$((10#${BASH_REMATCH[1]})); b=$((10#${BASH_REMATCH[2]}))
-    elif [[ "$base" =~ ^[0-9]+$ ]]; then a=$((10#$base)); if [[ "$item" == */* ]]; then b=59; else b=$a; fi
-    else return 0; fi
-    (( a <= b && b <= 59 )) || return 0
-    for ((m = a; m <= b; m += step)); do mins+=("$m"); done
+    elif [[ "$base" =~ ^[0-9]+$ ]]; then a=$((10#$base)); if [[ "$item" == */* ]]; then b=$max; else b=$a; fi
+    else return 1; fi
+    (( a <= b && b <= max )) || return 1
+    for ((m = a; m <= b; m += step)); do printf '%s\n' "$m"; done
   done
-  (( ${#mins[@]} > 0 )) || return 0
-  printf '%s\n' "${mins[@]}" | sort -n -u | awk -v wrap="$([[ "$hour_f" == "*" || "$hour_f" == "*/1" ]] && echo 1 || echo 0)" '
+}
+
+# cron の分と時の欄から、発火の最短の間隔（分）を出す。読めなければ何も出さない。
+# 日の境目もまたいで数える（日、月、曜日の欄は見ないので、間隔を短めに見積もる側に倒れる）。
+cron_min_gap() {
+  local mins hours h m
+  mins=$(expand_field "$1" 59) || return 0
+  hours=$(expand_field "$2" 23) || return 0
+  for h in $hours; do for m in $mins; do printf '%s\n' $((h * 60 + m)); done; done | sort -n -u | awk '
     NR == 1 { first = $1 } NR > 1 { g = $1 - prev; if (best == "" || g < best) best = g } { prev = $1 }
     END {
-      if (wrap) { g = 60 - prev + first; if (best == "" || g < best) best = g }
-      if (best == "") best = 60
+      g = 1440 - prev + first; if (best == "" || g < best) best = g
       print best
     }'
 }
 
 STOP_MSG="利用枠が尽きる手前（stop）。ループを終える。issue に \`## 状態\`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete（ID は CronList）で止めてから、ターンを終える。再開はリーダーが /loop を打ち直す。"
 handoff_msg() {
-  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `%s --state-url <状態コメントの URL> --model <モデル> --effort <エフォート> -- <同じ /loop の指示>` を呼んで、Herdr の新しいタブへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。' "$(ctx_desc)" "$HANDOFF_CMD"
+  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `%s --state-url <状態コメントの URL> --model <モデル> --effort <エフォート> -- <同じ /loop の指示>` を呼んで、Herdr の新しいタブへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。スクリプトが失敗したら、ループを止めたことと失敗の出力をリーダーに報告して、ターンを終える。' "$(ctx_desc)" "$HANDOFF_CMD"
 }
 state_msg() {
   printf '%s が一段目の閾値を越えた。次の予約の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。書いたら、同じ予約をもう一度呼んでよい（この止め方は一度だけ）。' "$(ctx_desc)"
+}
+state_notice() {
+  printf '%s が一段目の閾値を越えている。この回の作業の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。' "$(ctx_desc)"
 }
 
 case "$EVENT" in
@@ -188,7 +204,7 @@ case "$EVENT" in
         [[ "$(jq -r '.tool_input.stop // false' <<< "$INPUT" 2>/dev/null)" == true ]] && exit 0
         [[ "$ROUTE" == stop ]] && deny stop "$STOP_MSG"
         [[ "$CTX" == handoff ]] && deny handoff "$(handoff_msg)"
-        [[ "$CTX" == state ]] && take_note && deny state "$(state_msg)"
+        [[ "$CTX" == state ]] && take_once "$NOTED" && deny state "$(state_msg)"
         DELAY=$(jq -r '.tool_input.delaySeconds // empty' <<< "$INPUT" 2>/dev/null)
         if [[ "$ROUTE" == offload || "$ROUTE" == lean ]] && [[ "$DELAY" =~ ^[0-9]+(\.[0-9]+)?$ ]] && (( ${DELAY%%.*} < TIGHT_MIN )); then
           deny tight "Claude の利用枠が逼迫している（$ROUTE）。ループの 1 回は Claude の枠を食うので、逼迫の間は delaySeconds を $TIGHT_MIN 以上にして予約し直す。"
@@ -196,11 +212,11 @@ case "$EVENT" in
         remember "$(jq -r '.tool_input.prompt // empty' <<< "$INPUT" 2>/dev/null)"
         ;;
       CronCreate)
+        [[ "$ROUTE" == stop ]] && deny stop "新しい予約を作らない（一度きりも）。$STOP_MSG"
+        [[ "$CTX" == handoff ]] && deny handoff "新しい予約を作らない（一度きりも）。$(handoff_msg)"
         # jq の // は false も既定へ倒すので、false と比べる
         [[ "$(jq -r '.tool_input.recurring == false' <<< "$INPUT" 2>/dev/null)" == true ]] && exit 0
-        [[ "$ALLOW_CRON" == 1 ]] || deny cron "固定間隔のループ（繰り返しの CronCreate）は使わない。間隔を書かない /loop（自己ペース。ScheduleWakeup で次の回を予約する）で回す。一度きりのリマインダー（recurring: false）は使ってよい。"
-        [[ "$ROUTE" == stop ]] && deny stop "利用枠が尽きる手前（stop）。新しいループを始めない。"
-        [[ "$CTX" == handoff ]] && deny handoff "$(ctx_desc) が二段目の閾値を越えている。このセッションで新しいループを始めない。issue に \`## 状態\` を書き、$HANDOFF_CMD で Herdr の新しいタブへ渡して、そちらで始める。"
+        [[ "$ALLOW_CRON" == 1 ]] || deny cron "固定間隔のループ（繰り返しの CronCreate）は使わない。間隔を書かない /loop（自己ペース。ScheduleWakeup で次の回を予約する）で回す。"
         if [[ "$ROUTE" == offload || "$ROUTE" == lean ]]; then
           read -r CMIN CHOUR _ <<< "$(jq -r '.tool_input.cron // empty' <<< "$INPUT" 2>/dev/null)"
           GAP=$(cron_min_gap "${CMIN:-}" "${CHOUR:-}")
@@ -216,10 +232,10 @@ case "$EVENT" in
     P=$(jq -r '.prompt // empty' <<< "$INPUT" 2>/dev/null)
     [[ -n "$P" && -f "$PROMPTS" && ! -L "$PROMPTS" ]] || exit 0
     grep -qxF -- "$(hash_of "$P")" "$PROMPTS" 2>/dev/null || exit 0
-    [[ "$ROUTE" == stop ]] && notify stop "このプロンプトはループの発火。$STOP_MSG"
-    [[ "$CTX" == handoff ]] && notify handoff "このプロンプトはループの発火。$(handoff_msg)"
-    [[ "$CTX" == state ]] && take_note && notify state "このプロンプトはループの発火。$(state_msg)"
-    if [[ "$ROUTE" == offload || "$ROUTE" == lean ]]; then
+    [[ "$ALLOW_CRON" == 1 && "$ROUTE" == stop ]] && notify stop "このプロンプトはループの発火。$STOP_MSG"
+    [[ "$CTX" == handoff ]] && notify handoff "このプロンプトはループの発火。この回の作業をしない。$(handoff_msg)"
+    [[ "$CTX" == state ]] && take_once "$NOTICED" && notify state "このプロンプトはループの発火。$(state_notice)"
+    if [[ "$ALLOW_CRON" == 1 ]] && [[ "$ROUTE" == offload || "$ROUTE" == lean ]]; then
       notify tight "このプロンプトはループの発火。Claude の利用枠が逼迫している（$ROUTE）。固定間隔のループで間隔が $((TIGHT_MIN / 60)) 分より短いなら、CronDelete して $((TIGHT_MIN / 60)) 分以上の間隔で作り直す。自己ペースのループは、次の予約を $TIGHT_MIN 秒以上にする。"
     fi
     ;;

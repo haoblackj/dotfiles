@@ -122,12 +122,21 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     [ "$(decision)" = deny ]
 }
 
-@test "stop -> 繰り返しの CronCreate を deny、一度きりは通す" {
+@test "stop -> CronCreate は一度きりも deny（一度きりの予約で次の回を取らせない）" {
     route stop
     cron "7 * * * *"
     [ "$(decision)" = deny ]
     cron "30 14 28 2 *" "/remind" false
-    [ -z "$output" ]
+    [ "$(decision)" = deny ]
+    [[ "$(reason)" == *"一度きりも"* ]]
+}
+
+@test "stop のときは、固定間隔を許していなくても stop の理由を返す" {
+    unset LOOP_GUARD_ALLOW_RECURRING_CRON
+    route stop
+    cron "7 * * * *"
+    [[ "$(reason)" == *"stop"* ]]
+    [[ "$(reason)" != *"固定間隔のループ（繰り返しの CronCreate）は使わない"* ]]
 }
 
 # --- 逼迫（offload、lean）の間隔の下限 ---
@@ -171,6 +180,9 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     # 時が限られていれば境目はまたがない
     cron "0,50 9 * * *"
     [ -z "$output" ]
+    # 時が限られていても、続く時どうしの境目はまたぐ（9:50 と 10:00 は 10 分おき）
+    cron "50,0 9,10 * * *"
+    [ "$(decision)" = deny ]
 }
 
 @test "offload で読めない cron は通す" {
@@ -228,10 +240,13 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     [[ "$(reason)" == *"二段目"* ]]
 }
 
-@test "二段目では新しい CronCreate も deny" {
+@test "二段目では新しい CronCreate も、一度きりも deny" {
     ctx 40
     cron "7 * * * *"
     [ "$(decision)" = deny ]
+    cron "30 14 28 2 *" "/remind" false
+    [ "$(decision)" = deny ]
+    [[ "$(reason)" == *"loop-handoff.sh"* ]]
 }
 
 @test "一段目では CronCreate は通す" {
@@ -262,6 +277,31 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     prompt "/loop poll ci"
     [[ "$(context_of)" == "[loop-guard] このプロンプトはループの発火。"*"CronDelete"* ]]
     prompt "ふつうの質問"
+    [ -z "$output" ]
+}
+
+@test "固定間隔を許していなければ、発火で振り先の知らせを出さない（振り先が古いことがあるため）" {
+    unset LOOP_GUARD_ALLOW_RECURRING_CRON
+    route normal
+    wakeup 1800 "/loop w"
+    route stop
+    prompt "/loop w"
+    [ -z "$output" ]
+    route lean
+    prompt "/loop w"
+    [ -z "$output" ]
+}
+
+@test "発火の一段目の知らせは一度だけで、そのあとの予約の deny の一度きりは残る" {
+    wakeup 1800 "/loop s"
+    ctx 32
+    prompt "/loop s"
+    [[ "$(context_of)" == *"この回の作業の前に"*"## 状態"* ]]
+    prompt "/loop s"
+    [ -z "$output" ]
+    wakeup 1800 "/loop s"
+    [ "$(decision)" = deny ]
+    wakeup 1800 "/loop s"
     [ -z "$output" ]
 }
 

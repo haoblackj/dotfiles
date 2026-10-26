@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # loop-handoff.sh のユニットテスト。herdr は PATH の先頭に置いた偽物に差し替え、受けた引数を記録させる。
-# 偽物の tab create の応答は、herdr の公式の文書（cli reference）の形（.result.tab.tab_id、
-# .result.root_pane.pane_id）に合わせてある。
+# 偽物の応答は、herdr の公式の文書（cli reference）と API の定義（herdr-api.schema.json）の形に
+# 合わせてある（tab create は .result.root_pane.pane_id、pane current は .result.pane の PaneInfo）。
 bats_require_minimum_version 1.5.0
 set -u
 
@@ -17,6 +17,9 @@ setup() {
 #!/bin/bash
 printf '%s\n' "\$*" >> "$CALLS"
 case "\$1 \$2" in
+  "pane current") [ -n "\${FAKE_NO_CURRENT:-}" ] && exit 1
+                  echo '{"result":{"type":"pane_current","pane":{"pane_id":"w3:p1","workspace_id":"w3","tab_id":"w3:t1","cwd":"'"\$FAKE_CWD"'","focused":true,"agent_status":"working","revision":1,"terminal_id":"x"}}}' ;;
+  "pane wait-output") echo '{"result":{"matched":true}}' ;;
   "tab create") [ -n "\${FAKE_TAB_FAIL:-}" ] && { echo '{"error":{"code":"x"}}'; exit 1; }
                 echo '{"result":{"tab":{"tab_id":"w1:t9"},"root_pane":{"pane_id":"w1:p42"}}}' ;;
   "agent start") [ -n "\${FAKE_START_FAIL:-}" ] && { echo '{"error":{"code":"agent_not_ready"}}'; exit 1; }
@@ -27,6 +30,7 @@ EOF
     chmod +x "$BIN/herdr"
     export PATH="$BIN:$PATH"
     export HERDR_ENV=1 HERDR_WORKSPACE_ID=w1
+    export FAKE_CWD="$TMPDIR_TEST"
 }
 
 teardown() {
@@ -35,16 +39,24 @@ teardown() {
 
 handoff() { run bash "$SCRIPT" --state-url "$URL" --model opus --effort medium "$@" -- "/loop CI を見て、赤なら直す"; }
 
-@test "タブを同じワークスペースと cwd に作り、そのペインで claude を起動し、引き継ぎを渡す" {
+@test "今のペインのワークスペースと cwd にタブを作り、シェルを待ってから claude を起動し、引き継ぎを渡す" {
     handoff
     [ "$status" -eq 0 ]
     [ "$(jq -r .agent <<< "$output")" != "" ]
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     run cat "$CALLS"
-    [[ "${lines[0]}" == "tab create --workspace w1 --cwd $PWD --no-focus" ]]
-    [[ "${lines[1]}" == "agent start loop-"*" --kind claude --pane w1:p42 -- --model opus --effort medium" ]]
-    [[ "${lines[2]}" == "agent prompt loop-"*" /loop CI を見て、赤なら直す" ]]
+    [[ "${lines[0]}" == "pane current --current" ]]
+    [[ "${lines[1]}" == "tab create --workspace w3 --cwd $TMPDIR_TEST --no-focus" ]]
+    [[ "${lines[2]}" == "pane wait-output w1:p42 --regex "* ]]
+    [[ "${lines[3]}" == "agent start loop-"*" --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium" ]]
+    [[ "${lines[4]}" == "agent prompt loop-"*" /loop CI を見て、赤なら直す" ]]
     grep -qF "$URL" "$CALLS"
+}
+
+@test "pane current が使えなければ、HERDR_WORKSPACE_ID と今の cwd で作る" {
+    FAKE_NO_CURRENT=1 handoff
+    [ "$status" -eq 0 ]
+    grep -qx "tab create --workspace w1 --cwd $PWD --no-focus" "$CALLS"
 }
 
 @test "prompt に --wait を付けない" {
@@ -90,7 +102,8 @@ handoff() { run bash "$SCRIPT" --state-url "$URL" --model opus --effort medium "
     FAKE_TAB_FAIL=1 handoff
     [ "$status" -eq 1 ]
     [[ "$output" == *"tab create"* ]]
-    [ "$(wc -l < "$CALLS")" -eq 1 ]
+    [ "$(grep -c '^tab create' "$CALLS")" -eq 1 ]
+    run ! grep -q "^agent" "$CALLS"
 }
 
 @test "agent start が失敗したら、ペインを残したことを返して止まる" {
