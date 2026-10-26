@@ -8,7 +8,7 @@ setup() {
     export TMPDIR="$TMPDIR_TEST"
     export XDG_STATE_HOME="$TMPDIR_TEST/state"
     LOG="$XDG_STATE_HOME/claude-loop-guard/decisions.log"
-    for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT TIGHT_MIN_SECONDS; do unset "LOOP_GUARD_$v"; done
+    unset LOOP_GUARD_TIGHT_MIN_SECONDS; for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT; do unset "CONTEXT_GUARD_$v"; done
     # 繰り返しの CronCreate は既定で止める。その判定は「固定間隔のループ」の節で見る。
     # ほかの節では、許したときの判定（stop、二段目、逼迫の間隔）を確かめるため許しておく
     export LOOP_GUARD_ALLOW_RECURRING_CRON=1
@@ -264,7 +264,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 
 @test "閾値は環境変数で差し替えられる" {
     ctx 30
-    LOOP_GUARD_STATE_TOKENS=350000 LOOP_GUARD_HANDOFF_TOKENS=500000 wakeup
+    CONTEXT_GUARD_STATE_TOKENS=350000 CONTEXT_GUARD_HANDOFF_TOKENS=500000 wakeup
     [ -z "$output" ]
 }
 
