@@ -6,7 +6,7 @@
 
 クラウドでは、このファイルは dotfiles の `install-cloud.sh` が配ったもの。手元の WSL 前提の記述を次のとおり読み替える。
 
-- 「ホーム配下の設定ファイルはchezmoi前提で扱う」「Herdr でのセッションの立て方」「GitHub の名義（bot）」「環境の境界（WSL/Windows）」と、Codex への委譲と利用枠のフックの記述は適用しない。chezmoi / herdr / codex / trash-put と利用枠のフック、bot の鍵はコンテナに無く、GitHub への書き込みは本人の名義になる。
+- 「ホーム配下の設定ファイルはchezmoi前提で扱う」「Herdr でのセッションの立て方」「GitHub の名義（bot）」「環境の境界（WSL/Windows）」と、Codex への委譲と利用枠のフック、ループのコンテキストの規律（`loop-guard.sh`）の記述は適用しない。chezmoi / herdr / codex / trash-put と利用枠のフック、bot の鍵はコンテナに無く、GitHub への書き込みは本人の名義になる。
 - superpowers などのプラグインは入っていない。スキル名での指定は、同じ手順を自分で踏む指示として読む。
 - auto memory は無い。memory に残すはずの教訓や退けられた判断は、issue か PR の説明に書くか、リーダーへ報告する。
 - 削除は `trash-put` の代わりに、追跡されたファイルなら `git rm`（git で戻せる）。追跡外のファイルは消す前にリーダーに確かめる。
