@@ -14,6 +14,9 @@
 #                             一段目を下回ったら（圧縮のあとなど）、次に越えたときにまた一度 deny する。
 #   4. 振り先が offload か lean → 間隔が 20 分より短い予約を deny（ScheduleWakeup の delaySeconds、
 #                             繰り返しの CronCreate の cron の分の欄から求めた最短の間隔）。
+#   繰り返しの CronCreate（固定間隔のループ）は、上の判定より前に、どの状態でも deny する。
+#   固定間隔のループの発火はフックから止められず、逼迫や引き継ぎを強制できないため（#69 の決定）。
+#   LOOP_GUARD_ALLOW_RECURRING_CRON=1 のときだけ通し、上の 1、2、4 で判定する。
 #   通した予約の prompt は、ハッシュにしてセッションごとに覚える。
 #
 # UserPromptSubmit では、prompt が覚えた予約のどれかと同じとき（ループの発火）だけ、上の 1〜4 に
@@ -41,6 +44,7 @@ STATE_PCT="${LOOP_GUARD_STATE_PCT:-50}"
 HANDOFF_TOKENS="${LOOP_GUARD_HANDOFF_TOKENS:-400000}"
 HANDOFF_PCT="${LOOP_GUARD_HANDOFF_PCT:-75}"
 TIGHT_MIN="${LOOP_GUARD_TIGHT_MIN_SECONDS:-1200}"
+ALLOW_CRON="${LOOP_GUARD_ALLOW_RECURRING_CRON:-0}"
 for v in "$STATE_TOKENS" "$STATE_PCT" "$HANDOFF_TOKENS" "$HANDOFF_PCT" "$TIGHT_MIN"; do
   [[ "$v" =~ ^[0-9]+$ ]] || exit 0
 done
@@ -191,6 +195,7 @@ case "$EVENT" in
       CronCreate)
         # jq の // は false も既定へ倒すので、false と比べる
         [[ "$(jq -r '.tool_input.recurring == false' <<< "$INPUT" 2>/dev/null)" == true ]] && exit 0
+        [[ "$ALLOW_CRON" == 1 ]] || deny cron "固定間隔のループ（繰り返しの CronCreate）は使わない。間隔を書かない /loop（自己ペース。ScheduleWakeup で次の回を予約する）で回す。一度きりのリマインダー（recurring: false）は使ってよい。"
         [[ "$ROUTE" == stop ]] && deny stop "利用枠が尽きる手前（stop）。新しいループを始めない。"
         [[ "$CTX" == handoff ]] && deny handoff "$(ctx_desc) が二段目の閾値を越えている。このセッションで新しいループを始めず、Herdr で新しいタブを立てて、そちらで /loop を始める。"
         if [[ "$ROUTE" == offload || "$ROUTE" == lean ]]; then

@@ -9,6 +9,9 @@ setup() {
     export XDG_STATE_HOME="$TMPDIR_TEST/state"
     LOG="$XDG_STATE_HOME/claude-loop-guard/decisions.log"
     for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT TIGHT_MIN_SECONDS; do unset "LOOP_GUARD_$v"; done
+    # 繰り返しの CronCreate は既定で止める。その判定は「固定間隔のループ」の節で見る。
+    # ほかの節では、許したときの判定（stop、二段目、逼迫の間隔）を確かめるため許しておく
+    export LOOP_GUARD_ALLOW_RECURRING_CRON=1
 }
 
 teardown() {
@@ -66,6 +69,33 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 @test "サブエージェント内の呼び出し -> 何もしない" {
     route stop
     run bash "$SCRIPT" <<< '{"session_id":"sess","agent_id":"a1","hook_event_name":"PreToolUse","tool_name":"ScheduleWakeup","tool_input":{"delaySeconds":60}}'
+    [ -z "$output" ]
+}
+
+# --- 固定間隔のループ（既定で止める） ---
+
+@test "既定では繰り返しの CronCreate をどの状態でも deny し、自己ペースを勧める" {
+    unset LOOP_GUARD_ALLOW_RECURRING_CRON
+    cron "7 * * * *"
+    [ "$(decision)" = deny ]
+    [[ "$(reason)" == *"自己ペース"* ]]
+    [[ "$(cat "$LOG")" == *$'\tdeny:cron\t'* ]]
+    route normal
+    cron "*/20 * * * *"
+    [ "$(decision)" = deny ]
+}
+
+@test "既定でも一度きりの CronCreate は通す" {
+    unset LOOP_GUARD_ALLOW_RECURRING_CRON
+    cron "30 14 28 2 *" "/remind" false
+    [ -z "$output" ]
+}
+
+@test "既定では deny した繰り返しの予約の prompt を覚えない" {
+    unset LOOP_GUARD_ALLOW_RECURRING_CRON
+    cron "7 * * * *" "/loop q"
+    route stop
+    prompt "/loop q"
     [ -z "$output" ]
 }
 
