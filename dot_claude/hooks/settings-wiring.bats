@@ -123,3 +123,15 @@ assert len(groups("UserPromptSubmit"))==1, "UserPromptSubmit に無い"
 print("PASS")
 PY
 }
+
+# bats test_tags=production-asset
+@test "chat-context-guard.sh が UserPromptSubmit に配線されている" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
+for ev, hs in h.items():
+    n=sum(1 for g in hs for x in g.get("hooks",[]) if "chat-context-guard.sh" in x.get("command",""))
+    assert n==(1 if ev=="UserPromptSubmit" else 0), f"{ev}: chat-context-guard.sh の配線が {n} 件"
+print("PASS")
+PY
+}

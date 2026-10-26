@@ -29,14 +29,9 @@
 #   呼んだときにしか書き換わらず、眠っている間の発火の時点では古いことがある。自己ペースの
 #   ループは、その回のツール呼び出しで新しくなった振り先を予約の時点で読むので、それで足りる。
 #
-# 閾値（#69 の決定。環境変数で差し替えられる。記録を見て見直す）。1M の窓のトークン数は、実践者の
-# 経験則（300K を確認点にする、300〜400K を上限にする）から取った。測定に基づく値ではない。
-# 200K の窓では使用率のほうが先に効く（75% は 150K）:
-#   一段目: LOOP_GUARD_STATE_TOKENS トークン以上か、使用率 LOOP_GUARD_STATE_PCT% 以上
-#   二段目: LOOP_GUARD_HANDOFF_TOKENS トークン以上か、使用率 LOOP_GUARD_HANDOFF_PCT% 以上
-#   トークン数は、マーカーの使用率 × 窓の大きさ。使用率のマーカーが無い（/compact の直後など）
-#   ときは、コンテキストの判定をしない。
-#   逼迫の間の間隔の下限: LOOP_GUARD_TIGHT_MIN_SECONDS 秒
+# コンテキストの一段目と二段目の閾値と判定は context-level.sh にあり、ループ以外の対話セッションを
+# 見る chat-context-guard.sh と共有する（#71）。使用率のマーカーが無いときは、コンテキストの判定をしない。
+# 逼迫の間の間隔の下限: LOOP_GUARD_TIGHT_MIN_SECONDS 秒（#69 の決定。環境変数で差し替えられる）
 #
 # サブエージェント内のツール呼び出し（入力に agent_id がある）では何もしない。
 # 記録: ${XDG_STATE_HOME:-~/.local/state}/claude-loop-guard/decisions.log に、deny と知らせのたびに
@@ -45,18 +40,12 @@
 
 set -uo pipefail
 
-STATE_TOKENS="${LOOP_GUARD_STATE_TOKENS:-300000}"
-STATE_PCT="${LOOP_GUARD_STATE_PCT:-50}"
-HANDOFF_TOKENS="${LOOP_GUARD_HANDOFF_TOKENS:-400000}"
-HANDOFF_PCT="${LOOP_GUARD_HANDOFF_PCT:-75}"
 TIGHT_MIN="${LOOP_GUARD_TIGHT_MIN_SECONDS:-1200}"
 ALLOW_CRON="${LOOP_GUARD_ALLOW_RECURRING_CRON:-0}"
 # 理由の文面に載せるだけなので、~ は展開しない
 # shellcheck disable=SC2088
 HANDOFF_CMD="~/.claude/scripts/loop-handoff.sh"
-for v in "$STATE_TOKENS" "$STATE_PCT" "$HANDOFF_TOKENS" "$HANDOFF_PCT" "$TIGHT_MIN"; do
-  [[ "$v" =~ ^[0-9]+$ ]] || exit 0
-done
+[[ "$TIGHT_MIN" =~ ^[0-9]+$ ]] || exit 0
 
 INPUT=$(cat)
 SID=$(jq -r '.session_id // empty' <<< "$INPUT" 2>/dev/null) || exit 0
@@ -67,17 +56,12 @@ EVENT=$(jq -r '.hook_event_name // empty' <<< "$INPUT" 2>/dev/null) || exit 0
 TOOL=$(jq -r '.tool_name // empty' <<< "$INPUT" 2>/dev/null) || exit 0
 
 T="${TMPDIR:-/tmp}"
+# shellcheck source=context-level.sh
+source "$(dirname "${BASH_SOURCE[0]}")/context-level.sh" 2>/dev/null || exit 0
 GUARD_DIR="$T/claude-loop-guard"
-PROMPTS="$GUARD_DIR/$SID.prompts"
+PROMPTS="$LOOP_PROMPTS"
 NOTED="$GUARD_DIR/$SID.noted"
 NOTICED="$GUARD_DIR/$SID.noticed"
-
-# 通常のファイルの先頭の語だけを読む（FIFO やリンクを読んで固まったり他を読んだりしない）
-read_word() {
-  local w=""
-  [[ -f "$1" && ! -L "$1" ]] && read -r w _ < "$1" 2>/dev/null
-  printf '%s' "$w"
-}
 
 ROUTE=$(read_word "$T/claude-usage-route/$SID")
 case "$ROUTE" in
@@ -85,25 +69,6 @@ case "$ROUTE" in
   normal|offload|lean|stop) ;;
   *) ROUTE="" ;;
 esac
-
-PCT=$(read_word "$T/claude-status-context-usage/$SID")
-WIN=$(read_word "$T/claude-status-context-window/$SID")
-TOKENS=""
-CTX=""
-if [[ "$PCT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-  PCT_INT=${PCT%%.*}
-  if [[ "$WIN" =~ ^[1-9][0-9]*$ ]]; then
-    TOKENS=$(awk -v p="$PCT" -v w="$WIN" 'BEGIN { printf "%d", p * w / 100 }')
-  fi
-  over() { (( PCT_INT >= $1 )) || { [[ -n "$TOKENS" ]] && (( TOKENS >= $2 )); }; }
-  if over "$HANDOFF_PCT" "$HANDOFF_TOKENS"; then
-    CTX=handoff
-  elif over "$STATE_PCT" "$STATE_TOKENS"; then
-    CTX=state
-  else
-    CTX=low
-  fi
-fi
 
 # 一段目を下回ったら、一度だけの deny と知らせを、次に越えたときのために戻す
 [[ "$CTX" == low ]] && rm -f -- "$NOTED" "$NOTICED" 2>/dev/null
@@ -114,11 +79,6 @@ log() {
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SID" "$EVENT" "$TOOL" "$1" \
       "${ROUTE:--}" "${TOKENS:--}" "${PCT:--}" >> "$dir/decisions.log"; } 2>/dev/null
   return 0
-}
-
-ctx_desc() {
-  if [[ -n "$TOKENS" ]]; then printf 'コンテキスト 約 %s トークン（使用率 %s%%）' "$TOKENS" "$PCT"
-  else printf 'コンテキスト 使用率 %s%%' "$PCT"; fi
 }
 
 # 一段目の一度だけ（印のファイル $1）を使ったことにする。すでに使っていたら 1 を返す
