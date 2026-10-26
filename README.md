@@ -321,6 +321,21 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 フックのテストは `dot_claude/hooks/usage-route.bats`。
 クラウドセッションには Codex も CodexBar も無いので、この仕組みは手元の WSL でだけ動く。
 
+**ループ（/loop）の見張り。**
+`dot_claude/hooks/executable_loop-guard.sh`（PreToolUse の `ScheduleWakeup` と `CronCreate`、UserPromptSubmit）が、ループの次の予約を見張る（決定は haoblackj/dotfiles#69）。
+値は自分では測らず、`usage-route.sh` の振り先と、`statusline-context-window.sh` が書くコンテキストのマーカーを読む。
+
+| 状態 | 予約への判定 |
+|---|---|
+| 振り先が stop | 止める以外の予約と新しいループを deny。状態を書いてループを止めさせる |
+| コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny。状態を書き、新しいタブへ引き継がせる |
+| コンテキストが一段目（1M の窓で 300K、使用率 50%） | 予約を一度だけ deny し、状態コメントを書かせる |
+| 振り先が offload か lean | 間隔が 20 分より短い予約を deny |
+
+固定間隔のループは `ScheduleWakeup` を呼ばないので、通した予約の prompt を覚えておき、同じ prompt の発火に同じ知らせを入れる。
+閾値は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
+テストは `dot_claude/hooks/loop-guard.bats`。
+
 ### クラウドセッション（Claude Code on the web）
 
 クラウドのコンテナは手元の `~/.claude` を読まない（公式: https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup ）。
