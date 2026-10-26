@@ -116,6 +116,16 @@
           }
         ],
         "matcher": "Agent"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/loop-guard.sh\"",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "ScheduleWakeup|CronCreate"
       }
     ],
     "SessionStart": [
@@ -195,6 +205,15 @@
         "hooks": [
           {
             "command": "bash \"$HOME/.claude/hooks/session-title-promote.sh\"",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/loop-guard.sh\"",
+            "timeout": 10,
             "type": "command"
           }
         ]

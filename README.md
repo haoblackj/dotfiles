@@ -321,6 +321,28 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 フックのテストは `dot_claude/hooks/usage-route.bats`。
 クラウドセッションには Codex も CodexBar も無いので、この仕組みは手元の WSL でだけ動く。
 
+**ループ（/loop）の見張り。**
+`dot_claude/hooks/executable_loop-guard.sh`（PreToolUse の `ScheduleWakeup` と `CronCreate`、UserPromptSubmit）が、ループの次の予約を見張る（決定は haoblackj/dotfiles#69）。
+値は自分では測らず、`usage-route.sh` の振り先と、`statusline-context-window.sh` が書くコンテキストのマーカーを読む。
+
+| 状態 | 予約への判定 |
+|---|---|
+| 下の stop と二段目に当たらないとき | 繰り返しの `CronCreate`（固定間隔のループ）を deny し、自己ペースの `/loop` へ回させる。一度きりは通す |
+| 振り先が stop | 止める以外の予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書いてループを止めさせる |
+| コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書き、新しいタブへ引き継がせる |
+| コンテキストが一段目（1M の窓で 300K、使用率 50%） | 予約を一度だけ deny し、状態コメントを書かせる |
+| 振り先が offload か lean | 間隔が 20 分より短い予約を deny |
+
+判定は上の表の順で、先に当たったものだけが効く。
+通した予約の prompt を覚えておき、同じ prompt の発火（UserPromptSubmit）には、コンテキストの二段目と一段目をその回の作業の前に知らせる（一段目は一度だけ）。
+固定間隔のループは発火をフックから止められないので、既定で作らせない。`LOOP_GUARD_ALLOW_RECURRING_CRON=1` で許したときだけ、発火に振り先（stop、逼迫）の知らせも入れる。振り先のファイルはツールを呼んだときにしか書き換わらず、発火の時点では古いことがあるため、自己ペースのループでは予約の時点の判定に任せる。
+二段目の引き継ぎは `dot_claude/scripts/executable_loop-handoff.sh`（配置先 `~/.claude/scripts/loop-handoff.sh`）が受け持つ。
+Claude が渡すのは状態コメントの URL、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
+状態コメントへのリンク（`#issuecomment-<数字>`）でなければ止まる。
+
+閾値は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
+テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
+
 ### クラウドセッション（Claude Code on the web）
 
 クラウドのコンテナは手元の `~/.claude` を読まない（公式: https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup ）。

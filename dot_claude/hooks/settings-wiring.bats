@@ -108,3 +108,18 @@ for ev in ("PostToolUse","PostToolUseFailure"):
 print("PASS")
 PY
 }
+
+# bats test_tags=production-asset
+@test "loop-guard.sh が PreToolUse（ScheduleWakeup と CronCreate）と UserPromptSubmit に配線されている" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
+def groups(ev): return [g for g in h.get(ev,[]) if any("loop-guard.sh" in x.get("command","") for x in g.get("hooks",[]))]
+pre=groups("PreToolUse")
+assert len(pre)==1, f"PreToolUse: loop-guard.sh の配線が {len(pre)} 件"
+assert set(pre[0].get("matcher","").split("|"))=={"ScheduleWakeup","CronCreate"}, f"matcher={pre[0].get('matcher')!r}"
+# 固定間隔のループの発火を見るため、UserPromptSubmit にも要る（haoblackj/dotfiles#69）
+assert len(groups("UserPromptSubmit"))==1, "UserPromptSubmit に無い"
+print("PASS")
+PY
+}
