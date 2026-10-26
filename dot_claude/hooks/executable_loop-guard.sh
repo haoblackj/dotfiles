@@ -21,13 +21,20 @@
 #   LOOP_GUARD_ALLOW_RECURRING_CRON=1 のときだけ通し、4 で判定する。
 #   通した予約の prompt は、ハッシュにしてセッションごとに覚える。
 #
-# UserPromptSubmit では、prompt が覚えた予約のどれかと同じとき（ループの発火）だけ、知らせを
+# UserPromptSubmit では、prompt が覚えた予約のどれかと同じとき（ループの発火）に、知らせを
 # additionalContext で入れる。発火そのものは止めない。
 #   コンテキストの二段目と一段目は、その回の作業の前に知らせる（作業を一回分むだにしないため）。
 #   一段目の知らせは一度だけで、予約の deny の一度きりとは別に数える。
 #   振り先（stop、逼迫）の知らせは、固定間隔を許したときだけ出す。振り先のファイルはツールを
 #   呼んだときにしか書き換わらず、眠っている間の発火の時点では古いことがある。自己ペースの
 #   ループは、その回のツール呼び出しで新しくなった振り先を予約の時点で読むので、それで足りる。
+# ループ以外の対話セッションでは、自動の compact より先に、状態を書き出して /clear へ誘導する
+# 知らせを入れる（haoblackj/dotfiles#71）。フックからは /clear を打てないので、打つのはリーダー。
+#   一段目: 依頼を片付けたあと、状態の書き出しと /clear を勧めさせる。
+#   二段目: 依頼に入る前に状態を書き出させ、/clear を勧めて止まらせる。
+#   どちらも一度だけで、一段目を下回ったら戻す。閾値はループと同じ。
+#   予約を通したことのあるセッションと、/loop で始まる prompt では出さない。ループにはループの
+#   引き継ぎがあり、セッション単位で分けないと、ループの合間の手打ちに /clear の誘導が出てぶつかる。
 #
 # 閾値（#69 の決定。環境変数で差し替えられる。記録を見て見直す）。1M の窓のトークン数は、実践者の
 # 経験則（300K を確認点にする、300〜400K を上限にする）から取った。測定に基づく値ではない。
@@ -71,6 +78,8 @@ GUARD_DIR="$T/claude-loop-guard"
 PROMPTS="$GUARD_DIR/$SID.prompts"
 NOTED="$GUARD_DIR/$SID.noted"
 NOTICED="$GUARD_DIR/$SID.noticed"
+CHAT_STATE="$GUARD_DIR/$SID.chat-state"
+CHAT_HANDOFF="$GUARD_DIR/$SID.chat-handoff"
 
 # 通常のファイルの先頭の語だけを読む（FIFO やリンクを読んで固まったり他を読んだりしない）
 read_word() {
@@ -106,7 +115,7 @@ if [[ "$PCT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
 fi
 
 # 一段目を下回ったら、一度だけの deny と知らせを、次に越えたときのために戻す
-[[ "$CTX" == low ]] && rm -f -- "$NOTED" "$NOTICED" 2>/dev/null
+[[ "$CTX" == low ]] && rm -f -- "$NOTED" "$NOTICED" "$CHAT_STATE" "$CHAT_HANDOFF" 2>/dev/null
 
 log() {
   local dir="${XDG_STATE_HOME:-$HOME/.local/state}/claude-loop-guard"
@@ -193,6 +202,12 @@ handoff_msg() {
 state_msg() {
   printf '%s が一段目の閾値を越えた。次の予約の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。書いたら、同じ予約をもう一度呼んでよい（この止め方は一度だけ）。' "$(ctx_desc)"
 }
+chat_state_notice() {
+  printf '%s が一段目の閾値を越えた。この依頼を片付けたら、応答の最後に、状態（済んだこと、決定、次の一手）を書き出して /clear することをリーダーに一言勧める。' "$(ctx_desc)"
+}
+chat_handoff_notice() {
+  printf '%s が二段目の閾値を越えた。この依頼に入る前に、状態（済んだこと、決定、次の一手）を issue の `## 状態` コメントか作業中の文書へ書き出し、リーダーに /clear を勧めてターンを終える。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)"
+}
 state_notice() {
   printf '%s が一段目の閾値を越えている。この回の作業の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。' "$(ctx_desc)"
 }
@@ -230,7 +245,14 @@ case "$EVENT" in
     ;;
   UserPromptSubmit)
     P=$(jq -r '.prompt // empty' <<< "$INPUT" 2>/dev/null)
-    [[ -n "$P" && -f "$PROMPTS" && ! -L "$PROMPTS" ]] || exit 0
+    [[ -n "$P" ]] || exit 0
+    if [[ ! -e "$PROMPTS" && ! -L "$PROMPTS" ]]; then
+      [[ "$P" =~ ^[[:space:]]*/loop([[:space:]]|$) ]] && exit 0
+      [[ "$CTX" == handoff ]] && take_once "$CHAT_HANDOFF" && notify chat-handoff "$(chat_handoff_notice)"
+      [[ "$CTX" == state ]] && take_once "$CHAT_STATE" && notify chat-state "$(chat_state_notice)"
+      exit 0
+    fi
+    [[ -f "$PROMPTS" && ! -L "$PROMPTS" ]] || exit 0
     grep -qxF -- "$(hash_of "$P")" "$PROMPTS" 2>/dev/null || exit 0
     [[ "$ALLOW_CRON" == 1 && "$ROUTE" == stop ]] && notify stop "このプロンプトはループの発火。$STOP_MSG"
     [[ "$CTX" == handoff ]] && notify handoff "このプロンプトはループの発火。この回の作業をしない。$(handoff_msg)"
