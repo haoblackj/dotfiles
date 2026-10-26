@@ -334,8 +334,12 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 | 振り先が offload か lean | 間隔が 20 分より短い予約を deny |
 
 固定間隔のループは発火をフックから止められないので、既定で作らせない。`LOOP_GUARD_ALLOW_RECURRING_CRON=1` で許したときは、通した予約の prompt を覚えておき、同じ prompt の発火に知らせを入れる。
+二段目の引き継ぎは `dot_claude/scripts/executable_loop-handoff.sh`（配置先 `~/.claude/scripts/loop-handoff.sh`）が受け持つ。
+Claude が渡すのは状態コメントの URL、モデル、エフォート、ループの指示だけで、同じワークスペースと cwd でのタブの作成、`claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
+状態コメントへのリンク（`#issuecomment-<数字>`）でなければ止まる。
+
 閾値は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
-テストは `dot_claude/hooks/loop-guard.bats`。
+テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
 
 ### クラウドセッション（Claude Code on the web）
 

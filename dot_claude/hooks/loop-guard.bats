@@ -210,7 +210,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     ctx 40
     wakeup
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"Herdr"*"/loop"* ]]
+    [[ "$(reason)" == *"loop-handoff.sh --state-url"*"Herdr"* ]]
     wakeup
     [ "$(decision)" = deny ]
 }

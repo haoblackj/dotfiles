@@ -45,6 +45,9 @@ HANDOFF_TOKENS="${LOOP_GUARD_HANDOFF_TOKENS:-400000}"
 HANDOFF_PCT="${LOOP_GUARD_HANDOFF_PCT:-75}"
 TIGHT_MIN="${LOOP_GUARD_TIGHT_MIN_SECONDS:-1200}"
 ALLOW_CRON="${LOOP_GUARD_ALLOW_RECURRING_CRON:-0}"
+# 理由の文面に載せるだけなので、~ は展開しない
+# shellcheck disable=SC2088
+HANDOFF_CMD="~/.claude/scripts/loop-handoff.sh"
 for v in "$STATE_TOKENS" "$STATE_PCT" "$HANDOFF_TOKENS" "$HANDOFF_PCT" "$TIGHT_MIN"; do
   [[ "$v" =~ ^[0-9]+$ ]] || exit 0
 done
@@ -172,7 +175,7 @@ cron_min_gap() {
 
 STOP_MSG="利用枠が尽きる手前（stop）。ループを終える。issue に \`## 状態\`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete（ID は CronList）で止めてから、ターンを終える。再開はリーダーが /loop を打ち直す。"
 handoff_msg() {
-  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで Herdr の同じリポジトリのワークスペースに新しいタブを立て、/loop と同じ指示に状態コメントの場所を添えて渡す。' "$(ctx_desc)"
+  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `%s --state-url <状態コメントの URL> --model <モデル> --effort <エフォート> -- <同じ /loop の指示>` を呼んで、Herdr の新しいタブへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。' "$(ctx_desc)" "$HANDOFF_CMD"
 }
 state_msg() {
   printf '%s が一段目の閾値を越えた。次の予約の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。書いたら、同じ予約をもう一度呼んでよい（この止め方は一度だけ）。' "$(ctx_desc)"
@@ -197,7 +200,7 @@ case "$EVENT" in
         [[ "$(jq -r '.tool_input.recurring == false' <<< "$INPUT" 2>/dev/null)" == true ]] && exit 0
         [[ "$ALLOW_CRON" == 1 ]] || deny cron "固定間隔のループ（繰り返しの CronCreate）は使わない。間隔を書かない /loop（自己ペース。ScheduleWakeup で次の回を予約する）で回す。一度きりのリマインダー（recurring: false）は使ってよい。"
         [[ "$ROUTE" == stop ]] && deny stop "利用枠が尽きる手前（stop）。新しいループを始めない。"
-        [[ "$CTX" == handoff ]] && deny handoff "$(ctx_desc) が二段目の閾値を越えている。このセッションで新しいループを始めず、Herdr で新しいタブを立てて、そちらで /loop を始める。"
+        [[ "$CTX" == handoff ]] && deny handoff "$(ctx_desc) が二段目の閾値を越えている。このセッションで新しいループを始めない。issue に \`## 状態\` を書き、$HANDOFF_CMD で Herdr の新しいタブへ渡して、そちらで始める。"
         if [[ "$ROUTE" == offload || "$ROUTE" == lean ]]; then
           read -r CMIN CHOUR _ <<< "$(jq -r '.tool_input.cron // empty' <<< "$INPUT" 2>/dev/null)"
           GAP=$(cron_min_gap "${CMIN:-}" "${CHOUR:-}")
