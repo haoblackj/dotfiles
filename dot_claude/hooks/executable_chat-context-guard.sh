@@ -1,14 +1,14 @@
 #!/bin/bash
-# UserPromptSubmit: ループ以外の対話セッションで、自動の compact より先に、状態を書き出して /clear へ
-# 誘導する知らせを additionalContext で入れる（haoblackj/dotfiles#71）。
+# UserPromptSubmit: ループ以外の対話セッションで、自動の compact より先に、新しいセッションへの
+# 引き継ぎを指示する知らせを additionalContext で入れる（haoblackj/dotfiles#73）。
 # compact は要約で何を落とすか読めず、コンテキストが長いほど毎回の呼び出しで送り直す量も増えるため。
-# フックからは /clear も /compact も打てない（公式の hooks）ので、打つのはリーダー。
 #
-# コンテキストの段は context-level.sh が statusline-context-window.sh のマーカーから決める。
-# 閾値は loop-guard.sh と共有する。
-#   一段目: 依頼を片付けたあと、状態の書き出しと /clear を勧めさせる。
-#   二段目: 依頼に入る前に状態を書き出させ、/clear を勧めて止まらせる。続けるよう言われたら従う。
-#   どちらも一度だけ出す。一段目を下回ったら（compact のあとなど）、次に越えたときにまた出す。
+# 対話の段は context-level.sh の CHAT_CTX が statusline-context-window.sh のマーカーから決める。
+#   40%: いまの依頼をキリの良いところまで進めてから、session-handoff で新しいセッションへ移る。
+#   60%: 依頼に入る前に session-handoff で移る。続けるよう言われたら従う。
+#   Herdr の外では、それぞれ状態を書き出して /clear を勧める。
+#   閾値は CONTEXT_GUARD_CHAT_HANDOFF_PCT と CONTEXT_GUARD_CHAT_URGENT_PCT で差し替えられる。
+#   どちらも一度だけ出す。40% を下回ったら（compact のあとなど）、次に越えたときにまた出す。
 # ループのセッション（context-level.sh の in_loop_session）では何もしない。ループの知らせと
 # 引き継ぎは loop-guard.sh が受け持つ。
 #
@@ -33,10 +33,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/context-level.sh" 2>/dev/null || exit 0
 in_loop_session "$P" && exit 0
 
 GUARD_DIR="$T/claude-chat-context-guard"
-STATE_MARK="$GUARD_DIR/$SID.state"
 HANDOFF_MARK="$GUARD_DIR/$SID.handoff"
+URGENT_MARK="$GUARD_DIR/$SID.urgent"
 
-[[ "$CTX" == low ]] && rm -f -- "$STATE_MARK" "$HANDOFF_MARK" 2>/dev/null
+[[ "$CHAT_CTX" == low ]] && rm -f -- "$HANDOFF_MARK" "$URGENT_MARK" 2>/dev/null
 
 # 一度だけ（印のファイル $1）を使ったことにする。すでに使っていたら 1 を返す
 take_once() {
@@ -54,10 +54,16 @@ notify() {
   exit 0
 }
 
-if [[ "$CTX" == handoff ]] && take_once "$HANDOFF_MARK"; then
-  notify handoff "$(printf '%s が二段目の閾値を越えた。この依頼に入る前に、状態（済んだこと、決定、次の一手）を issue の `## 状態` コメントか作業中の文書へ書き出し、リーダーに /clear を勧めてターンを終える。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)")"
+if [[ "$CHAT_CTX" == urgent ]] && take_once "$URGENT_MARK"; then
+  if [[ "${HERDR_ENV:-}" == 1 ]]; then
+    notify urgent "$(printf '%s が引き継ぎの予備の閾値を越えた。この依頼に入る前に、スキル `session-handoff` の手順で新しいセッションへ移る。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)")"
+  fi
+  notify urgent "$(printf '%s が二段目の閾値を越えた。この依頼に入る前に、状態（済んだこと、決定、次の一手）を issue の `## 状態` コメントか作業中の文書へ書き出し、リーダーに /clear を勧めてターンを終える。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)")"
 fi
-if [[ "$CTX" == state ]] && take_once "$STATE_MARK"; then
-  notify state "$(printf '%s が一段目の閾値を越えた。この依頼を片付けたら、応答の最後に、状態（済んだこと、決定、次の一手）を書き出して /clear することをリーダーに一言勧める。' "$(ctx_desc)")"
+if [[ "$CHAT_CTX" == handoff ]] && take_once "$HANDOFF_MARK"; then
+  if [[ "${HERDR_ENV:-}" == 1 ]]; then
+    notify handoff "$(printf '%s が引き継ぎの閾値を越えた。いまの依頼をキリの良いところ（コミットや一区切りの報告が済んだところ）まで進めたら、スキル `session-handoff` の手順で新しいセッションへ移る。' "$(ctx_desc)")"
+  fi
+  notify handoff "$(printf '%s が一段目の閾値を越えた。この依頼を片付けたら、応答の最後に、状態（済んだこと、決定、次の一手）を書き出して /clear することをリーダーに一言勧める。' "$(ctx_desc)")"
 fi
 exit 0
