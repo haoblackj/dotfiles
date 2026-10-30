@@ -5,13 +5,13 @@
 #
 # 使い方:
 #   herdr-closable.sh list [--exclude-pane <ペイン ID> ...]
-#   herdr-closable.sh close <ペイン ID> ...
+#   herdr-closable.sh close <ペイン ID>=<session_id> ...
 #
 # 自分のペインとワークスペースは pane current --current から取る。
 # list は自分、指定されたペイン、ループ、未応答、複数の transcript を除く。
 # close はペインごとに一覧と現在のペインを取り直し、同じワークスペースの
 # 自分以外の Claude でループの印が無く、idle、タブの唯一のペイン、
-# ワークスペースに二つ以上のタブがあることを確かめてから閉じる。
+# ワークスペースに二つ以上のタブがあり、セッションが同じで新しい入力が無いことを確かめて閉じる。
 #
 # fail-open: 情報の取得に失敗したら閉じず、list は黙って exit 0。
 # close の取得や終了の失敗は kept と reason:error を出す。
@@ -61,12 +61,27 @@ last_reply() {
                     (.; .reply = ((.reply // "") + $text))
             else . end)
         | select(.have_user and .reply != null) | .reply
+        | if length > 2000 then "…" + .[-2000:] else . end
     ' "$1" 2>/dev/null
+}
+
+# transcript を一つだけ読み、未応答なら 2、取得や読み取りの失敗なら 1 を返す。
+session_reply() {
+    local session="$1" reply
+    local -a transcripts=()
+    valid_id "$session" || return 1
+    shopt -s nullglob
+    transcripts=("$HOME"/.claude/projects/*/"$session.jsonl")
+    (( ${#transcripts[@]} == 1 )) || return 1
+    [[ -f "${transcripts[0]}" && -r "${transcripts[0]}" ]] || return 1
+    reply=$(last_reply "${transcripts[0]}") || return 1
+    [[ -n "$reply" ]] || return 2
+    printf '%s\n' "$reply"
 }
 
 list_candidates() {
     local current workspace self excluded panes candidates candidate session reply
-    local -a exclude_panes=() transcripts=()
+    local -a exclude_panes=()
     while (( $# > 0 )); do
         case "$1" in
             --exclude-pane)
@@ -95,17 +110,12 @@ list_candidates() {
         {pane:.pane_id, tab:.tab_id, session_id:.agent_session.value, title:(.terminal_title_stripped // "")}
     ' <<< "$panes" 2>/dev/null) || return 0
 
-    shopt -s nullglob
     while IFS= read -r candidate; do
         [[ -n "$candidate" ]] || continue
         session=$(jq -r '.session_id' <<< "$candidate")
         valid_id "$session" || continue
         [[ ! -e "${TMPDIR:-/tmp}/claude-loop-guard/$session.prompts" ]] || continue
-        transcripts=("$HOME"/.claude/projects/*/"$session.jsonl")
-        (( ${#transcripts[@]} == 1 )) || continue
-        [[ -f "${transcripts[0]}" && -r "${transcripts[0]}" ]] || continue
-        reply=$(last_reply "${transcripts[0]}") || continue
-        [[ -n "$reply" ]] || continue
+        reply=$(session_reply "$session") || continue
         jq -c --argjson reply "$reply" '. + {last_reply:$reply}' <<< "$candidate"
     done <<< "$candidates"
 }
@@ -115,7 +125,7 @@ kept() {
 }
 
 close_pane() {
-    local pane="$1" panes current workspace self check reason tab session
+    local pane="$1" expected_session="$2" panes current workspace self check reason tab session result
     panes=$(read_panes) || return 1
     current=$(timeout 5 herdr pane current --current 2>/dev/null) || return 1
     workspace=$(jq -er '.result.pane.workspace_id | strings | select(length > 0)' <<< "$current" 2>/dev/null) || return 1
@@ -141,19 +151,37 @@ close_pane() {
     tab=$(jq -er '.tab | strings | select(length > 0)' <<< "$check" 2>/dev/null) || return 1
     session=$(jq -er '.session | strings | select(length > 0)' <<< "$check" 2>/dev/null) || return 1
     valid_id "$tab" && valid_id "$session" || return 1
+    if [[ "$session" != "$expected_session" ]]; then
+        kept "$pane" session_changed
+        return
+    fi
     if [[ -e "${TMPDIR:-/tmp}/claude-loop-guard/$session.prompts" ]]; then
         kept "$pane" loop
         return
     fi
+    session_reply "$session" >/dev/null
+    result=$?
+    if (( result == 2 )); then
+        kept "$pane" new_input
+        return
+    fi
+    (( result == 0 )) || return 1
     timeout 5 herdr tab close "$tab" >/dev/null 2>&1 || return 1
     jq -nc --arg pane "$pane" --arg tab "$tab" '{pane:$pane, tab:$tab, result:"closed"}'
 }
 
 close_panes() {
-    local pane
-    herdr_ready || return 0
-    for pane in "$@"; do
-        close_pane "$pane" || kept "$pane" error
+    local argument pane session
+    for argument in "$@"; do
+        pane="${argument%%=*}"
+        valid_id "$pane" || die "ペインを読み取れない引数: $argument"
+        session="${argument#*=}"
+        if [[ "$argument" != *=* ]] || ! valid_id "$session"; then
+            kept "$pane" error
+            continue
+        fi
+        herdr_ready || continue
+        close_pane "$pane" "$session" || kept "$pane" error
     done
 }
 

@@ -49,7 +49,20 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 @test "40% の知らせのあとに 60% を越えたら、60% も一度出す" { ctx 40; prompt a; ctx 60; prompt b; [[ "$(context_of)" == *"入る前に"* ]]; }
 @test "1M の窓で 30% は対話では何も出さない" { ctx 30 1000000; prompt a; [ -z "$output" ]; }
 @test "40% を下回ったら、次に越えたときにまた知らせる" { ctx 40; prompt a; ctx 10; prompt b; ctx 41; prompt c; [[ "$(context_of)" == *"session-handoff"* ]]; }
-@test "Herdr の外では /clear を勧める" { unset HERDR_ENV; ctx 40; prompt a; [[ "$(context_of)" == *"/clear"* ]]; [[ "$(context_of)" != *"session-handoff"* ]]; }
+@test "Herdr の外では 40% の閾値として /clear を勧める" {
+    unset HERDR_ENV
+    ctx 40
+    prompt a
+    [[ "$(context_of)" == *"40% の閾値"*"/clear"* ]]
+    [[ "$(context_of)" != *"session-handoff"* ]]
+}
+@test "Herdr の外では 60% の閾値として依頼に入る前に /clear を勧める" {
+    unset HERDR_ENV
+    ctx 60
+    prompt a
+    [[ "$(context_of)" == *"60% の閾値"*"この依頼に入る前に"*"/clear"* ]]
+    [[ "$(context_of)" != *"session-handoff"* ]]
+}
 @test "閾値は環境変数で差し替えられる" { export CONTEXT_GUARD_CHAT_HANDOFF_PCT=20; ctx 21; prompt a; [[ "$(context_of)" == *"session-handoff"* ]]; }
 
 @test "200K の窓では使用率で判定する" {

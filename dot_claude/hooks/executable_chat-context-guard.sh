@@ -58,12 +58,12 @@ if [[ "$CHAT_CTX" == urgent ]] && take_once "$URGENT_MARK"; then
   if [[ "${HERDR_ENV:-}" == 1 ]]; then
     notify urgent "$(printf '%s が引き継ぎの予備の閾値を越えた。この依頼に入る前に、スキル `session-handoff` の手順で新しいセッションへ移る。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)")"
   fi
-  notify urgent "$(printf '%s が二段目の閾値を越えた。この依頼に入る前に、状態（済んだこと、決定、次の一手）を issue の `## 状態` コメントか作業中の文書へ書き出し、リーダーに /clear を勧めてターンを終える。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)")"
+  notify urgent "$(printf '%s が 60%% の閾値を越えた。この依頼に入る前に、状態（済んだこと、決定、次の一手）を issue の `## 状態` コメントか作業中の文書へ書き出し、リーダーに /clear を勧めてターンを終える。リーダーがこのまま続けるよう言ったら従う。' "$(ctx_desc)")"
 fi
 if [[ "$CHAT_CTX" == handoff ]] && take_once "$HANDOFF_MARK"; then
   if [[ "${HERDR_ENV:-}" == 1 ]]; then
     notify handoff "$(printf '%s が引き継ぎの閾値を越えた。いまの依頼をキリの良いところ（コミットや一区切りの報告が済んだところ）まで進めたら、スキル `session-handoff` の手順で新しいセッションへ移る。' "$(ctx_desc)")"
   fi
-  notify handoff "$(printf '%s が一段目の閾値を越えた。この依頼を片付けたら、応答の最後に、状態（済んだこと、決定、次の一手）を書き出して /clear することをリーダーに一言勧める。' "$(ctx_desc)")"
+  notify handoff "$(printf '%s が 40%% の閾値を越えた。この依頼を片付けたら、応答の最後に、状態（済んだこと、決定、次の一手）を書き出して /clear することをリーダーに一言勧める。' "$(ctx_desc)")"
 fi
 exit 0

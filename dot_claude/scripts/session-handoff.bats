@@ -119,3 +119,40 @@ handoff() { run bash "$SCRIPT" --model opus --effort medium "$@"; }
     [[ "$output" == *"agent start"* ]]
     run ! grep -q '^agent prompt' "$CALLS"
 }
+
+@test "pane current が 5 秒でタイムアウトしたら環境変数のワークスペースを使う" {
+    export TIMEOUT_CALLS="$TMPDIR_TEST/timeout-calls"
+    cat > "$BIN/timeout" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TIMEOUT_CALLS"
+[[ "$*" == "5 herdr pane current --current" ]] || exit 1
+exit 124
+EOF
+    chmod +x "$BIN/timeout"
+    handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    grep -qx '5 herdr pane current --current' "$TIMEOUT_CALLS"
+    grep -Fx "tab create --workspace w1 --cwd $FAKE_CWD --no-focus" "$CALLS"
+    run ! grep -q '^pane current' "$CALLS"
+    unset HERDR_WORKSPACE_ID
+    handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ワークスペースが分からない"* ]]
+}
+
+@test "共通部分が無いか読み込みに失敗したら理由を標準エラーに出して止まる" {
+    isolated="$TMPDIR_TEST/isolated"
+    mkdir -p "$isolated"
+    cp "$SCRIPT" "$isolated/handoff.sh"
+    for helper in absent failed; do
+        if [[ "$helper" == failed ]]; then
+            echo 'return 1' > "$isolated/herdr-start-claude.sh"
+        fi
+        run --separate-stderr bash "$isolated/handoff.sh" \
+            --state "$URL" --cwd "$FAKE_CWD" --model opus --effort medium --dry-run
+        [ "$status" -eq 1 ]
+        [ -z "$output" ]
+        [[ "$stderr" == *"session-handoff: 共通部分 herdr-start-claude.sh を読み込めない"* ]]
+    done
+    run ! test -e "$CALLS"
+}

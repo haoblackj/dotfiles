@@ -10,10 +10,10 @@
 
 set -uo pipefail
 
-# shellcheck source=dot_claude/scripts/herdr-start-claude.sh
-source "$(dirname "${BASH_SOURCE[0]}")/herdr-start-claude.sh"
-
 die() { printf 'session-handoff: %s\n' "$1" >&2; exit 1; }
+
+# shellcheck source=dot_claude/scripts/herdr-start-claude.sh
+source "$(dirname "${BASH_SOURCE[0]}")/herdr-start-claude.sh" || die "共通部分 herdr-start-claude.sh を読み込めない"
 
 STATE="" DIR="" MODEL="" EFFORT="" DRY=0
 while (( $# > 0 )); do
@@ -48,7 +48,7 @@ if (( DRY == 0 )); then
 fi
 WS="${HERDR_WORKSPACE_ID:-}"
 if (( DRY == 0 )); then
-  CUR=$(herdr pane current --current 2>/dev/null) || CUR=""
+  CUR=$(timeout 5 herdr pane current --current 2>/dev/null) || CUR=""
   W=$(jq -r '.result.pane.workspace_id // empty' <<< "$CUR" 2>/dev/null)
   [[ -n "$W" ]] && WS="$W"
 fi
