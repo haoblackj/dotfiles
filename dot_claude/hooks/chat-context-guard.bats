@@ -9,7 +9,8 @@ setup() {
     export TMPDIR="$TMPDIR_TEST"
     export XDG_STATE_HOME="$TMPDIR_TEST/state"
     LOG="$XDG_STATE_HOME/claude-chat-context-guard/decisions.log"
-    for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT; do unset "CONTEXT_GUARD_$v"; done
+    export HERDR_ENV=1
+    for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT CHAT_HANDOFF_PCT CHAT_URGENT_PCT; do unset "CONTEXT_GUARD_$v"; done
 }
 
 teardown() {
@@ -29,53 +30,45 @@ prompt() {
 
 context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$output"; }
 
-@test "一段目 -> 依頼のあとに /clear を勧めさせる。一度だけ" {
-    ctx 32
+@test "40% -> いまの依頼をキリの良いところまで進めてから session-handoff で移らせる。一度だけ" {
+    ctx 40
     prompt "ふつうの依頼"
-    [ "$status" -eq 0 ]
-    [[ "$(context_of)" == "[chat-context-guard] "*"一段目"*"片付けたら"*"/clear"* ]]
-    prompt "次の依頼"
+    [[ "$(context_of)" == "[chat-context-guard] "*"キリの良いところ"*"session-handoff"* ]]
+    prompt "次"
     [ -z "$output" ]
-    grep -q "notice:state" "$LOG"
+    grep -q "notice:handoff" "$LOG"
 }
-
-@test "二段目 -> 依頼の前に状態を書き出し、/clear を勧めて止まらせる。一度だけ" {
-    ctx 45
-    prompt "ふつうの依頼"
-    [[ "$(context_of)" == *"二段目"*"入る前に"*"/clear"* ]]
-    prompt "このまま続けて"
-    [ -z "$output" ]
-}
-
-@test "一段目の知らせのあとに二段目を越えたら、二段目も一度出す" {
-    ctx 32
+@test "60% -> 依頼に入る前に session-handoff で移らせる。一度だけ" {
+    ctx 60
     prompt "a"
-    ctx 45
-    prompt "b"
-    [[ "$(context_of)" == *"二段目"* ]]
-}
-
-@test "一段目を下回ったら、次に越えたときにまた知らせる" {
-    ctx 32
-    prompt "a"
-    ctx 5
+    [[ "$(context_of)" == *"入る前に"*"session-handoff"* ]]
     prompt "b"
     [ -z "$output" ]
-    ctx 32
-    prompt "c"
-    [[ "$(context_of)" == *"一段目"* ]]
+    grep -q "notice:urgent" "$LOG"
 }
+@test "40% の知らせのあとに 60% を越えたら、60% も一度出す" { ctx 40; prompt a; ctx 60; prompt b; [[ "$(context_of)" == *"入る前に"* ]]; }
+@test "1M の窓で 30% は対話では何も出さない" { ctx 30 1000000; prompt a; [ -z "$output" ]; }
+@test "40% を下回ったら、次に越えたときにまた知らせる" { ctx 40; prompt a; ctx 10; prompt b; ctx 41; prompt c; [[ "$(context_of)" == *"session-handoff"* ]]; }
+@test "Herdr の外では 40% の閾値として /clear を勧める" {
+    unset HERDR_ENV
+    ctx 40
+    prompt a
+    [[ "$(context_of)" == *"40% の閾値"*"/clear"* ]]
+    [[ "$(context_of)" != *"session-handoff"* ]]
+}
+@test "Herdr の外では 60% の閾値として依頼に入る前に /clear を勧める" {
+    unset HERDR_ENV
+    ctx 60
+    prompt a
+    [[ "$(context_of)" == *"60% の閾値"*"この依頼に入る前に"*"/clear"* ]]
+    [[ "$(context_of)" != *"session-handoff"* ]]
+}
+@test "閾値は環境変数で差し替えられる" { export CONTEXT_GUARD_CHAT_HANDOFF_PCT=20; ctx 21; prompt a; [[ "$(context_of)" == *"session-handoff"* ]]; }
 
 @test "200K の窓では使用率で判定する" {
     ctx 50 200000
     prompt "a"
-    [[ "$(context_of)" == *"一段目"* ]]
-}
-
-@test "閾値は環境変数で差し替えられる" {
-    ctx 32
-    CONTEXT_GUARD_STATE_TOKENS=350000 prompt "a"
-    [ -z "$output" ]
+    [[ "$(context_of)" == *"キリの良いところ"*"session-handoff"* ]]
 }
 
 @test "閾値の下か、使用率が測れない -> 黙る" {
@@ -94,7 +87,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     prompt "  /loop"
     [ -z "$output" ]
     prompt "/loopy は別のコマンド"
-    [[ "$(context_of)" == *"二段目"* ]]
+    [[ "$(context_of)" == *"session-handoff"* ]]
 }
 
 @test "loop-guard.sh が予約を通したセッションでは、手打ちの prompt にも知らせを出さない" {

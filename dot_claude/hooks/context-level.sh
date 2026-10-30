@@ -8,8 +8,11 @@
 #   1M の窓のトークン数は、実践者の経験則（300K を確認点にする、300〜400K を上限にする）から取った
 #   （#69 の決定）。測定に基づく値ではない。200K の窓では使用率のほうが先に効く（75% は 150K）。
 #   トークン数は、マーカーの使用率 × 窓の大きさ。使用率のマーカーが無い（/compact の直後など）
-#   ときは CTX を空にする。
-# 決めるもの: CTX（low / state / handoff / 空）、PCT、TOKENS
+#   ときは CTX と CHAT_CTX を空にする。
+# 対話の段（CHAT_CTX）は使用率だけで決める（#73）。
+#   handoff: 使用率 CONTEXT_GUARD_CHAT_HANDOFF_PCT% 以上（既定 40%）
+#   urgent: 使用率 CONTEXT_GUARD_CHAT_URGENT_PCT% 以上（既定 60%）
+# 決めるもの: CTX（low / state / handoff / 空）、CHAT_CTX（low / handoff / urgent / 空）、PCT、TOKENS
 # 関数: read_word、ctx_desc、in_loop_session
 #
 # 閾値が数でなければ 1 を返す。読む側は黙って通す（fail-open）。
@@ -18,7 +21,9 @@ STATE_TOKENS="${CONTEXT_GUARD_STATE_TOKENS:-300000}"
 STATE_PCT="${CONTEXT_GUARD_STATE_PCT:-50}"
 HANDOFF_TOKENS="${CONTEXT_GUARD_HANDOFF_TOKENS:-400000}"
 HANDOFF_PCT="${CONTEXT_GUARD_HANDOFF_PCT:-75}"
-for v in "$STATE_TOKENS" "$STATE_PCT" "$HANDOFF_TOKENS" "$HANDOFF_PCT"; do
+CHAT_HANDOFF_PCT="${CONTEXT_GUARD_CHAT_HANDOFF_PCT:-40}"
+CHAT_URGENT_PCT="${CONTEXT_GUARD_CHAT_URGENT_PCT:-60}"
+for v in "$STATE_TOKENS" "$STATE_PCT" "$HANDOFF_TOKENS" "$HANDOFF_PCT" "$CHAT_HANDOFF_PCT" "$CHAT_URGENT_PCT"; do
   [[ "$v" =~ ^[0-9]+$ ]] || return 1
 done
 
@@ -36,8 +41,16 @@ PCT=$(read_word "$T/claude-status-context-usage/$SID")
 WIN=$(read_word "$T/claude-status-context-window/$SID")
 TOKENS=""
 CTX=""
+CHAT_CTX=""
 if [[ "$PCT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
   PCT_INT=${PCT%%.*}
+  if (( PCT_INT >= CHAT_URGENT_PCT )); then
+    CHAT_CTX=urgent
+  elif (( PCT_INT >= CHAT_HANDOFF_PCT )); then
+    CHAT_CTX=handoff
+  else
+    CHAT_CTX=low
+  fi
   if [[ "$WIN" =~ ^[1-9][0-9]*$ ]]; then
     TOKENS=$(awk -v p="$PCT" -v w="$WIN" 'BEGIN { printf "%d", p * w / 100 }')
   fi
