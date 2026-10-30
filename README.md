@@ -343,20 +343,44 @@ Claude が渡すのは状態コメントの URL、モデル、エフォート、
 コンテキストの閾値は `CONTEXT_GUARD_*`、逼迫の間隔と固定間隔の許可は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
 テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
 
-**ループ以外の対話セッションの見張り。**
-`dot_claude/hooks/executable_chat-context-guard.sh`（UserPromptSubmit）が、自動の compact より先に、状態を書き出して `/clear` へ誘導する知らせを入れる（決定は haoblackj/dotfiles#71）。
-フックからは `/clear` を打てないので、打つのはリーダー。
+#### ループ以外の対話セッションの見張り
+
+`dot_claude/hooks/executable_chat-context-guard.sh`（UserPromptSubmit）が、自動の compact より先に、新しいセッションへ引き継ぐ知らせを入れる（決定は haoblackj/dotfiles#73）。
+Herdr の中では、元のセッションがスキル `session-handoff` の手順で同じワークスペースの新しいタブへ移る。
+リーダーに「移って」「新しいセッションへ移って」と言われたときも、使用率によらず同じ手順で移る。
 
 | コンテキスト | 知らせ |
 |---|---|
-| 一段目（1M の窓で 300K、使用率 50%） | 依頼を片付けたあと、状態の書き出しと `/clear` を勧めさせる |
-| 二段目（1M の窓で 400K、使用率 75%） | 依頼に入る前に状態を書き出させ、`/clear` を勧めて止まらせる |
+| 使用率 40% | いまの依頼をキリの良いところまで進めたら、`session-handoff` で移る |
+| 使用率 60% | この依頼に入る前に、`session-handoff` で移る（リーダーが続けるよう言ったら従う） |
 
-どちらも一度だけ出し、一段目を下回ったら次に越えたときにまた出す。
+窓の大きさによらず使用率で判定する。
+どちらも一度だけ出し、40% を下回ったら次に越えたときにまた出す。
+Herdr の外では、40% で依頼を片付けたあとに状態を書き出して `/clear` することを勧め、60% で依頼に入る前に状態を書き出し、`/clear` を勧めて止まる。
+60% でもリーダーが続けるよう言ったら従う。
+フックからは `/clear` を打てないので、打つのはリーダー。
 ループの予約を通したことのあるセッションと、`/loop` で始まる prompt では何もしない（ループは上の `loop-guard.sh` が受け持つ）。
 閾値の計算とループのセッションの判定は、両方のフックが `source` する `dot_claude/hooks/context-level.sh` にある。
+対話の閾値は `CONTEXT_GUARD_CHAT_HANDOFF_PCT` と `CONTEXT_GUARD_CHAT_URGENT_PCT` で差し替えられ、ループの 50% / 75% と 300K / 400K は変えない。
 知らせは `~/.local/state/claude-chat-context-guard/decisions.log` に残る。
-テストは `dot_claude/hooks/chat-context-guard.bats`。
+
+手順の実体は [`skills/session-handoff/SKILL.md`](skills/session-handoff/SKILL.md)。
+状態は issue の `## 状態` コメントに書き、一つ前をたたむ。
+issue が無ければ、まず作ることをリーダーに提案して返答を待ち、却下されたら `~/.cache/claude-handoff/<日付>-<session_id>.md` に書く。
+済んだこと、決定、次の一手に加えて、作業フォルダ、ワークツリーのパスとブランチ、issue と PR、元の session_id、裏で走っている処理とその扱いを残す。
+残りの仕事からモデルとエフォートを選び、`~/.claude/scripts/session-handoff.sh --state <URLかファイル> --cwd <作業フォルダかワークツリー> --model <モデル> --effort <エフォート>` で引き継ぐ。
+失敗したら出力をリーダーに報告して止まり、掃除へ進まない。
+
+成功したら `~/.claude/scripts/herdr-closable.sh list --exclude-pane <立てたペイン>` で候補を出す。
+元のセッションが各候補の `last_reply` を読み、そのセッションが自分の仕事について「閉じていい」とはっきり書いているものだけを `~/.claude/scripts/herdr-closable.sh close <ペイン>...` に渡す。
+迷えば残し、セッションに宣言を求めない。
+スクリプトは自分自身、新しく立てたペイン、ループ中のセッション、応答後にユーザーの入力があるものなどを候補から外し、閉じる直前にも idle かを確かめる。
+他のペインがあるタブとワークスペースの最後のタブは閉じない。
+元のセッションで引き継いだ先、閉じたタブ、残した候補とその理由を報告し、最後に「このセッションは閉じていい」と書いて止まる。
+掃除の結果は引き継ぎ先へ渡す文面には入れない。
+
+テストは `dot_claude/hooks/chat-context-guard.bats`、`dot_claude/hooks/settings-wiring.bats`、`dot_claude/scripts/session-handoff.bats`、`dot_claude/scripts/herdr-closable.bats`。
+`bats dot_claude/hooks/ dot_claude/scripts/` で、ループ側を含めて確かめる。
 
 ### クラウドセッション（Claude Code on the web）
 
