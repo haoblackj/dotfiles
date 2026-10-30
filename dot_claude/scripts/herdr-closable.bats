@@ -86,6 +86,24 @@ no_close() {
     [ -z "$output" ]
 }
 
+@test "list 値が無い --exclude-pane と知らない引数は理由を標準エラーに出して止まる" {
+    run --separate-stderr bash "$SCRIPT" list --exclude-pane
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    [ "$stderr" = 'herdr-closable: --exclude-pane に値が無い' ]
+    [ ! -e "$CALLS" ]
+    run --separate-stderr bash "$SCRIPT" list --unknown
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    [ "$stderr" = 'herdr-closable: 知らない引数: --unknown' ]
+    [ ! -e "$CALLS" ]
+    HERDR_ENV=0 run --separate-stderr bash "$SCRIPT" list --exclude-pane --unknown
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    [ "$stderr" = 'herdr-closable: --exclude-pane に値が無い' ]
+    [ ! -e "$CALLS" ]
+}
+
 @test "list working のものは出さない" {
     panes_edit '.result.panes[1].agent_status = "working"'
     closable list
@@ -216,6 +234,47 @@ EOF
     [ "$output" = '{"pane":"w3:p2","tab":"w3:t2","result":"closed"}' ]
     grep -qx 'tab close w3:t2' "$CALLS"
     [ "$(grep -c '^pane list$' "$CALLS")" -eq 1 ]
+    grep -qx 'pane current --current' "$CALLS"
+}
+
+@test "close 別のワークスペースのペインは残す" {
+    panes_edit '.result.panes += [
+        (.result.panes[1] | .pane_id = "w9:p2" | .tab_id = "w9:t2" | .workspace_id = "w9"),
+        (.result.panes[1] | .pane_id = "w9:p3" | .tab_id = "w9:t3" | .workspace_id = "w9")
+    ]'
+    closable close w9:p2
+    [ "$output" = '{"pane":"w9:p2","result":"kept","reason":"other_workspace"}' ]
+    [ "$(jq '[.result.panes[] | select(.pane_id == "w9:p2")] | length' "$PANES")" -eq 1 ]
+    no_close
+}
+
+@test "close ループのペインは残す" {
+    mkdir -p "$TMPDIR/claude-loop-guard"
+    touch "$TMPDIR/claude-loop-guard/session-2.prompts"
+    closable close w3:p2
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"loop"}' ]
+    no_close
+}
+
+@test "close Claude 以外のペインは残す" {
+    panes_edit '.result.panes[1].agent = "codex"'
+    closable close w3:p2
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"not_claude"}' ]
+    no_close
+}
+
+@test "close 呼んだペイン自身は idle でも残す" {
+    panes_edit '.result.panes[0].agent_status = "idle"'
+    closable close w3:p1
+    [ "$output" = '{"pane":"w3:p1","result":"kept","reason":"self"}' ]
+    no_close
+}
+
+@test "close done も idle ではないので残す" {
+    panes_edit '.result.panes[1].agent_status = "done"'
+    closable close w3:p2
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"not_idle"}' ]
+    no_close
 }
 
 @test "close 直前に working なら残す" {
@@ -257,27 +316,62 @@ EOF
 }
 
 @test "close ペインごとに一覧を取り直して最後のタブを残す" {
-    panes_edit '.result.panes[0].agent_status = "idle"'
-    closable close w3:p2 w3:p1
+    panes_edit '.result.panes[0] |= (.pane_id = "w3:p3" | .agent_status = "idle")'
+    closable close w3:p2 w3:p3
     [ "${#lines[@]}" -eq 2 ]
     [ "$(jq -sr '.[0].result' <<< "$output")" = closed ]
     [ "$(jq -sr '.[1].reason' <<< "$output")" = last_tab ]
     [ "$(grep -c '^pane list$' "$CALLS")" -eq 2 ]
+    [ "$(grep -c '^pane current --current$' "$CALLS")" -eq 2 ]
     [ "$(grep -c '^tab close ' "$CALLS")" -eq 1 ]
 }
 
-@test "close 一覧の取得やタブの終了に失敗しても closed を返さない" {
-    FAKE_LIST_FAIL=1 closable close w3:p2
-    [ -z "$output" ]
+@test "close 一覧の取得に失敗したらペインごとに error で残す" {
+    FAKE_LIST_FAIL=1 closable close w3:p2 w3:p3
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[0]}" = '{"pane":"w3:p2","result":"kept","reason":"error"}' ]
+    [ "${lines[1]}" = '{"pane":"w3:p3","result":"kept","reason":"error"}' ]
     no_close
+}
+
+@test "close タブの終了に失敗したら error を返す" {
     FAKE_CLOSE_FAIL=1 closable close w3:p2
-    [ -z "$output" ]
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"error"}' ]
     grep -qx 'tab close w3:t2' "$CALLS"
 }
 
-@test "close 一覧が壊れていれば閉じずに黙って返す" {
+@test "close タブの終了がタイムアウトしたら error を返す" {
+    export REAL_TIMEOUT
+    REAL_TIMEOUT="$(command -v timeout)"
+    cat > "$BIN/timeout" <<'EOF'
+#!/bin/bash
+if [[ "$2 $3 $4" == "herdr tab close" ]]; then
+    exit 124
+fi
+exec "$REAL_TIMEOUT" "$@"
+EOF
+    chmod +x "$BIN/timeout"
+    closable close w3:p2
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"error"}' ]
+    no_close
+}
+
+@test "close jq でペインを読めなければ error を返す" {
+    panes_edit '.result.panes[1].agent_session = 42'
+    closable close w3:p2
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"error"}' ]
+    no_close
+}
+
+@test "close 一覧が壊れていれば閉じずに error を返す" {
     echo '{"result":{}}' > "$PANES"
     closable close w3:p2
-    [ -z "$output" ]
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"error"}' ]
+    no_close
+}
+
+@test "close 現在のペインが取得できなければ error を返す" {
+    FAKE_NO_CURRENT=1 closable close w3:p2
+    [ "$output" = '{"pane":"w3:p2","result":"kept","reason":"error"}' ]
     no_close
 }
