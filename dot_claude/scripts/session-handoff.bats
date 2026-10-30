@@ -20,6 +20,7 @@ case "\$1 \$2" in
                   echo '{"result":{"type":"pane_current","pane":{"pane_id":"w3:p1","workspace_id":"w3","tab_id":"w3:t1","cwd":"'"\$FAKE_CWD"'","focused":true,"agent_status":"working","revision":1,"terminal_id":"x"}}}' ;;
   "pane wait-output") echo '{"result":{"matched":true}}' ;;
   "tab create") [ -n "\${FAKE_TAB_FAIL:-}" ] && { echo '{"error":{"code":"x"}}'; exit 1; }
+                [ -n "\${FAKE_NO_TAB_ID:-}" ] && { echo '{"result":{"root_pane":{"pane_id":"w1:p42"}}}'; exit 0; }
                 echo '{"result":{"tab":{"tab_id":"w1:t9"},"root_pane":{"pane_id":"w1:p42"}}}' ;;
   "agent start") [ -n "\${FAKE_START_FAIL:-}" ] && { echo '{"error":{"code":"agent_not_ready"}}'; exit 1; }
                  echo '{"result":{"agent":{"name":"x"}}}' ;;
@@ -51,7 +52,33 @@ handoff() { run bash "$SCRIPT" --model opus --effort medium "$@"; }
 @test "状態のファイルは ~/.cache/claude-handoff/ の下だけを受け付ける" {
     mkdir -p "$HOME/.cache/claude-handoff"; f="$HOME/.cache/claude-handoff/x.md"; echo s > "$f"
     handoff --state "$f" --cwd "$FAKE_CWD"; [ "$status" -eq 0 ]
+    echo s > "$TMPDIR_TEST/x.md"
     handoff --state "$TMPDIR_TEST/x.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
+    [[ "$output" == *"状態のファイルは ~/.cache/claude-handoff/ 下に置く"* ]]
+}
+@test "相対パスの state と cwd は解決済みの絶対パスで渡す" {
+    mkdir -p "$HOME/.cache/claude-handoff/sub" "$TMPDIR_TEST/work"
+    echo s > "$HOME/.cache/claude-handoff/x.md"
+    cd "$TMPDIR_TEST"
+    handoff --state "home/.cache/claude-handoff/sub/../x.md" --cwd "work/../work"
+    [ "$status" -eq 0 ]
+    state_path=$(realpath -e "$HOME/.cache/claude-handoff/x.md")
+    cwd_path=$(realpath -e "$TMPDIR_TEST/work")
+    [ "$(jq -r .state <<< "$output")" = "$state_path" ]
+    grep -Fq "最初に状態 $state_path を読み" "$CALLS"
+    grep -Fx "tab create --workspace w3 --cwd $cwd_path --no-focus" "$CALLS"
+}
+@test "tab_id が無くても対話と loop の引き継ぎを続ける" {
+    FAKE_NO_TAB_ID=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .tab <<< "$output")" = "" ]
+    [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
+    grep -q '^agent prompt chat-' "$CALLS"
+    FAKE_NO_TAB_ID=1 run bash "$BATS_TEST_DIRNAME/executable_loop-handoff.sh" \
+        --state-url "$URL" --model opus --effort medium -- "/loop CI を見る"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
+    grep -q '^agent prompt loop-' "$CALLS"
 }
 @test "引き継ぎの文面は、状態の在りかを読んで次の一手から続けるよう言い、/loop を付けない" {
     handoff --state "$URL" --cwd "$FAKE_CWD"

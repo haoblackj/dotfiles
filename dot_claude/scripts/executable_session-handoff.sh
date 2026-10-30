@@ -10,6 +10,7 @@
 
 set -uo pipefail
 
+# shellcheck source=dot_claude/scripts/herdr-start-claude.sh
 source "$(dirname "${BASH_SOURCE[0]}")/herdr-start-claude.sh"
 
 die() { printf 'session-handoff: %s\n' "$1" >&2; exit 1; }
@@ -32,8 +33,10 @@ if [[ ! "$STATE" =~ ^https?://[^[:space:]]+$ ]]; then
   STATE_PATH=$(realpath -e -- "$STATE" 2>/dev/null) || die "状態のファイルの場所が分からない"
   STATE_ROOT=$(realpath -e -- "$HOME/.cache/claude-handoff" 2>/dev/null) || die "状態の保存先が無い"
   [[ "$STATE_PATH" == "$STATE_ROOT/"* ]] || die "状態のファイルは ~/.cache/claude-handoff/ 下に置く"
+  STATE="$STATE_PATH"
 fi
 [[ -n "$DIR" && -d "$DIR" ]] || die "--cwd は存在するディレクトリにする"
+DIR=$(realpath -e -- "$DIR" 2>/dev/null) || die "作業ディレクトリの場所が分からない"
 MODEL_RE='^[][A-Za-z0-9._-]+$'
 [[ "$MODEL" =~ $MODEL_RE ]] || die "--model が無いか、形が違う"
 [[ "$EFFORT" =~ ^(low|medium|high|xhigh|max)$ ]] || die "--effort は low、medium、high、xhigh、max のどれか"

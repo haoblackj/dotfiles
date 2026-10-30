@@ -28,8 +28,8 @@ start_claude_in_new_tab() {
   else
     pane=$(jq -r '.result.root_pane.pane_id // empty' <<< "$created" 2>/dev/null)
     tab=$(jq -r '.result.tab.tab_id // empty' <<< "$created" 2>/dev/null)
-    if [[ -z "$pane" || -z "$tab" ]]; then
-      printf 'herdr-start-claude: tab create の応答に root_pane.pane_id か tab.tab_id が無い: %s\n' "$created" >&2
+    if [[ -z "$pane" ]]; then
+      printf 'herdr-start-claude: tab create の応答に root_pane.pane_id が無い: %s\n' "$created" >&2
       return 1
     fi
   fi
