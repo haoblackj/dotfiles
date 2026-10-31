@@ -135,3 +135,22 @@ for ev, hs in h.items():
 print("PASS")
 PY
 }
+
+# GitHub の本文に推測の時刻を書かせないため、gh の本文に手書きの時刻があれば止める（haoblackj/dotfiles#75）。
+# command はファイルが無いとき何もしない形にしてある。python3 は無いファイルを渡されると
+# 終了コード 2 で終わり、PreToolUse ではそれが deny になって Bash の呼び出しが全部止まる
+# （settings.json が symlink で先に効き、chezmoi apply がまだのときに起きる）。
+# bats test_tags=production-asset
+@test "guard-gh-body-time.py が PreToolUse の Bash に配線されている" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
+for ev, hs in h.items():
+    gs=[g for g in hs if any("guard-gh-body-time.py" in x.get("command","") for x in g.get("hooks",[]))]
+    if ev=="PreToolUse":
+        assert len(gs)==1 and gs[0].get("matcher")=="Bash", f"PreToolUse: {gs!r}"
+    else:
+        assert not gs, f"{ev} に配線がある"
+print("PASS")
+PY
+}
