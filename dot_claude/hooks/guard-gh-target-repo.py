@@ -23,6 +23,8 @@
 #   - 書き込みの本文（コマンドの文字列、--body-file などのファイル、標準入力に流すファイルや
 #     ヒアドキュメント、$(cat file)）に、他人の issue / PR への参照か、リーダー以外への
 #     @メンションがあれば止める。標準入力の出どころが読めないときも止める。
+#     redirect.github.com 経由の URL は相手に参照の記録を残さないので通し、止めるときは
+#     その URL への書き換えを案内する（2026-11-03）。
 #   - GitHub 用の MCP ツールは、書き込みの owner と本文で同じ判定をする。
 
 import json
@@ -126,7 +128,9 @@ REASONS = {
     'foreign': '書き込み先がリーダーの持ち物ではありません（{detail}）。' + RULE +
                ' 必要なら本文を示して、リーダーに手で投稿してもらってください。',
     'reference': '本文に、リーダーの持ち物でないリポジトリの issue / PR への参照があります（{detail}）。'
-                 '相手の issue に参照の記録が残り、書き換えても消えません。' + RULE,
+                 '相手の issue に参照の記録が残り、書き換えても消えません。リンクが要るなら、矢印の'
+                 '先の redirect.github.com の URL に書き換えてください（相手に記録が残りません。'
+                 '短縮形の owner/repo#N は使いません）。',
     'mention': '本文に、リーダー以外への @メンションがあります（{detail}）。相手に通知が届きます。'
                '役割や例はバッククォートで囲んでください。' + RULE,
     'stdin': '本文を標準入力から渡していて、その出どころを読めません（{detail}）。本文をファイルに'
@@ -169,15 +173,24 @@ def without_code(text):
     return re.sub(r'`[^`\n]*`', ' ', text)
 
 
+def redirect_url(ref):
+    """参照を、相手に参照の記録を残さない redirect.github.com の URL に書き換える。
+    owner/repo#N は issue か PR か分からないが、/issues/N は PR なら GitHub が転送する。"""
+    if ref.startswith('http'):
+        return re.sub(r'^https?://github\.com/', 'https://redirect.github.com/', ref)
+    slug, _, number = ref.partition('#')
+    return f'https://redirect.github.com/{slug}/issues/{number}'
+
+
 def check_body(text, owners):
     """他人の issue / PR への参照と、リーダー以外への @メンションを探す。"""
-    refs = []
+    refs = {}
     for m in REFERENCE.finditer(text):
         owner = m.group(1) or m.group(3)
         if owner not in owners:
-            refs.append(m.group(0))
+            refs[m.group(0)] = redirect_url(m.group(0))
     if refs:
-        raise Deny('reference', ', '.join(dict.fromkeys(refs)))
+        raise Deny('reference', '; '.join(f'{ref} → {url}' for ref, url in refs.items()))
     mentions = [m.group(1) for m in MENTION.finditer(without_code(text))
                 if m.group(1) not in owners and m.group(1) not in OWN_ACCOUNTS]
     if mentions:

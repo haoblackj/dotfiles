@@ -296,6 +296,23 @@ def test_mentions_of_other_users_are_denied():
     assert decide('gh issue comment 1 -R haoblackj/r --body "mail a@example.com"') is None
 
 
+def test_redirect_links_to_other_owners_pass():
+    # redirect.github.com 経由の URL は相手に参照の記録を残さない（公式文書と、
+    # 2026-11-03 にリーダーのリポジトリで実際に確かめた結果）。
+    assert decide('gh issue comment 2 -R haoblackj/r --body '
+                  '"see https://redirect.github.com/kot149/zmk-workspace/issues/4"') is None
+
+
+def test_url_reference_denial_suggests_redirect():
+    _, reason = guard.decision('gh issue comment 2 -R haoblackj/r --body '
+                               '"see https://github.com/kot149/zmk-workspace/issues/4"',
+                               owners=OWN, resolve_node_owner=resolve)
+    assert 'https://redirect.github.com/kot149/zmk-workspace/issues/4' in reason
+    _, reason = guard.decision('gh issue comment 2 -R haoblackj/r --body "see kot149/zmk-workspace#4"',
+                               owners=OWN, resolve_node_owner=resolve)
+    assert 'https://redirect.github.com/kot149/zmk-workspace/issues/4' in reason
+
+
 def test_own_and_bare_references_pass():
     assert decide('gh issue comment 2 -R haoblackj/r --body "see haoblackj/r#3 and #4"') is None
     assert decide('gh issue comment 2 -R haoblackj/r --body "upstream is kot149/zmk-workspace"') is None
