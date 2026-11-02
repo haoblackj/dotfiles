@@ -175,6 +175,33 @@ def test_gh_as_a_plain_word_is_not_a_call(aliases):
     assert decide('echo "`gh api` を使う"') is None
 
 
+def test_ghf_is_checked_like_gh(aliases):
+    # ghf（atusy/gh-fzf）は引数をそのまま gh に渡す。
+    assert decide('ghf issue create --title t --body b') == 'deny'
+    assert decide('ghf issue create -R kot149/r --title t --body b') == 'deny'
+    assert decide('ghf issue create -R haoblackj/r --title t --body b') is None
+    assert decide('ghf issue') is None
+    assert decide('ghf repo fzf | ghf repo clone') is None
+
+
+def test_ghf_write_fed_from_a_pipe_is_denied(aliases):
+    # パイプの標準入力は ghf が最後の引数として gh に渡すので、投稿先を確かめられない。
+    assert decide('echo kot149/r | ghf repo fork') == 'deny'
+    assert decide('echo x | ghf issue create -R haoblackj/r --title t') == 'deny'
+
+
+def test_gh_pr_body_is_checked_as_pr_edit(tmp_path):
+    body = tmp_path / 'b.md'
+    body.write_text('one\ntwo\nthree\n')
+    assert decide(f'gh-pr-body set haoblackj/r 3 {body}') is None
+    assert decide(f'gh-pr-body set --force kot149/r 3 {body}') == 'deny'
+    assert decide(f'gh-pr-body restore {body} kot149/r 3') == 'deny'
+    assert decide('gh-pr-body get kot149/r 3') is None
+    body.write_text('see kot149/zmk-workspace#4\ntwo\nthree\n')
+    assert decide(f'gh-pr-body set haoblackj/r 3 {body}') == 'deny'
+    assert decide(f'~/.local/bin/gh-pr-body set kot149/r 3 {body}') == 'deny'
+
+
 def test_variable_subcommands_are_denied():
     assert decide('for c in issue pr; do gh $c create --title t; done') == 'deny'
     assert decide('for c in issue pr; do gh $c --help; done') is None
