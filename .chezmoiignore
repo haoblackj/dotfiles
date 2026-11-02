@@ -26,6 +26,7 @@ keyboard.conf
 local.conf
 wsl-static-dns.sh
 wsl-static-dns.service
+earlyoom.default
 # Pythonテスト実行で生成されるバイトコードとキャッシュはapply対象外
 **/__pycache__
 **/__pycache__/**

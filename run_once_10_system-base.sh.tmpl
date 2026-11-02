@@ -136,12 +136,13 @@ apt_get install -y \
   libexpat1-dev \
   golang-go \
   docker-ce \
-  docker-compose-plugin
+  docker-compose-plugin \
+  earlyoom
 # 上の一覧の由来:
 #   基本 (apt-transport-https 〜 xdg-utils)、zsh、日本語ロケール (language-pack-ja)、
 #   wslu、GUI 系ライブラリ (libgtk2.0-0 〜 fonts-ipafont)、Homebrew の前提
 #   (build-essential procps file)、pyenv の Python ビルド依存 (libssl-dev 〜 libexpat1-dev)、
-#   go、docker
+#   go、docker、メモリの暴走を止める earlyoom（設定は run_onchange_12 が配る）
 
 # ログインシェルを zsh に（再ログインで効く）
 if [ "$(getent passwd "$USER" | cut -d: -f7)" != "/usr/bin/zsh" ]; then

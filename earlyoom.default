@@ -1,0 +1,13 @@
+# earlyoom の設定。run_onchange_12 が /etc/default/earlyoom へコピーする。
+# systemd の earlyoom.service が EnvironmentFile として読む。
+#
+# WSL を固めるメモリの暴走への最後の砦（haoblackj/dotfiles#81）。WSL では Claude Code が
+# /init.scope で動いて cgroup を作れず、公式の CLAUDE_CODE_TOOL_MEMORY_LIMIT が効かないため。
+#
+# -M 4194304          空きのメモリ（MemAvailable）が 4GiB を切ったら SIGTERM、その半分で SIGKILL。単位は KiB
+# -s 100,100          スワップの空きは見ない。スワップへ溢れて固まる前に止めるため。
+#                     -s 100 だけだと SIGKILL にスワップの空き 50% 以下の条件が残り、SIGTERM を
+#                     無視する処理がスワップを 4GB 埋めるまで止まらない
+# --avoid / --prefer  プロセス名（comm）の正規表現。内側を引用符で囲まない。systemd が引用符を
+#                     剥がさずに渡すと、正規表現がどの名前にも当たらなくなるおそれがある
+EARLYOOM_ARGS="-r 3600 -M 4194304 -s 100,100 --avoid ^(claude|herdr|zsh|bash|sshd|systemd|ollama|dockerd|containerd)$ --prefer ^python"

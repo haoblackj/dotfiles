@@ -123,9 +123,9 @@ D ドライブへ退避してあるトランスクリプトは、手順 4 の `c
 
 | スクリプト | 中身 |
 |---|---|
-| `run_once_10_system-base` | ブートストラップ用 sudo ドロップイン、公開 DNS 固定（`wsl-static-dns.sh` を 1 回実行）、**apt のすべて**（wslu と docker のリポジトリ追加、基本パッケージ、zsh、GUI ライブラリ、brew と pyenv の前提、go、docker）、zsh 化、docker グループ、日本語ロケール |
+| `run_once_10_system-base` | ブートストラップ用 sudo ドロップイン、公開 DNS 固定（`wsl-static-dns.sh` を 1 回実行）、**apt のすべて**（wslu と docker のリポジトリ追加、基本パッケージ、zsh、GUI ライブラリ、brew と pyenv の前提、go、docker、earlyoom）、zsh 化、docker グループ、日本語ロケール |
 | `run_once_11_system-upgrade` | `apt-get upgrade` |
-| `run_onchange_12_system-files` | `/etc/wsl.conf` `/etc/default/keyboard` `/etc/fonts/local.conf` `wsl-static-dns.sh` `wsl-static-dns.service` をソースから `/etc` と `/usr/local/bin` へコピー。内容が変わると再実行 |
+| `run_onchange_12_system-files` | `/etc/wsl.conf` `/etc/default/keyboard` `/etc/fonts/local.conf` `wsl-static-dns.sh` `wsl-static-dns.service` `/etc/default/earlyoom`（ソースは `earlyoom.default`）をソースから `/etc` と `/usr/local/bin` へコピーし、earlyoom に設定を読み直させる。内容が変わると再実行 |
 | `run_once_30_linuxbrew` | Homebrew |
 | `run_once_40_python-env` | pyenv / pyenv-virtualenv（brew） |
 | `run_once_50_node-env` | nvm |
