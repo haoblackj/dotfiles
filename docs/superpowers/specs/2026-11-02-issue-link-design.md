@@ -73,7 +73,7 @@ README に、この設定が何のためにあるかを書く。
 
 1. リーダーのプロンプト（`prompt.submit`）。引き継ぎの指示もプロンプトとして届くので同じ道で拾う。本文の GitHub の Issue の URL（`https://github.com/<owner>/<repo>/issues/<N>`）と、`#<N>` の形の番号。
 2. セッション中に立てた Issue。`gh issue create` の出力に出る Issue の URL。
-3. 書き込んだ Issue。`gh issue comment <N>`、`gh issue edit <N>`、`gh issue close <N>`、`gh api repos/<owner>/<repo>/issues/<N>/...` のように、Bash のコマンドで Issue を名指しして書き込んだもの。
+3. 書き込んだか読んだ Issue。`gh issue comment <N>`、`gh issue edit <N>`、`gh issue close <N>`、`gh issue view <N>`、`gh api repos/<owner>/<repo>/issues/<N>/...` のように、Bash のコマンドで Issue を名指ししたもの。読むだけの命令も拾うのは、セッションの始めに状態コメントを読む命令（グローバルの CLAUDE.md の `gh api .../issues/<N>/comments`）がそのセッションの Issue を指すから（計画を書くときのあたしの判断）。
 
 番号だけで repo が書かれていないときは、セッションのいまのリポジトリ（git の `origin` が GitHub を指すもの）の Issue とみなす。
 GitHub を指す `origin` が無いリポジトリでは、番号だけのものは拾わない。
