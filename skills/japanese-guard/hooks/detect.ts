@@ -6,8 +6,9 @@
 export const MIN_LATIN = 25
 // ツール呼び出しの前の報告（複数行）は、英字がこれ以上あるときだけ判定する
 export const MIN_LATIN_MID = 60
-// 1 行の報告は、英字がこれ以上ある長い段落のときだけ判定する
-export const MIN_LATIN_MID_LONG = 250
+// 1 行の報告は、英字がこれ以上あれば判定する。上流は 250（1 行の前置きは見逃す）だが、
+// 英語の 1 行の前置きが 30〜70 字で残り続けたので、最終回答と同じ値に下げた（haoblackj/dotfiles#83）。
+export const MIN_LATIN_MID_LONG = 25
 // 英字の数が日本語の文字数のこの倍を超えたら、英語主体とみなす
 export const RATIO = 3
 
@@ -53,7 +54,7 @@ export const isChinese = (text: string, minHan = MIN_HAN_CHINESE) => chineseHan(
 /** 最終回答の判定。 */
 export const isForeign = (text: string) => isEnglish(text) || isChinese(text)
 
-/** ツール呼び出しの前の報告の判定。1 行の前置きは見逃し、複数行か長い段落だけを見る。 */
+/** ツール呼び出しの前の報告の判定。1 行の中国語は長い段落だけを見る。 */
 export const isMidReportForeign = (text: string) => {
   const lines = text.trim().split('\n').filter(l => l.trim() !== '')
   return lines.length >= 2
