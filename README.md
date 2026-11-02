@@ -441,6 +441,9 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 `run_once_80`（本体）、`run_once_83`（agent skill）、`run_once_84`（プラグイン: reviewr、herdr-plus、command-palette、equalize-splits、file-viewer、hunk、ローカルの open-project）、`run_once_86`（Claude Code 統合 hook）で自動導入される。
 キーバインドは `dot_config/herdr/config.toml` の `[[keys.command]]`（`prefix+a` でコマンドパレット、`prefix+s` / `prefix+d` で分割して Claude Code 起動など）。
 
+ローカルの `open-github`（`prefix+g` でブランチ名の Issue と PR を開く）は撤去し、Mod の `issue-link` に置き換えた。
+ファイルは `.chezmoiremove` で消えるが、Herdr に link した登録は残るので、入れていたマシンでは一度 `herdr plugin unlink local.open-github` を打つ。
+
 チートシート:
 
 - 恒久コピー: [`docs/herdr-cheatsheet.html`](docs/herdr-cheatsheet.html)（ブラウザで直接開ける単体 HTML）

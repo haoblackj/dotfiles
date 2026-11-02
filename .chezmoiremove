@@ -1,0 +1,6 @@
+# ソースから消したファイルを、すでに apply 済みのマシンのホームからも消す。
+# パターンに先頭の / を付けない（.chezmoiignore の注意書きと同じ理由）。
+# ブランチ名から Issue 番号を拾っていた表示と Herdr の prefix+g（issue-link の Mod に置き換えた）
+.config/ccstatusline/issue-pr-links.sh
+.config/ccstatusline/github-refs.sh
+.config/herdr/plugins/local/open-github
