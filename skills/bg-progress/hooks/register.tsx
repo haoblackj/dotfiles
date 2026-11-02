@@ -50,12 +50,16 @@ const tick = async ($: EngineInterface) => {
     const current = await read($, jobs)
     const measured = new Map<string, number>()
     for (const job of current) {
-      measured.set(job.name, await measure($, job.paths, job.unit))
+      // 1 本の測定の失敗（30 秒の打ち切りなど）で、ほかの登録の測定まで止めない。失敗した登録はこの回を飛ばす
+      const amount = await measureOr($, job.paths, job.unit, undefined)
+      if (amount !== undefined) measured.set(job.name, amount)
     }
     const now = await $.clock.now()
     const finished: Job[] = []
-    await update($, jobs, list =>
-      list.flatMap(job => {
+    await update($, jobs, list => {
+      // update は書き込みが競合すると関数を呼び直すので、集めた結果を毎回やり直す
+      finished.length = 0
+      return list.flatMap(job => {
         const amount = measured.get(job.name)
         if (amount === undefined) return [job]
         const grew = amount > amountOf(job)
@@ -69,8 +73,8 @@ const tick = async ($: EngineInterface) => {
           return []
         }
         return [next]
-      }),
-    )
+      })
+    })
     for (const job of finished) await toastDone($, job)
     await stopTimerIfIdle($)
   } finally {
@@ -82,20 +86,42 @@ const ensureTimer = ($: EngineInterface) => {
   timer ??= $.clock.every(TICK_MS, () => void tick($))
 }
 
-// 全体に届く前に背景タスクが終わったら外す。届いていれば（照合などで長引いただけ）完了として扱う。
-const settleTask = async ($: EngineInterface, taskId: string) => {
+async function measureOr<T>($: EngineInterface, paths: string[], unit: Unit, fallback: T): Promise<number | T> {
+  try {
+    return await measure($, paths, unit)
+  } catch {
+    return fallback
+  }
+}
+
+const percentOf = (amount: number, total: number) =>
+  Math.min(100, Math.max(0, Math.floor((100 * amount) / total)))
+
+// 背景タスクが終わったら外す。全体に届いていれば（照合などで長引いただけ）完了、成功で終わったが
+// 届いていなければ「終わった」、失敗や中断なら「止まった」と出す。
+const settleTask = async ($: EngineInterface, taskId: string, status: string) => {
   const hit = (await read($, jobs)).filter(j => j.taskId === taskId)
   if (hit.length === 0) return
   const amounts = new Map<string, number>()
-  for (const job of hit) amounts.set(job.name, await measure($, job.paths, job.unit))
-  await update($, jobs, list => list.filter(j => j.taskId !== taskId))
-  for (const job of hit) {
+  for (const job of hit) amounts.set(job.name, await measureOr($, job.paths, job.unit, amountOf(job)))
+  // 測っている間に tick が全体到達で外していれば、ここでは出さない（実際に外したものだけ通知する）
+  const removed: Job[] = []
+  await update($, jobs, list => {
+    removed.length = 0
+    return list.filter(j => {
+      if (j.taskId !== taskId) return true
+      removed.push(j)
+      return false
+    })
+  })
+  for (const job of removed) {
     const amount = amounts.get(job.name) ?? amountOf(job)
     if (amount >= job.total) {
       await toastDone($, job)
+    } else if (status === 'completed') {
+      $.ui.toast(`✔ ${job.name} 終わった（${percentOf(amount, job.total)}%）`, { timeoutMs: 8000 })
     } else {
-      const percent = Math.min(100, Math.max(0, Math.floor((100 * amount) / job.total)))
-      $.ui.toast(`✖ ${job.name} 止まった（${percent}%）`, { timeoutMs: 8000 })
+      $.ui.toast(`✖ ${job.name} 止まった（${percentOf(amount, job.total)}%）`, { timeoutMs: 8000 })
     }
   }
   await stopTimerIfIdle($)
@@ -145,7 +171,7 @@ export const register: Register = on => {
     if (unit !== 'bytes' && unit !== 'lines') return { deny: 'unit は bytes か lines' }
     if (!(typeof total === 'number' && total > 0)) return { deny: 'total は 0 より大きい数' }
 
-    const amount = await measure($, paths, unit)
+    const amount = await measureOr($, paths, unit, 0)
     const now = await $.clock.now()
     const job: Job = {
       name,
@@ -179,7 +205,7 @@ export const register: Register = on => {
 
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind === 'task-notification') {
-      for (const { taskId } of parseTaskNotifications(e.text)) await settleTask($, taskId)
+      for (const { taskId, status } of parseTaskNotifications(e.text)) await settleTask($, taskId, status)
     }
     return next(e)
   })
@@ -188,7 +214,7 @@ export const register: Register = on => {
   on('tool.call', { tool: 'TaskStop' }, async ($, e, next) => {
     const ran = await next(e)
     const taskId = e.task_id ?? e.shell_id
-    if (ran.deny === undefined && ran.isError !== true && taskId) await settleTask($, taskId)
+    if (ran.deny === undefined && ran.isError !== true && taskId) await settleTask($, taskId, 'killed')
     return ran
   })
 

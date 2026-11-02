@@ -40,6 +40,11 @@ test('残り時間の書式', () => {
   expect(formatDuration(4320)).toBe('1時間12分')
 })
 
+test('丸めで 60 分にならない', () => {
+  expect(formatDuration(3590)).toBe('1時間0分')
+  expect(formatDuration(7190)).toBe('2時間0分')
+})
+
 test('量と速さの書式', () => {
   expect(formatAmount('bytes', 7.8e9, 12.6e9)).toBe('7.8/12.6 GB')
   expect(formatAmount('bytes', 329e6, 345e6)).toBe('329/345 MB')

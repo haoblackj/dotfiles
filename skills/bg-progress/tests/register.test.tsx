@@ -9,15 +9,19 @@ const T0 = Date.UTC(2026, 10, 2, 7, 0)
 
 // テストの $ は Mod の $.state を読めないので、書き込みを state.set の hook で写し取る。
 let written: Job[] = []
+// Mod が一度でも書いたか。書いた後は、空の一覧も Mod の値として扱う
+let didWrite = false
 
 // テストの hook はエンジンの代わりに立つ。process.run は du / wc の答えを返す。
 const engine = (on: On, measured: { stdout: string; exitCode?: number }) => {
   const toasts: string[] = []
   const runs: string[][] = []
   written = []
+  didWrite = false
   const clock = mock.clock(on, { now: T0 })
   on('state.set', (_, e, next) => {
     written = e.value as Job[]
+    didWrite = true
     return next(e)
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -39,6 +43,12 @@ const engine = (on: On, measured: { stdout: string; exitCode?: number }) => {
     return { value: undefined }
   })
   return { toasts, runs, clock }
+}
+
+// session.start と tool.register だけに答える（process.run を自前で答えるテスト用）
+const bare = (on: On) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('tool.register', (_, e) => ({ value: { tool: `mcp__bg-progress__${e.name}` } }))
 }
 
 const start = ($: Engine) =>
@@ -184,7 +194,7 @@ const seeded = (over: Partial<Job> = {}): Job => ({
 // Mod が書き込むまで、前から在った登録として返す
 const seed = (on: On, jobs: Job[]) =>
   on('state.get', (_, e, next) =>
-    written.length > 0 ? next(e) : { value: { value: jobs, version: 0 } },
+    didWrite ? next(e) : { value: { value: jobs, version: 0 } },
   )
 
 const notify = ($: Engine, body: string) =>
@@ -265,6 +275,95 @@ test('TaskStop が失敗したら外さない', async ($, on) => {
   expect(runs).toEqual([])
 })
 
+test('成功で終わったが全体に届かなければ、止まったではなく終わったと出す', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts } = engine(on, { stdout: '7800000000\t/d\n' })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await notify($, '<task-id>bq1</task-id><status>completed</status>')
+  expect(toasts).toEqual(['✔ a 終わった（61%）'])
+  expect(written).toEqual([])
+})
+
+test('一本の測定が失敗しても、ほかの登録は測り続ける', async ($, on) => {
+  seed(on, [seeded({ name: 'a', paths: ['/a'] }), seeded({ name: 'b', paths: ['/b'] })])
+  bare(on)
+  const clock = mock.clock(on, { now: T0 })
+  on('state.set', (_, e, next) => {
+    written = e.value as Job[]
+    didWrite = true
+    return next(e)
+  })
+  on('process.run', (_, e) => {
+    if (e.argv.includes('/a')) throw new Error('timed out')
+    return {
+      value: { exitCode: 0, stdout: '8000000000\t/b\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+    }
+  })
+  on('ui.toast', () => ({ value: undefined }))
+  written = []
+  didWrite = false
+  await start($)
+  await clock.advance(4000)
+  const b = written.find(j => j.name === 'b')
+  expect(b?.samples.at(-1)?.amount).toBe(8e9)
+  expect(written.find(j => j.name === 'a')?.samples.length).toBe(2)
+})
+
+test('watch で測定が失敗したら 0 として登録する', async ($, on) => {
+  mock.clock(on, { now: T0 })
+  on('state.set', (_, e, next) => {
+    written = e.value as Job[]
+    didWrite = true
+    return next(e)
+  })
+  bare(on)
+  on('process.run', () => {
+    throw new Error('timed out')
+  })
+  written = []
+  didWrite = false
+  await start($)
+  const ran = await watch($, { name: 'x', paths: ['/d'], unit: 'bytes', total: 1e9 })
+  expect(String(ran.result)).toMatch(/^登録した: x（0\.0\/1\.0 GB）/)
+  expect(written.length).toBe(1)
+})
+
+test('全体に届いたのと通知が重なっても、完了の通知は一度だけ', async ($, on) => {
+  seed(on, [seeded({ total: 100, samples: [{ at: T0, amount: 10 }] })])
+  bare(on)
+  const clock = mock.clock(on, { now: T0 })
+  on('state.set', (_, e, next) => {
+    written = e.value as Job[]
+    didWrite = true
+    return next(e)
+  })
+  let release = () => {}
+  const gate = new Promise<void>(r => {
+    release = r
+  })
+  on('process.run', async () => {
+    await gate
+    return { value: { exitCode: 0, stdout: '100\t/d\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  written = []
+  didWrite = false
+  await start($)
+  const ticking = clock.advance(4000)
+  await clock.settle()
+  const notified = notify($, '<task-id>bq1</task-id><status>completed</status>')
+  await clock.settle()
+  release()
+  await ticking
+  await notified
+  expect(toasts.filter(t => t.startsWith('✔ a')).length).toBe(1)
+})
+
 test('ほかのタスクの通知では外さない', async ($, on) => {
   seed(on, [seeded()])
   const { toasts, runs } = engine(on, { stdout: '7800000000\t/d\n' })
@@ -316,7 +415,7 @@ test('読み込み直しで測定を再開する', async ($, on) => {
   }
   // 前の版が書いた登録を、Mod が書き込むまで返す（以後は kit が持つ）
   on('state.get', (_, e, next) =>
-    written.length > 0 ? next(e) : { value: { value: [stored], version: 0 } },
+    didWrite ? next(e) : { value: { value: [stored], version: 0 } },
   )
   const { runs, clock } = engine(on, { stdout: '20\t/d\n' })
   await start($)

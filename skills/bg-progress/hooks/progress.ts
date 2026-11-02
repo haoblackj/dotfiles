@@ -24,10 +24,11 @@ export const formatJst = (ms: number): string => {
   return `${hh}:${mm}`
 }
 
-export const formatDuration = (sec: number): string =>
-  sec >= 3600
-    ? `${Math.floor(sec / 3600)}時間${Math.round((sec % 3600) / 60)}分`
-    : `${Math.max(1, Math.round(sec / 60))}分`
+// 先に分へ丸めてから時間と分に割る（3590 秒を「60分」、7190 秒を「1時間60分」にしない）
+export const formatDuration = (sec: number): string => {
+  const mins = Math.round(sec / 60)
+  return mins >= 60 ? `${Math.floor(mins / 60)}時間${mins % 60}分` : `${Math.max(1, mins)}分`
+}
 
 export const formatAmount = (unit: Unit, done: number, total: number): string => {
   if (unit === 'lines') return `${done}/${total} 件`
