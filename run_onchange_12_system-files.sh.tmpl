@@ -10,6 +10,7 @@ set -eu
 # local.conf hash: {{ include "local.conf" | sha256sum }}
 # wsl-static-dns.sh hash: {{ include "wsl-static-dns.sh" | sha256sum }}
 # wsl-static-dns.service hash: {{ include "wsl-static-dns.service" | sha256sum }}
+# earlyoom.default hash: {{ include "earlyoom.default" | sha256sum }}
 
 SRC={{ .chezmoi.sourceDir | quote }}
 sudo install -m 0644 -o root -g root "$SRC/wsl.conf" /etc/wsl.conf
@@ -17,4 +18,7 @@ sudo install -m 0644 -o root -g root "$SRC/keyboard.conf" /etc/default/keyboard
 sudo install -m 0644 -o root -g root "$SRC/local.conf" /etc/fonts/local.conf
 sudo install -m 0755 -o root -g root "$SRC/wsl-static-dns.sh" /usr/local/bin/wsl-static-dns.sh
 sudo install -m 0644 -o root -g root "$SRC/wsl-static-dns.service" /etc/systemd/system/wsl-static-dns.service
+sudo install -m 0644 -o root -g root "$SRC/earlyoom.default" /etc/default/earlyoom
 sudo systemctl daemon-reload
+# 動いている earlyoom に新しい設定を読ませる。止まっていれば何もしない（try-restart）
+sudo systemctl try-restart earlyoom.service
