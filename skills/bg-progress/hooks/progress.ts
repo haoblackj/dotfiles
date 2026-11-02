@@ -35,7 +35,13 @@ export const formatAmount = (unit: Unit, done: number, total: number): string =>
   return `${Math.round(done / MB)}/${Math.round(total / MB)} MB`
 }
 
-export const formatRate = (unit: Unit, perSec: number): string =>
+export const formatSize = (unit: Unit, n: number): string => {
+  if (unit === 'lines') return `${n} 件`
+  if (n >= GB) return `${(n / GB).toFixed(1)} GB`
+  return `${Math.round(n / MB)} MB`
+}
+
+export const formatRate =(unit: Unit, perSec: number): string =>
   unit === 'lines' ? `${perSec.toFixed(1)} 件/s` : `${(perSec / MB).toFixed(1)} MB/s`
 
 export const bar = (ratio: number, width = 10): string => {

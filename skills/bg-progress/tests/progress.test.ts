@@ -7,6 +7,7 @@ import {
   formatDuration,
   formatJst,
   formatRate,
+  formatSize,
   isStalled,
   parseTaskNotifications,
   rateOf,
@@ -45,6 +46,12 @@ test('量と速さの書式', () => {
   expect(formatAmount('lines', 143, 260)).toBe('143/260 件')
   expect(formatRate('bytes', 9.8e6)).toBe('9.8 MB/s')
   expect(formatRate('lines', 0.8)).toBe('0.8 件/s')
+})
+
+test('トーストに出す全体の量の書式', () => {
+  expect(formatSize('bytes', 12.6e9)).toBe('12.6 GB')
+  expect(formatSize('bytes', 345e6)).toBe('345 MB')
+  expect(formatSize('lines', 260)).toBe('260 件')
 })
 
 test('速さは直近 30 秒の増え方', () => {
