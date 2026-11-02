@@ -246,6 +246,25 @@ test('通知の時点で全体に届いていれば完了', async ($, on) => {
   expect(written).toEqual([])
 })
 
+// Claude が TaskStop で止めた背景タスクは、終わりの通知が会話に届かない（2026-11-02 に実機で確かめた）
+test('TaskStop で止めたら止まったと出す', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts } = engine(on, { stdout: '7800000000\t/d\n' })
+  on('tool.call', () => ({ result: { message: 'stopped' } }) as never)
+  await $.tool.call({ tool: 'TaskStop', task_id: 'bq1' } as never)
+  expect(toasts).toEqual(['✖ a 止まった（61%）'])
+  expect(written).toEqual([])
+})
+
+test('TaskStop が失敗したら外さない', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts, runs } = engine(on, { stdout: '7800000000\t/d\n' })
+  on('tool.call', () => ({ deny: 'no such task' }))
+  await $.tool.call({ tool: 'TaskStop', task_id: 'bq1' } as never)
+  expect(toasts).toEqual([])
+  expect(runs).toEqual([])
+})
+
 test('ほかのタスクの通知では外さない', async ($, on) => {
   seed(on, [seeded()])
   const { toasts, runs } = engine(on, { stdout: '7800000000\t/d\n' })

@@ -184,6 +184,14 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // Claude が TaskStop で止めた背景タスクは終わりの通知が会話に届かないので、呼び出しの側で拾う
+  on('tool.call', { tool: 'TaskStop' }, async ($, e, next) => {
+    const ran = await next(e)
+    const taskId = e.task_id ?? e.shell_id
+    if (ran.deny === undefined && ran.isError !== true && taskId) await settleTask($, taskId)
+    return ran
+  })
+
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
     return {
