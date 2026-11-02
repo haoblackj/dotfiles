@@ -6,17 +6,26 @@
 # 判定の方針:
 #   - シェルのコマンド境界から gh の書き込みを探す。引用中の言及は通す。
 #   - 投稿先が -R / --repo、URL、gh api のパスのどれでも名指しされていなければ止める。
-#   - 名指しされた持ち主が GH_WRITE_OWNERS（既定 haoblackj）に無ければ、リーダーに許可を求める。
+#   - 名指しされた持ち主が GH_WRITE_OWNERS（既定 haoblackj）に無ければ止める。外部のリポジトリへの
+#     起票、コメント、言及は、リーダーの指示で当面すべて禁止（2026-11-02）。
 #   - gh api graphql はノード ID で対象を名指しするので、暗黙の選択は起きず通す。
+#   - 書き込みのコマンドと本文のファイルに、他人の issue / PR への参照（owner/repo#N か URL）が
+#     あれば止める。相手の issue に参照の記録が残り、書き換えても消えないため
+#     （2026-11-02、自分の issue の状態コメントから他人の issue に参照の記録を付けた）。
 #   - 入力が読めない場合は、フックの都合で作業を止めない。
 
 import json
 import os
+from pathlib import Path
 import re
 import shlex
 import sys
 
 ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z_0-9]*=')
+REFERENCE = re.compile(
+    r'(?<![\w./-])([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)#\d+'
+    r'|https?://github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull|discussions)/\d+')
+BODY_FILE_OPTS = {'--body-file', '-F', '--notes-file', '--input'}
 URL_REPO = re.compile(r'^https?://github\.com/([^/\s]+)/([^/\s]+)/')
 API_REPO = re.compile(r'^/?repos/([^/\s]+)/([^/\s]+)')
 WRITES = {
@@ -38,8 +47,13 @@ DENY = """GitHub への書き込みで、投稿先のリポジトリが名指し
 gh は作業コピーの remote から投稿先を選ぶため、upstream（他人のリポジトリ）に書くことがあります。
 -R owner/repo（gh api なら repos/owner/repo/... のパス）で投稿先を明示してください。
 対象: {command}"""
-ASK = """GitHub への書き込みの投稿先が、リーダーの持ち物でないリポジトリ（{repos}）です。
-他人のリポジトリへの書き込みは、投稿先と本文を示して許可を得てから行います。
+FOREIGN = """GitHub への書き込みの投稿先が、リーダーの持ち物でないリポジトリ（{repos}）です。
+外部のリポジトリへの起票、コメント、言及は、リーダーの指示で当面すべて禁止されています（2026-11-02）。
+書き込みが必要なら、本文を示してリーダーに手で投稿してもらってください。
+対象: {command}"""
+FOREIGN_REF = """GitHub への書き込みの本文に、リーダーの持ち物でないリポジトリの issue / PR への参照（{refs}）があります。
+相手の issue に参照の記録が残り、本文を書き換えても消えません。
+外部のリポジトリへの言及は、リーダーの指示で当面すべて禁止されています（2026-11-02）。参照を外してください。
 対象: {command}"""
 
 
@@ -161,19 +175,67 @@ def invocations(command):
             segment.append(token)
 
 
-def decision(command, owners):
-    """('deny' | 'ask' | None, reason)"""
+def body_files(args):
+    """書き込みの本文を渡すファイルの名前。"""
+    for i, word in enumerate(args):
+        value = None
+        if word in BODY_FILE_OPTS and i + 1 < len(args):
+            value = args[i + 1]
+        elif word.startswith('--body-file=') or word.startswith('--input='):
+            value = word.split('=', 1)[1]
+        elif word in ('-f', '--field', '--raw-field') and i + 1 < len(args):
+            value = args[i + 1]
+        if value is None:
+            continue
+        _, sep, path = value.partition('=@')
+        if sep:
+            yield path
+        elif '=' not in value and value != '-':
+            yield value
+
+
+def foreign_refs(text, owners):
+    for m in REFERENCE.finditer(text):
+        owner, repo = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        if owner not in owners:
+            yield m.group(0)
+
+
+def read_text(name, cwd):
+    try:
+        path = Path(name).expanduser()
+        if not path.is_absolute():
+            path = Path(cwd or Path.cwd()) / path
+        with path.open('rb') as stream:
+            return stream.read(1024 * 1024).decode('utf-8', errors='replace')
+    except (OSError, ValueError, RuntimeError):
+        return ''
+
+
+def decision(command, owners, cwd=None):
+    """('deny' | None, reason)"""
     foreign = []
+    refs = []
+    writes = False
     for args in invocations(command):
         found = target(args)
         if found is None:
             continue
+        writes = True
         _, repos = found
         if repos is None:
             return 'deny', DENY.format(command=command[:300])
         foreign += [r for r in repos if r.split('/', 1)[0] not in owners]
+        for name in body_files(args):
+            refs += foreign_refs(read_text(name, cwd), owners)
     if foreign:
-        return 'ask', ASK.format(repos=', '.join(dict.fromkeys(foreign)), command=command[:300])
+        return 'deny', FOREIGN.format(repos=', '.join(dict.fromkeys(foreign)),
+                                      command=command[:300])
+    if writes:
+        refs += foreign_refs(command, owners)
+    if refs:
+        return 'deny', FOREIGN_REF.format(refs=', '.join(dict.fromkeys(refs)),
+                                          command=command[:300])
     return None, ''
 
 
@@ -184,7 +246,7 @@ def main():
         if not isinstance(command, str) or 'gh' not in command:
             return
         owners = {o for o in os.environ.get('GH_WRITE_OWNERS', 'haoblackj').split(',') if o}
-        verdict, reason = decision(command, owners)
+        verdict, reason = decision(command, owners, payload.get('cwd'))
         if verdict:
             print(json.dumps({'hookSpecificOutput': {
                 'hookEventName': 'PreToolUse',
