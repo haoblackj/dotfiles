@@ -22,6 +22,20 @@ def resolve(node_id):
 
 
 @pytest.fixture(autouse=True)
+def no_git_env(monkeypatch):
+    """ワークツリーから push すると、git は pre-push のフックに GIT_DIR などを渡す。残すと
+    一時リポジトリへの git init / config が本体のリポジトリに効き、core.bare = true と
+    [user] を書いた（2026-11-03）。bats のフックが落とすのと同じ変数を落とす。"""
+    import os
+    for name in list(os.environ):
+        if name.startswith('GIT_') and not (
+                name in ('GIT_EXEC_PATH', 'GIT_SSH', 'GIT_SSH_COMMAND', 'GIT_SSL_CAINFO',
+                         'GIT_SSL_NO_VERIFY', 'GIT_CONFIG_COUNT')
+                or name.startswith(('GIT_CONFIG_KEY_', 'GIT_CONFIG_VALUE_'))):
+            monkeypatch.delenv(name)
+
+
+@pytest.fixture(autouse=True)
 def no_aliases(monkeypatch):
     """手元の gh の alias に結果を左右させない。"""
     monkeypatch.setattr(guard, 'gh_aliases', lambda: {})
