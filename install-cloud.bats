@@ -52,11 +52,22 @@ setup() {
     [ ! -e "$HOME/.claude/keybindings.json" ]
 }
 
+# CLOUD_HOOK_COMMANDS はいま空なので、仕組みを試すテストは値を差し込んだ写しで走らせる。
+# ソースの settings.json にも、その command の Stop hook を足す。
+with_cloud_hook() {
+    sed 's|^CLOUD_HOOK_COMMANDS=.*|CLOUD_HOOK_COMMANDS=("~/.claude/hooks/demo-guard.py")|' \
+        "$SCRIPT" >"$BATS_TEST_TMPDIR/install-cloud.sh"
+    SCRIPT="$BATS_TEST_TMPDIR/install-cloud.sh"
+    jq '.hooks.Stop += [{"hooks":[{"type":"command","command":"~/.claude/hooks/demo-guard.py"}]}]' \
+        "$SRC/linked/claude/settings.json" >"$BATS_TEST_TMPDIR/settings.json"
+    mv "$BATS_TEST_TMPDIR/settings.json" "$SRC/linked/claude/settings.json"
+}
+
 @test "settings.json には決めたキーだけを入れる" {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     run jq -c 'keys' "$HOME/.claude/settings.json"
-    [ "$output" = '["hooks","language","outputStyle","spinnerVerbs"]' ]
+    [ "$output" = '["language","outputStyle","spinnerVerbs"]' ]
     run jq -r '.outputStyle' "$HOME/.claude/settings.json"
     [ "$output" = "$(jq -r '.outputStyle' "$SRC/linked/claude/settings.json")" ]
     run jq -c '.spinnerVerbs' "$HOME/.claude/settings.json"
@@ -83,27 +94,37 @@ setup() {
     [ "$output" = "japanese" ]
 }
 
+@test "CLOUD_HOOK_COMMANDS が空なら hooks を入れない" {
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    run jq -c 'has("hooks")' "$HOME/.claude/settings.json"
+    [ "$output" = false ]
+}
+
 @test "hooks.Stop には CLOUD_HOOK_COMMANDS のものだけを入れる" {
+    with_cloud_hook
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     run jq -c '[.hooks.Stop[].hooks[].command]' "$HOME/.claude/settings.json"
-    [ "$output" = '["~/.claude/hooks/japanese-guard.py"]' ]
+    [ "$output" = '["~/.claude/hooks/demo-guard.py"]' ]
     run jq -c '.hooks | keys' "$HOME/.claude/settings.json"
     [ "$output" = '["Stop"]' ]
 }
 
 @test "既存の hooks を残して hooks.Stop をマージする" {
+    with_cloud_hook
     mkdir -p "$HOME/.claude"
     echo '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}],"PreToolUse":[]}}' >"$HOME/.claude/settings.json"
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     run jq -c '[.hooks.Stop[].hooks[].command]' "$HOME/.claude/settings.json"
-    [ "$output" = '["mine","~/.claude/hooks/japanese-guard.py"]' ]
+    [ "$output" = '["mine","~/.claude/hooks/demo-guard.py"]' ]
     run jq -c '.hooks.PreToolUse' "$HOME/.claude/settings.json"
     [ "$output" = '[]' ]
 }
 
 @test "二度走らせても hooks.Stop の要素が重複しない" {
+    with_cloud_hook
     bash "$SCRIPT" 2>/dev/null
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
@@ -239,4 +260,30 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     [ ! -e "$HOME/.claude/skills/notaskill" ]
+}
+
+@test "CLOUD_MODS に挙げた Mod は SKILL.md が無くても写す" {
+    mkdir -p "$SRC/skills/japanese-guard/.claude-plugin" "$SRC/skills/japanese-guard/hooks"
+    echo '{"name":"japanese-guard"}' >"$SRC/skills/japanese-guard/.claude-plugin/plugin.json"
+    echo '{"modules":["./register.ts"]}' >"$SRC/skills/japanese-guard/hooks/hooks.json"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    diff -r "$SRC/skills/japanese-guard" "$HOME/.claude/skills/japanese-guard"
+}
+
+@test "CLOUD_MODS に無い Mod は写さない" {
+    mkdir -p "$SRC/skills/localmod/.claude-plugin"
+    echo '{"name":"localmod"}' >"$SRC/skills/localmod/.claude-plugin/plugin.json"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/skills/localmod" ]
+}
+
+@test "本物の skills/japanese-guard をクラウドへ写す" {
+    cp -R "$BATS_TEST_DIRNAME/skills" "$SRC/skills"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    diff -r "$SRC/skills/japanese-guard" "$HOME/.claude/skills/japanese-guard"
+    [ ! -e "$HOME/.claude/skills/bg-progress" ]
+    [ ! -e "$HOME/.claude/skills/issue-link" ]
 }

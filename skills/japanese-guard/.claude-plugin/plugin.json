@@ -1,0 +1,6 @@
+{
+  "name": "japanese-guard",
+  "version": "0.1.0",
+  "description": "最終回答とツールの前の報告が英語か中国語なら、同じターンのうちに日本語で書き直させる",
+  "license": "Apache-2.0"
+}
