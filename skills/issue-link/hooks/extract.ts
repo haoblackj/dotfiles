@@ -12,9 +12,12 @@ const NO_NUMBER_VERBS = new Set(['create', 'list', 'status'])
 
 type At = { at: number; found: Found }
 
+// 正規表現の必ず埋まる組を読む（noUncheckedIndexedAccess は組を undefined もありうると見る）
+const g = (m: RegExpMatchArray, i: number): string => m[i] ?? ''
+
 export const repoOfRemote = (remote: string | null): RepoRef | null => {
   const m = remote?.match(/^(?:https?:\/\/|ssh:\/\/git@|git@)github\.com[:/]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/)
-  return m ? { owner: m[1], repo: m[2] } : null
+  return m ? { owner: g(m, 1), repo: g(m, 2) } : null
 }
 
 export const keyOf = (r: RepoRef & { number: number }): string =>
@@ -23,7 +26,7 @@ export const keyOf = (r: RepoRef & { number: number }): string =>
 const urlsIn = (text: string, source: Source): At[] =>
   [...text.matchAll(ISSUE_URL)].map(m => ({
     at: m.index,
-    found: { owner: m[1], repo: m[2], number: Number(m[3]), source },
+    found: { owner: g(m, 1), repo: g(m, 2), number: Number(g(m, 3)), source },
   }))
 
 // 文字列の中で後に出たものほど先に並べる（新しいものが左）
@@ -35,7 +38,7 @@ export const fromPrompt = (text: string, here: RepoRef | null): Found[] => {
     // URL の中の #（コメントの錨など）を番号と読まないよう、URL を同じ長さの空白に置き換えてから探す
     const blanked = text.replace(ANY_URL, s => ' '.repeat(s.length))
     for (const m of blanked.matchAll(BARE)) {
-      hits.push({ at: m.index, found: { ...here, number: Number(m[1]), source: 'bare' } })
+      hits.push({ at: m.index, found: { ...here, number: Number(g(m, 1)), source: 'bare' } })
     }
   }
   return latestFirst(hits)
@@ -44,7 +47,8 @@ export const fromPrompt = (text: string, here: RepoRef | null): Found[] => {
 export const fromBash = (command: string, stdout: string, here: RepoRef | null): Found[] => {
   const hits: At[] = []
   for (const m of command.matchAll(GH_ISSUE)) {
-    const [, verb, args] = m
+    const verb = g(m, 1)
+    const args = g(m, 2)
     if (verb === 'create') {
       hits.push(...urlsIn(stdout, 'command').map(h => ({ ...h, at: m.index })))
       continue
@@ -56,12 +60,12 @@ export const fromBash = (command: string, stdout: string, here: RepoRef | null):
       continue
     }
     const flag = args.match(REPO_FLAG)
-    const repo = flag ? { owner: flag[1], repo: flag[2] } : here
+    const repo = flag ? { owner: g(flag, 1), repo: g(flag, 2) } : here
     const number = args.split(/\s+/).find(t => /^\d+$/.test(t))
     if (repo && number) hits.push({ at: m.index, found: { ...repo, number: Number(number), source: 'command' } })
   }
   for (const m of command.matchAll(GH_API_ISSUE)) {
-    hits.push({ at: m.index, found: { owner: m[1], repo: m[2], number: Number(m[3]), source: 'command' } })
+    hits.push({ at: m.index, found: { owner: g(m, 1), repo: g(m, 2), number: Number(g(m, 3)), source: 'command' } })
   }
   return latestFirst(hits)
 }
