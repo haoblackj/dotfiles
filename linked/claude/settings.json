@@ -121,12 +121,24 @@
       {
         "hooks": [
           {
-            "command": "f=\"$HOME/.claude/hooks/guard-gh-target-repo.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
-            "timeout": 10,
+            "command": "python3 \"$HOME/.claude/hooks/guard-gh-target-repo.py\"",
+            "onFailure": "block",
+            "timeout": 30,
             "type": "command"
           }
         ],
         "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "python3 \"$HOME/.claude/hooks/guard-gh-target-repo.py\"",
+            "onFailure": "block",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "mcp__.*[Gg]it[Hh]ub.*"
       },
       {
         "hooks": [

@@ -1,33 +1,45 @@
 #!/usr/bin/env python3
-# gh が投稿先を暗黙に選んで他人のリポジトリへ書く事故を防ぐ PreToolUse フック。
-# 2026-11-02、origin（haoblackj）と upstream（kot149）を持つ作業コピーで
-# -R なしの gh issue create が upstream に issue を立てた（bot では閉じられなかった）。
+# GitHub への書き込みを、リーダー（GH_WRITE_OWNERS、既定 haoblackj）の持ち物に限る PreToolUse フック。
+# 外部のリポジトリへの起票、コメント、言及は、リーダーの指示で当面すべて禁止（2026-11-02）。
+#   - 2026-11-02、upstream を持つ作業コピーで -R なしの gh issue create が他人のリポジトリに
+#     issue を立てた（bot では閉じられなかった）。
+#   - 同日、自分の issue の状態コメントに他人の issue の参照を書き、相手の issue に参照の記録を
+#     残した（本文を書き換えても記録は消えない）。
 #
-# 判定の方針:
-#   - シェルのコマンド境界から gh の書き込みを探す。引用中の言及は通す。
-#   - 投稿先が -R / --repo、URL、gh api のパスのどれでも名指しされていなければ止める。
-#   - 名指しされた持ち主が GH_WRITE_OWNERS（既定 haoblackj）に無ければ止める。外部のリポジトリへの
-#     起票、コメント、言及は、リーダーの指示で当面すべて禁止（2026-11-02）。
-#   - gh api graphql はノード ID で対象を名指しするので、暗黙の選択は起きず通す。
-#   - 書き込みのコマンドと本文のファイルに、他人の issue / PR への参照（owner/repo#N か URL）が
-#     あれば止める。相手の issue に参照の記録が残り、書き換えても消えないため
-#     （2026-11-02、自分の issue の状態コメントから他人の issue に参照の記録を付けた）。
-#   - 入力が読めない場合は、フックの都合で作業を止めない。
+# 判定の方針（確かめられないものは止める）:
+#   - Bash のコマンドを区切りごとに読み、cd を追って作業フォルダを決める。
+#   - gh: 書き込みの投稿先を -R / URL / gh api のパスで確かめる。名指しが無い、持ち主が違う、
+#     確かめられない（gists などリポジトリ外、{owner} の置き換え、--fill）ときは止める。
+#     gh api graphql の mutation は、書き込む先のノード ID の持ち主を GitHub に問い合わせ、
+#     すべてリーダーの持ち物と確かめられたときだけ通す。
+#   - git push: 送り先の remote の URL を git に聞き、リーダーの持ち物でなければ止める。
+#     送る commit のメッセージに他人の issue / PR への参照があれば止める。
+#   - curl / wget の GitHub API への書き込みは、パスの持ち主で判定する（graphql は止める）。
+#     そのほかのプログラムが GitHub API に触れる（コマンドかスクリプトに api.github.com がある）
+#     ときは止める。
+#   - 書き込みの本文（コマンドの文字列、--body-file などのファイル、標準入力に流すファイルや
+#     ヒアドキュメント、$(cat file)）に、他人の issue / PR への参照か、リーダー以外への
+#     @メンションがあれば止める。標準入力の出どころが読めないときも止める。
+#   - GitHub 用の MCP ツールは、書き込みの owner と本文で同じ判定をする。
 
 import json
 import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import sys
 
+OWN_ACCOUNTS = {'penguinex-agent'}
 ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z_0-9]*=')
 REFERENCE = re.compile(
     r'(?<![\w./-])([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)#\d+'
-    r'|https?://github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull|discussions)/\d+')
-BODY_FILE_OPTS = {'--body-file', '-F', '--notes-file', '--input'}
-URL_REPO = re.compile(r'^https?://github\.com/([^/\s]+)/([^/\s]+)/')
-API_REPO = re.compile(r'^/?repos/([^/\s]+)/([^/\s]+)')
+    r'|https?://github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull|discussions|commit)/\w+')
+MENTION = re.compile(r'(?<![\w.@/`-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?![\w.-]*\.\w)')
+GITHUB_URL_REPO = re.compile(r'github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$')
+URL_REPO = re.compile(r'^https?://github\.com/([^/\s]+)/([^/\s]+)')
+API_REPO = re.compile(r'(?:^|api\.github\.com)/?repos/([^/\s?]+)/([^/\s?]+)')
+NODE_ID = re.compile(r'\b[A-Z][A-Za-z]{0,7}_[A-Za-z0-9_-]{6,}\b')
 WRITES = {
     'issue': {'create', 'comment', 'edit', 'close', 'reopen', 'delete', 'lock', 'unlock',
               'pin', 'unpin', 'transfer', 'develop'},
@@ -35,35 +47,132 @@ WRITES = {
            'lock', 'unlock'},
     'label': {'create', 'edit', 'delete', 'clone'},
     'release': {'create', 'edit', 'delete', 'upload', 'delete-asset'},
+    'repo': {'create', 'fork', 'edit', 'delete', 'rename', 'archive', 'unarchive', 'sync'},
+    'gist': {'create', 'edit', 'delete', 'clone'},
     'workflow': {'run', 'enable', 'disable'},
     'run': {'rerun', 'cancel', 'delete'},
     'secret': {'set', 'delete'},
     'variable': {'set', 'delete'},
     'cache': {'delete'},
 }
+REPO_OPTIONAL = {('gist', 'create'), ('gist', 'edit'), ('gist', 'delete'), ('gist', 'clone')}
 API_VALUE_OPTS = {'-f', '-F', '--field', '--raw-field', '--input', '-X', '--method', '-H',
-                  '--header', '--hostname', '-q', '--jq', '-t', '--template', '--cache'}
-DENY = """GitHub への書き込みで、投稿先のリポジトリが名指しされていないため止めました。
-gh は作業コピーの remote から投稿先を選ぶため、upstream（他人のリポジトリ）に書くことがあります。
--R owner/repo（gh api なら repos/owner/repo/... のパス）で投稿先を明示してください。
-対象: {command}"""
-FOREIGN = """GitHub への書き込みの投稿先が、リーダーの持ち物でないリポジトリ（{repos}）です。
-外部のリポジトリへの起票、コメント、言及は、リーダーの指示で当面すべて禁止されています（2026-11-02）。
-書き込みが必要なら、本文を示してリーダーに手で投稿してもらってください。
-対象: {command}"""
-FOREIGN_REF = """GitHub への書き込みの本文に、リーダーの持ち物でないリポジトリの issue / PR への参照（{refs}）があります。
-相手の issue に参照の記録が残り、本文を書き換えても消えません。
-外部のリポジトリへの言及は、リーダーの指示で当面すべて禁止されています（2026-11-02）。参照を外してください。
-対象: {command}"""
+                  '--header', '--hostname', '-q', '--jq', '-t', '--template', '--cache',
+                  '-p', '--preview'}
+BODY_FILE_OPTS = {'--body-file', '-F', '--notes-file', '--input'}
+STDIN_FRIENDLY = {'cat', 'echo', 'printf', 'jq', 'sed', 'head', 'tail', 'tr', 'envsubst', 'tee'}
+WRITE_METHODS = {'POST', 'PATCH', 'PUT', 'DELETE'}
+MCP_WRITE_WORDS = ('create', 'update', 'add', 'delete', 'remove', 'merge', 'push', 'comment',
+                   'fork', 'edit', 'close', 'reopen', 'assign', 'request', 'submit', 'write',
+                   'mark', 'dismiss', 'lock', 'set')
+
+RULE = '外部のリポジトリへの起票、コメント、言及は、リーダーの指示で当面すべて禁止です（2026-11-02）。'
+REASONS = {
+    'unnamed': '投稿先のリポジトリを確かめられません（{detail}）。-R owner/repo（gh api なら '
+               'repos/owner/repo/... のパス）で投稿先を名指ししてください。',
+    'foreign': '書き込み先がリーダーの持ち物ではありません（{detail}）。' + RULE +
+               ' 必要なら本文を示して、リーダーに手で投稿してもらってください。',
+    'reference': '本文に、リーダーの持ち物でないリポジトリの issue / PR への参照があります（{detail}）。'
+                 '相手の issue に参照の記録が残り、書き換えても消えません。' + RULE,
+    'mention': '本文に、リーダー以外への @メンションがあります（{detail}）。相手に通知が届きます。'
+               '役割や例はバッククォートで囲んでください。' + RULE,
+    'stdin': '本文を標準入力から渡していて、その出どころを読めません（{detail}）。本文をファイルに'
+             '書き、--body-file などでファイルを渡してください。',
+    'unverified': '書き込み先を確かめられないため止めました（{detail}）。' + RULE,
+}
 
 
-def invocation(tokens):
-    """トークン列が gh の呼び出しなら gh の後ろの引数を返す。"""
+class Deny(Exception):
+    def __init__(self, kind, detail):
+        super().__init__(kind)
+        self.kind = kind
+        self.detail = detail
+
+    def reason(self, command):
+        return REASONS[self.kind].format(detail=self.detail) + f'\n対象: {command[:300]}'
+
+
+def owner_of(slug):
+    return slug.split('/', 1)[0]
+
+
+# --- reading text ------------------------------------------------------------------------
+
+def read_text(name, cwd):
+    try:
+        path = Path(name).expanduser()
+        if not path.is_absolute():
+            path = Path(cwd or Path.cwd()) / path
+        with path.open('rb') as stream:
+            return stream.read(1024 * 1024).decode('utf-8', errors='replace')
+    except (OSError, ValueError, RuntimeError):
+        return None
+
+
+def without_code(text):
+    text = re.sub(r'```.*?(```|$)', ' ', text, flags=re.S)
+    text = re.sub(r'~~~.*?(~~~|$)', ' ', text, flags=re.S)
+    return re.sub(r'`[^`\n]*`', ' ', text)
+
+
+def check_body(text, owners):
+    """他人の issue / PR への参照と、リーダー以外への @メンションを探す。"""
+    refs = []
+    for m in REFERENCE.finditer(text):
+        owner = m.group(1) or m.group(3)
+        if owner not in owners:
+            refs.append(m.group(0))
+    if refs:
+        raise Deny('reference', ', '.join(dict.fromkeys(refs)))
+    mentions = [m.group(1) for m in MENTION.finditer(without_code(text))
+                if m.group(1) not in owners and m.group(1) not in OWN_ACCOUNTS]
+    if mentions:
+        raise Deny('mention', ', '.join('@' + m for m in dict.fromkeys(mentions)))
+
+
+# --- shell parsing -----------------------------------------------------------------------
+
+def split_command(command):
+    """コマンドを (区切り, トークン列) の並びにする。区切りは直前の区切り記号。"""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|()\n<>')
+    lexer.whitespace = ' \t'
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        tokens = None
+    if tokens is None:
+        # ヒアドキュメントの中のアポストロフィなどで分割できないときは、ヒアドキュメントを
+        # 外した行で分割し直す（ヒアドキュメントの本文はコマンドの文字列として検査済み）。
+        stripped = re.sub(r"<<-?\s*['\"]?(\w+)['\"]?.*?^\1\s*$", '<< HEREDOC', command,
+                          flags=re.S | re.M)
+        try:
+            lexer = shlex.shlex(stripped, posix=True, punctuation_chars=';&|()\n<>')
+            lexer.whitespace = ' \t'
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except ValueError:
+            tokens = stripped.split()
+    segments = []
+    current = []
+    sep = ';'
+    for token in tokens + [';']:
+        if token and all(c in ';&|()\n' for c in token):
+            segments.append((sep, current))
+            current = []
+            sep = token
+        else:
+            current.append(token)
+    return segments
+
+
+def strip_prefix(tokens):
+    """環境変数の代入や env、command などの前置きを外したトークン列。"""
     i = 0
     while i < len(tokens):
         word = tokens[i]
         if ASSIGNMENT.match(word) or word in ('command', 'exec', 'time', 'nohup', 'then', 'do',
-                                              '!', '{'):
+                                              '!', '{', 'sudo'):
             i += 1
         elif word == 'env':
             i += 1
@@ -76,10 +185,35 @@ def invocation(tokens):
                     break
         else:
             break
-    if i >= len(tokens) or not (tokens[i] == 'gh' or tokens[i].endswith('/gh')):
-        return None
-    return tokens[i + 1:]
+    return tokens[i:]
 
+
+def redirects(tokens):
+    """(< の入力ファイル, ヒアドキュメントの有無, リダイレクトを除いたトークン列)"""
+    stdin_file, heredoc, rest = None, False, []
+    i = 0
+    while i < len(tokens):
+        if tokens[i] == '<' and i + 1 < len(tokens) and tokens[i + 1] == '<':
+            heredoc = True
+            i += 3
+            continue
+        if tokens[i] == '<' and i + 1 < len(tokens):
+            stdin_file = tokens[i + 1]
+            i += 2
+            continue
+        if tokens[i] == '>' and i + 1 < len(tokens):
+            i += 2 if tokens[i + 1] != '>' else 3
+            continue
+        rest.append(tokens[i])
+        i += 1
+    return stdin_file, heredoc, rest
+
+
+def program(tokens):
+    return Path(tokens[0]).name if tokens else ''
+
+
+# --- gh ------------------------------------------------------------------------------------
 
 def repo_flag(args):
     for i, word in enumerate(args):
@@ -92,96 +226,55 @@ def repo_flag(args):
     return None
 
 
-def target(args):
-    """書き込みなら (kind, [owner/repo...] or None) を、読み取りなら None を返す。"""
-    repo = repo_flag(args)
-    rest = []
-    skip = False
-    for i, word in enumerate(args):
+def without_repo_flag(args):
+    rest, skip = [], False
+    for word in args:
         if skip:
             skip = False
-            continue
-        if word in ('-R', '--repo'):
+        elif word in ('-R', '--repo'):
             skip = True
-            continue
-        if word.startswith('--repo=') or (word.startswith('-R') and len(word) > 2):
-            continue
-        rest.append(word)
-    if not rest:
-        return None
-    kind = rest[0]
-    if kind == 'api':
-        endpoint, writes, i = None, False, 1
-        while i < len(rest):
-            word = rest[i]
-            key = word.split('=', 1)[0] if word.startswith('--') else word[:2]
-            if word in API_VALUE_OPTS:
-                value = rest[i + 1] if i + 1 < len(rest) else ''
-                if word in ('-f', '-F', '--field', '--raw-field', '--input'):
-                    writes = True
-                if word in ('-X', '--method') and value.upper() in ('POST', 'PATCH', 'PUT',
-                                                                    'DELETE'):
-                    writes = True
-                i += 2
-                continue
-            if key in ('-f', '-F') or key in ('--field', '--raw-field', '--input'):
+        elif not (word.startswith('--repo=') or (word.startswith('-R') and len(word) > 2)):
+            rest.append(word)
+    return rest
+
+
+def api_parts(rest):
+    """gh api の (endpoint, 書き込みか, 値の一覧)"""
+    endpoint, writes, values, i = None, False, [], 1
+    while i < len(rest):
+        word = rest[i]
+        if word in API_VALUE_OPTS:
+            value = rest[i + 1] if i + 1 < len(rest) else ''
+            if word in ('-f', '-F', '--field', '--raw-field', '--input'):
                 writes = True
-            elif key in ('-X', '--method'):
-                value = word.split('=', 1)[1] if word.startswith('--') else word[2:]
-                writes = writes or value.upper() in ('POST', 'PATCH', 'PUT', 'DELETE')
-            elif not word.startswith('-') and endpoint is None:
-                endpoint = word
-            i += 1
-        if not writes or endpoint is None or endpoint == 'graphql':
-            return None
-        m = API_REPO.match(endpoint)
-        if m is None:
-            return None
-        if '{' in m.group(0):
-            return ('api', None)
-        return ('api', [f'{m.group(1)}/{m.group(2)}'])
-    if len(rest) < 2 or rest[1] not in WRITES.get(kind, ()):
-        return None
-    if repo:
-        return (kind, [repo])
-    urls = [m for word in rest[2:] if (m := URL_REPO.match(word))]
-    if urls:
-        return (kind, [f'{m.group(1)}/{m.group(2)}' for m in urls])
-    return (kind, None)
+                values.append((word, value))
+            if word in ('-X', '--method') and value.upper() in WRITE_METHODS:
+                writes = True
+            i += 2
+            continue
+        if word.startswith(('--field=', '--raw-field=', '--input=')):
+            writes = True
+            key, value = word.split('=', 1)
+            values.append((key, value))
+        elif word.startswith(('-f', '-F')) and len(word) > 2:
+            writes = True
+            values.append((word[:2], word[2:]))
+        elif word.startswith('--method=') or (word.startswith('-X') and len(word) > 2):
+            value = word.split('=', 1)[1] if word.startswith('--') else word[2:]
+            writes = writes or value.upper() in WRITE_METHODS
+        elif not word.startswith('-') and endpoint is None:
+            endpoint = word
+        i += 1
+    return endpoint, writes, values
 
 
-def invocations(command):
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|()\n')
-    lexer.whitespace = ' \t'
-    lexer.whitespace_split = True
-    try:
-        tokens = list(lexer)
-    except ValueError:
-        # 分割できないコマンドは、gh の書き込みらしい部分だけを粗く拾う。
-        tokens = []
-        for m in re.finditer(r'(?:^|[;&|(\n])\s*(gh\s[^;&|\n]*)', command):
-            try:
-                tokens += shlex.split(m.group(1)) + [';']
-            except ValueError:
-                tokens += m.group(1).split() + [';']
-    segment = []
-    for token in tokens + [';']:
-        if token and all(c in ';&|()\n' for c in token):
-            args = invocation(segment)
-            if args is not None:
-                yield args
-            segment = []
-        else:
-            segment.append(token)
-
-
-def body_files(args):
-    """書き込みの本文を渡すファイルの名前。"""
+def body_file_names(args):
+    """書き込みの本文を渡すファイル名（'-' は標準入力）。"""
     for i, word in enumerate(args):
         value = None
         if word in BODY_FILE_OPTS and i + 1 < len(args):
             value = args[i + 1]
-        elif word.startswith('--body-file=') or word.startswith('--input='):
+        elif word.startswith(('--body-file=', '--input=', '--notes-file=')):
             value = word.split('=', 1)[1]
         elif word in ('-f', '--field', '--raw-field') and i + 1 < len(args):
             value = args[i + 1]
@@ -190,71 +283,292 @@ def body_files(args):
         _, sep, path = value.partition('=@')
         if sep:
             yield path
-        elif '=' not in value and value != '-':
+        elif '=' not in value:
             yield value
 
 
-def foreign_refs(text, owners):
-    for m in REFERENCE.finditer(text):
-        owner, repo = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+def graphql_targets(values, resolve_node_owner, owners):
+    texts = [v.split('=', 1)[1] if '=' in v else v for _, v in values]
+    query = next((t for k, t in zip(values, texts) if k[1].startswith('query=')), '')
+    if not re.search(r'\bmutation\b', query):
+        return
+    ids = set()
+    for text in texts:
+        ids.update(NODE_ID.findall(text))
+    ids.discard('IC')
+    if not ids:
+        raise Deny('unverified', 'graphql の mutation で、書き込む先のノード ID が見つかりません')
+    for node_id in sorted(ids):
+        owner = resolve_node_owner(node_id)
+        if owner is None:
+            raise Deny('unverified', f'ノード ID {node_id} の持ち主を確かめられません')
         if owner not in owners:
-            yield m.group(0)
+            raise Deny('foreign', f'ノード ID {node_id} は {owner} の持ち物')
 
 
-def read_text(name, cwd):
-    try:
-        path = Path(name).expanduser()
-        if not path.is_absolute():
-            path = Path(cwd or Path.cwd()) / path
-        with path.open('rb') as stream:
-            return stream.read(1024 * 1024).decode('utf-8', errors='replace')
-    except (OSError, ValueError, RuntimeError):
-        return ''
-
-
-def decision(command, owners, cwd=None):
-    """('deny' | None, reason)"""
-    foreign = []
-    refs = []
-    writes = False
-    for args in invocations(command):
-        found = target(args)
-        if found is None:
-            continue
-        writes = True
-        _, repos = found
-        if repos is None:
-            return 'deny', DENY.format(command=command[:300])
-        foreign += [r for r in repos if r.split('/', 1)[0] not in owners]
-        for name in body_files(args):
-            refs += foreign_refs(read_text(name, cwd), owners)
+def check_gh(args, owners, resolve_node_owner):
+    """gh の呼び出しを調べ、書き込みなら True。"""
+    repo = repo_flag(args)
+    rest = without_repo_flag(args)
+    if not rest:
+        return False
+    kind = rest[0]
+    if kind == 'api':
+        endpoint, writes, values = api_parts(rest)
+        if not writes or endpoint is None:
+            return False
+        if endpoint == 'graphql':
+            graphql_targets(values, resolve_node_owner, owners)
+            return True
+        m = API_REPO.match(endpoint)
+        if m is None:
+            raise Deny('unverified', f'gh api の書き込み先 {endpoint} はリポジトリの外')
+        if '{' in m.group(0):
+            raise Deny('unnamed', f'gh api のパス {endpoint}')
+        if m.group(1) not in owners:
+            raise Deny('foreign', f'{m.group(1)}/{m.group(2)}')
+        return True
+    if len(rest) < 2 or rest[1] not in WRITES.get(kind, ()):
+        return False
+    if any(w in ('--fill', '--fill-first', '--fill-verbose') for w in rest):
+        raise Deny('unverified', '--fill は commit のメッセージを本文にする')
+    if (kind, rest[1]) in REPO_OPTIONAL:
+        return True
+    targets = []
+    if repo:
+        targets.append(repo)
+    targets += [f'{m.group(1)}/{m.group(2)}' for w in rest[2:] if (m := URL_REPO.match(w))]
+    if kind == 'repo':
+        targets += [w for w in rest[2:] if re.fullmatch(r'[\w.-]+/[\w.-]+', w)]
+    if not targets:
+        raise Deny('unnamed', f'gh {kind} {rest[1]}')
+    foreign = [t for t in targets if owner_of(t) not in owners]
     if foreign:
-        return 'deny', FOREIGN.format(repos=', '.join(dict.fromkeys(foreign)),
-                                      command=command[:300])
-    if writes:
-        refs += foreign_refs(command, owners)
-    if refs:
-        return 'deny', FOREIGN_REF.format(refs=', '.join(dict.fromkeys(refs)),
-                                          command=command[:300])
+        raise Deny('foreign', ', '.join(dict.fromkeys(foreign)))
+    return True
+
+
+# --- git push ------------------------------------------------------------------------------
+
+def git_output(cwd, *args):
+    try:
+        out = subprocess.run(['git', '-C', str(cwd or Path.cwd()), *args], capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def check_git(tokens, cwd, owners):
+    args = tokens[1:]
+    while args and args[0] in ('-C', '-c'):
+        if args[0] == '-C' and len(args) > 1:
+            cwd = str(Path(cwd or Path.cwd()) / args[1])
+        args = args[2:]
+    if not args or args[0] != 'push':
+        return
+    positional = [a for a in args[1:] if not a.startswith('-')]
+    remote = positional[0] if positional else None
+    if remote is None:
+        branch = git_output(cwd, 'symbolic-ref', '--short', 'HEAD')
+        remote = (git_output(cwd, 'config', f'branch.{branch}.pushRemote') if branch else None) \
+            or git_output(cwd, 'config', 'remote.pushDefault') \
+            or (git_output(cwd, 'config', f'branch.{branch}.remote') if branch else None) \
+            or 'origin'
+    url = remote if re.search(r'[:/]', remote) else (
+        git_output(cwd, 'remote', 'get-url', '--push', remote))
+    if not url:
+        raise Deny('unverified', f'git push の送り先 {remote} の URL を確かめられません')
+    m = GITHUB_URL_REPO.search(url)
+    if m is None:
+        raise Deny('unverified', f'git push の送り先 {url} は GitHub の名指しの形ではありません')
+    if m.group(1) not in owners:
+        raise Deny('foreign', f'git push の送り先 {m.group(1)}/{m.group(2)}')
+    messages = git_output(cwd, 'log', '--format=%B', 'HEAD', '--not', '--remotes')
+    if messages is None:
+        raise Deny('unverified', '送る commit のメッセージを読めません')
+    check_body(messages, owners)
+
+
+# --- curl and other programs ---------------------------------------------------------------
+
+def check_http(tokens, owners):
+    urls = [t for t in tokens if 'github.com' in t and t.startswith('http')]
+    api = [u for u in urls if 'api.github.com' in u or 'uploads.github.com' in u]
+    if not api:
+        return
+    writes = any(t in ('-d', '--data', '--data-raw', '--data-binary', '--data-urlencode',
+                       '-F', '--form', '--json', '-T', '--upload-file', '--post-data',
+                       '--post-file', '--body-data', '--body-file')
+                 or t.startswith(('--data', '--json', '--post-'))
+                 for t in tokens)
+    for i, t in enumerate(tokens):
+        if t in ('-X', '--request', '--method') and i + 1 < len(tokens):
+            writes = writes or tokens[i + 1].upper() in WRITE_METHODS
+        elif t.startswith(('-X', '--request=', '--method=')) and len(t) > 2:
+            writes = writes or t.split('=', 1)[-1].lstrip('-X').upper() in WRITE_METHODS
+    if not writes:
+        return
+    for url in api:
+        m = API_REPO.search(url)
+        if m is None:
+            raise Deny('unverified', f'{url} はリポジトリのパスではありません')
+        if m.group(1) not in owners:
+            raise Deny('foreign', f'{m.group(1)}/{m.group(2)}')
+
+
+def check_program(tokens, cwd):
+    """GitHub API に触れるそのほかのプログラムを止める。"""
+    name = program(tokens)
+    if name in ('gh', 'git', 'curl', 'wget', 'http', 'https', 'xh') or name in STDIN_FRIENDLY:
+        return
+    texts = [' '.join(tokens)]
+    # インタープリターが直接実行するスクリプトだけ中身を読む（テストの引数などは読まない）。
+    if re.fullmatch(r'(python|python3|python3\.\d+|node|bash|sh|zsh|ruby|perl|deno|bun)', name) \
+            and '-m' not in tokens and '-c' not in tokens:
+        script = next((t for t in tokens[1:] if not t.startswith('-')), None)
+        if script:
+            text = read_text(script, cwd)
+            if text:
+                texts.append(text)
+    for text in texts:
+        if 'api.github.com' in text or 'uploads.github.com' in text:
+            raise Deny('unverified', f'{name} が GitHub API に触れます')
+
+
+# --- whole command ---------------------------------------------------------------------------
+
+def stdin_text(segments, index, cwd):
+    """index の呼び出しが標準入力から読む本文。読めなければ Deny。"""
+    sep, tokens = segments[index]
+    stdin_file, heredoc, _ = redirects(tokens)
+    if heredoc:
+        return ''  # 本文はコマンドの文字列に含まれ、全体で検査する
+    if stdin_file:
+        text = read_text(stdin_file, cwd)
+        if text is None:
+            raise Deny('stdin', f'{stdin_file} を読めません')
+        return text
+    if sep != '|':
+        raise Deny('stdin', '標準入力に何も渡していません')
+    texts = []
+    j = index
+    while j > 0 and segments[j][0] == '|':
+        j -= 1
+        prev = strip_prefix(redirects(segments[j][1])[2])
+        if program(prev) not in STDIN_FRIENDLY:
+            raise Deny('stdin', f'{program(prev) or "?"} の出力')
+        for arg in prev[1:]:
+            if not arg.startswith('-'):
+                text = read_text(arg, cwd)
+                if text is not None:
+                    texts.append(text)
+    return '\n'.join(texts)
+
+
+def substitution_texts(command, cwd):
+    for m in re.finditer(r'\$\(\s*(?:cat\s+|<\s*)([^)]+)\)', command):
+        for name in shlex.split(m.group(1)):
+            text = read_text(name, cwd)
+            if text is not None:
+                yield text
+
+
+def resolve_node_owner_via_gh(node_id):
+    query = ('query($id:ID!){node(id:$id){... on RepositoryNode{repository{owner{login}}}'
+             '... on Repository{owner{login}}}}')
+    try:
+        out = subprocess.run(['gh', 'api', 'graphql', '-f', f'query={query}', '-f', f'id={node_id}'],
+                             capture_output=True, text=True, timeout=10)
+        node = json.loads(out.stdout)['data']['node']
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        return None
+    if not node:
+        return None
+    return ((node.get('repository') or {}).get('owner') or node.get('owner') or {}).get('login')
+
+
+def decision(command, owners, cwd=None, resolve_node_owner=resolve_node_owner_via_gh):
+    """('deny' | None, reason)"""
+    try:
+        segments = split_command(command)
+        writes = False
+        for index, (_, raw) in enumerate(segments):
+            stdin_file, heredoc, without_redirects = redirects(raw)
+            tokens = strip_prefix(without_redirects)
+            name = program(tokens)
+            if name == 'cd' and len(tokens) > 1:
+                cwd = str(Path(cwd or Path.cwd()) / Path(tokens[1]).expanduser())
+                continue
+            if name == 'gh':
+                if check_gh(tokens[1:], owners, resolve_node_owner):
+                    writes = True
+                    for file_name in body_file_names(tokens[1:]):
+                        text = (stdin_text(segments, index, cwd) if file_name == '-'
+                                else read_text(file_name, cwd))
+                        if text is None:
+                            raise Deny('stdin', f'{file_name} を読めません')
+                        check_body(text, owners)
+            elif name == 'git':
+                check_git(tokens, cwd, owners)
+            elif name in ('curl', 'wget', 'http', 'https', 'xh'):
+                check_http(tokens, owners)
+            else:
+                check_program(tokens, cwd)
+        if writes:
+            check_body(command, owners)
+            for text in substitution_texts(command, cwd):
+                check_body(text, owners)
+    except Deny as deny:
+        return 'deny', deny.reason(command)
+    return None, ''
+
+
+# --- MCP tools -------------------------------------------------------------------------------
+
+def mcp_decision(tool_name, tool_input, owners):
+    name = tool_name.lower()
+    if 'github' not in name:
+        return None, ''
+    action = name.rsplit('__', 1)[-1]
+    if not any(word in action for word in MCP_WRITE_WORDS):
+        return None, ''
+    try:
+        owner = tool_input.get('owner')
+        repo = tool_input.get('repo') or tool_input.get('repository') or ''
+        if not owner and isinstance(repo, str) and '/' in repo:
+            owner = owner_of(repo)
+        if not owner:
+            raise Deny('unnamed', f'{tool_name} の owner')
+        if owner not in owners:
+            raise Deny('foreign', f'{owner}/{repo}')
+        check_body(json.dumps(tool_input, ensure_ascii=False), owners)
+    except Deny as deny:
+        return 'deny', deny.reason(f'{tool_name} {json.dumps(tool_input, ensure_ascii=False)}')
     return None, ''
 
 
 def main():
     try:
         payload = json.load(sys.stdin)
-        command = payload.get('tool_input', {}).get('command')
-        if not isinstance(command, str) or 'gh' not in command:
-            return
-        owners = {o for o in os.environ.get('GH_WRITE_OWNERS', 'haoblackj').split(',') if o}
-        verdict, reason = decision(command, owners, payload.get('cwd'))
-        if verdict:
-            print(json.dumps({'hookSpecificOutput': {
-                'hookEventName': 'PreToolUse',
-                'permissionDecision': verdict,
-                'permissionDecisionReason': reason,
-            }}, ensure_ascii=False))
-    except (ValueError, KeyError, TypeError, AttributeError):
+    except ValueError:
         return
+    owners = {o for o in os.environ.get('GH_WRITE_OWNERS', 'haoblackj').split(',') if o}
+    tool = payload.get('tool_name') or 'Bash'
+    tool_input = payload.get('tool_input') or {}
+    if tool == 'Bash':
+        command = tool_input.get('command')
+        if not isinstance(command, str):
+            return
+        verdict, reason = decision(command, owners, payload.get('cwd'))
+    else:
+        verdict, reason = mcp_decision(tool, tool_input, owners)
+    if verdict:
+        print(json.dumps({'hookSpecificOutput': {
+            'hookEventName': 'PreToolUse',
+            'permissionDecision': verdict,
+            'permissionDecisionReason': reason,
+        }}, ensure_ascii=False))
 
 
 if __name__ == '__main__':
