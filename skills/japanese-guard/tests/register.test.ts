@@ -70,8 +70,14 @@ test('ツールの前の複数行の報告が英語なら、ツールを差し�
   expect(String((r as { deny?: string }).deny)).toContain('ツールを呼ぶ前の報告')
 })
 
-test('ツールの前の 1 行の前置きは差し戻さない', async ($, on) => {
+test('ツールの前の 1 行の英語の前置きも差し戻す', async ($, on) => {
   engine(on, { value: [user('やって'), called('Let me check the configuration file first.')] })
+  const r = await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(String((r as { deny?: string }).deny)).toContain('Let me check the configuration file first.')
+})
+
+test('ツールの前の 1 行の日本語の前置きは差し戻さない', async ($, on) => {
+  engine(on, { value: [user('やって'), called(JA)] })
   const r = await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect((r as { deny?: string }).deny).toBeUndefined()
 })

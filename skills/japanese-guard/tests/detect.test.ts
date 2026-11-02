@@ -38,8 +38,13 @@ test('日本語の中に混じった中国語の文を拾う', () => {
   expect(isForeign(`${JA}\n${ZH}\n${JA}`)).toBe(true)
 })
 
-test('ツールの前の 1 行の前置きは見逃し、複数行の報告は見る', () => {
-  expect(isMidReportForeign('Let me check the configuration file first.')).toBe(false)
+test('ツールの前の 1 行の英語の前置きも、英字 25 字から見る', () => {
+  expect(isMidReportForeign('Let me check the configuration file first.')).toBe(true)
+  expect(isMidReportForeign('Now the README:')).toBe(false)
+  expect(isMidReportForeign('次は `install-cloud.sh` と README の CLOUD_MODS を直すね。')).toBe(false)
+})
+
+test('ツールの前の 1 行の中国語は長い段落だけ、複数行の報告は見る', () => {
   expect(isMidReportForeign(`${EN}\n${EN}`)).toBe(true)
   expect(isMidReportForeign(ZH)).toBe(false)
   expect(isMidReportForeign(`${ZH}\n${ZH}`)).toBe(true)
