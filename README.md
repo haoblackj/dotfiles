@@ -192,6 +192,15 @@ symlink なので、同期フックの `migrate_new` は claude-private へ吸�
 4. 本チェックアウトで `git pull` と `chezmoi apply`。起動中のセッションでは、新しい名前は `/reload-skills` で読まれ、既存のスキルの編集はそのまま効く。
 5. 他のマシンは `chezmoi update`。
 
+Mod（hooks module を持つプラグイン）も同じ形で置く。
+`skills/<名前>/.claude-plugin/plugin.json` を持つディレクトリは、`~/.claude/skills/<名前>` から Claude Code が Mod として自動で読み込む（`SKILL.md` は要らない。`bg-progress` で確かめた）。
+Mod のテストは `claude plugin test skills/<名前>`、読み込みの検査は `claude plugin validate skills/<名前>`。
+別セッションで試すときは、手順 2 の `--plugin-dir` に `skills/<名前>` を渡す。
+
+| Mod | 何をするか |
+|---|---|
+| `bg-progress` | Claude が背景の Bash で始めた長い処理（モデルのダウンロード、ローカル LLM の一括の推論）を道具 `mcp__bg-progress__watch` で登録すると、入力欄の上に一本一行で何％、速さ、JST の終了時刻を出す。測る場所の大きさ（`du -sb`）か行数（`wc -l`）を 4 秒おきに測り、全体に届いたら完了の通知を出して外す。全体の前に背景タスクが終わったら「止まった」と出して外し、1 分増えなければ「停滞中」と出す。設計は `docs/superpowers/specs/2026-11-02-bg-progress-band-design.md` |
+
 リポジトリ直下に、プラグインが自動で拾うディレクトリ（`agents/`、`commands/`、`hooks/`、`bin/`、`.mcp.json` など）を足すと、手順 2 で余計なものまで読まれる。
 本チェックアウトを main 以外へ切り替えると、全セッションのスキルがそのブランチの版になる。
 
@@ -401,6 +410,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | settings.json の `effortLevel` | 配らない（手元でも持たない） | ユーザー設定の最上位の `effortLevel` は Opus 5.5 以降のモデルで無視される（公式の settings reference）。モデルの既定値（Opus 5.5 / Sonnet 5.5 は `medium`）に任せる |
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
 | リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。写したスキルがクラウドのセッションのスキル一覧に出ることは、`research-design` で確かめた（dotfiles#48） |
+| リポジトリ直下の `skills/bg-progress/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドでは背景で長いダウンロードや推論を回すことがほぼ無く、帯を出す入力欄も手元の端末とは違う |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
 | hooks / statusLine / keybindings | 配らない（下の japanese-guard を除く） | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
 | japanese-guard（Stop hook）。`.chezmoiexternal.toml` の `.claude/hooks/` 配下の file external と、settings.json の `hooks.Stop` のうち `CLOUD_HOOK_COMMANDS` に挙げたもの | 配る | 応答が英語に切り替わったら日本語で書き直させる（dotfiles#56）。Python 3 だけで動き、手元の道具に依存しない。既存の `hooks.Stop` は残し、同じ command があれば足さない |
