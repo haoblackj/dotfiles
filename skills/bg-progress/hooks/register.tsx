@@ -18,7 +18,7 @@ const TICK_MS = 4000
 const KEEP_MS = 60_000
 
 const WATCH_DESCRIPTION =
-  '背景で始めた長い処理（ダウンロード、一括の推論など）の進捗を、入力欄の上の帯に何％と JST の終了時刻で出す。背景の Bash を起動して結果が返った後に呼び、その結果の backgroundTaskId を taskId に渡す。paths にはこの処理だけが書き込むディレクトリかファイルを渡す（hf download なら --local-dir、curl なら出力先）。unit は、ファイルの大きさで測るなら bytes、行を足していく出力なら lines。total は処理が終わったときに paths が達する量（bytes ならファイルの合計の大きさ、lines なら行数）。同じ name で呼び直すと置き換わる。'
+  '背景で始めた長い処理（ダウンロード、一括の推論など）の進捗を、入力欄の上の帯に何％と JST の終了時刻で出す。背景の Bash を起動して結果が返った後に呼び、その結果の backgroundTaskId を taskId に渡す。paths にはこの処理だけが書き込むディレクトリかファイルを絶対パスで渡す（hf download なら --local-dir、curl なら出力先）。unit は、ファイルの大きさで測るなら bytes、行を足していく出力なら lines。total は処理が終わったときに paths が達する量（bytes ならファイルの合計の大きさ、lines なら行数）。同じ name で呼び直すと置き換わる。'
 
 const GUIDE_TEXT = `# 背景の処理の進捗
 数分以上かかる処理（モデルのダウンロード、ローカル LLM の一括の推論など）を背景の Bash で始めたら、結果が返った直後に mcp__bg-progress__watch で登録する。進捗と JST の終了時刻が入力欄の上に出て、リーダーが終わりの見当をつけられる。全体の量は起動の前に調べておく（Hugging Face のファイルなら https://huggingface.co/api/models/<repo>/tree/main の size を足す。問いを一つずつ書き出す処理なら問いの数）。処理を途中で止めたら mcp__bg-progress__unwatch で外す。`
@@ -137,6 +137,10 @@ export const register: Register = on => {
     const { name, paths, unit, total, taskId } = e as unknown as WatchInput
     if (!name || !Array.isArray(paths) || paths.length === 0) {
       return { deny: 'name と paths（1 つ以上）が要る' }
+    }
+    // find は - や ( で始まる引数を条件式として読む（-delete なら消す）ので、絶対パスだけを通す
+    if (!paths.every(p => typeof p === 'string' && p.startsWith('/'))) {
+      return { deny: 'paths は絶対パスで渡す' }
     }
     if (unit !== 'bytes' && unit !== 'lines') return { deny: 'unit は bytes か lines' }
     if (!(typeof total === 'number' && total > 0)) return { deny: 'total は 0 より大きい数' }

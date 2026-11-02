@@ -73,6 +73,16 @@ test('paths が空か total が 0 以下なら断る', async ($, on) => {
   expect((await jobsOf($)).length).toBe(0)
 })
 
+test('絶対パスでない paths は断り、何も測らない', async ($, on) => {
+  const { runs } = engine(on, { stdout: '' })
+  await start($)
+  for (const p of ['-delete', 'rel/dir', '(']) {
+    expect((await watch($, { name: 'x', paths: [p], unit: 'lines', total: 1 })).deny).toBeDefined()
+  }
+  expect(runs).toEqual([])
+  expect((await jobsOf($)).length).toBe(0)
+})
+
 test('登録の時点で全体に届いていれば完了にする', async ($, on) => {
   const { toasts } = engine(on, { stdout: '2000000000\t/d\n' })
   await start($)
