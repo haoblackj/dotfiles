@@ -1,0 +1,6 @@
+{
+  "name": "issue-link",
+  "version": "0.1.0",
+  "description": "セッションに出てきた GitHub の Issue へのリンクをモードの表示の右に出す",
+  "types": "./types/index.d.ts"
+}
