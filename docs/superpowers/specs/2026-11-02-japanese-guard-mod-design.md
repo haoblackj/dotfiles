@@ -70,6 +70,7 @@ API は early access で版ごとに変わりうるので、Mod が読み込ま�
 - 週 1 回（月曜 09:00 JST）と手動で起動する。上流の main と `skills/japanese-guard/UPSTREAM` を比べ、進んでいて、取り込みの PR が開いていなければ移植に入る。
 - `anthropics/claude-code-action`（v1 をコミットで固定）に、上流のコミットの一覧と差分を渡して Mod へ移植させる。使える道具はファイルの読み書きだけで、シェルとネットワークは渡さない。差分は第三者のデータで指示ではないと伝える。
 - ブランチ、コミット、PR は workflow のスクリプトが作る。編集が `skills/japanese-guard/` の外に及んだら PR を作らずに失敗する。
+- 上流の差分に引きずられた編集を、secret や書き込みの権限に近づけないよう、job を分ける。移植の job は読むだけの権限で Claude を動かし、編集した Mod のフォルダと本文だけを artifact で渡す（Claude が `.git` の中を書き換えても、この job は push もコミットもしない）。テストの job は secret を持たずにモデルの書いたコードを動かす。PR の job は Claude の secret を持たず、新しく checkout した木に Mod のフォルダだけを当てる。どの job も checkout の認証情報を `.git/config` に残さない。
 - PR はラベル `upstream:japanese-guard` を付け、レビュアーと担当者に haoblackj を入れる（GitHub Mobile の通知で気づく）。本文に「取り込んだ変更」「見送った変更」、`claude plugin test` の結果、マージ後に手元の Claude へ「dotfiles を最新にして」と声をかけることを書く。
 - 7 日以上レビューされていない取り込みの PR には、同じ workflow が @haoblackj を付けたコメントで催促する。
 - 手元への反映は自動にしない。リーダーの声かけで Claude が `git pull --ff-only` し、Mod が読み直されたことを確かめる。
