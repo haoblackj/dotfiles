@@ -14,6 +14,7 @@
 #     すべてリーダーの持ち物と確かめられたときだけ通す。
 #     gh の alias は gh alias list で展開してから同じ判定に掛け、シェルの alias は止める。
 #     拡張コマンドは中身を読んで決めたもの（EXTENSIONS）だけ判定し、ほかは止める。
+#     gh を中で呼ぶ ghf と gh-pr-body も、gh の呼び出しに読み替えて同じ判定に掛ける。
 #   - git push: 送り先の remote の URL を git に聞き、リーダーの持ち物でなければ止める。
 #     送る commit のメッセージに他人の issue / PR への参照があれば止める。
 #   - curl / wget の GitHub API への書き込みは、パスの持ち主で判定する（graphql は止める）。
@@ -41,6 +42,28 @@ REFERENCE = re.compile(
     r'|https?://github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull|discussions|commit)/\w+', re.ASCII)
 MENTION = re.compile(r'(?<![\w.@/`-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?![\w.-]*\.\w)', re.ASCII)
 HTTP_PROGRAMS = ('curl', 'wget', 'http', 'https', 'xh')
+# ghf（zsh のプラグイン atusy/gh-fzf）は引数をそのまま gh に渡し、パイプの標準入力があれば
+# その中身を最後の引数に足す。
+GH_PROGRAMS = ('gh', 'ghf')
+PIPED_ARG = '<標準入力>'
+# gh を中で呼ぶ自作のスクリプト（~/.local/bin）。gh の引数に読み替えて同じ判定に掛ける。
+GH_WRAPPERS = ('gh-pr-body',)
+
+
+def gh_pr_body_args(args):
+    """gh-pr-body の引数を、中で呼ぶ gh pr edit の引数に読み替える。get は読み取り。"""
+    sub, rest = (args[0], args[1:]) if args else ('', [])
+    if rest[:1] == ['--force']:
+        rest = rest[1:]
+    if sub == 'get':
+        return []
+    if sub == 'set' and len(rest) == 3:
+        repo, number, body = rest
+    elif sub == 'restore' and len(rest) == 3:
+        body, repo, number = rest
+    else:
+        return []  # 使い方の誤りで、スクリプトは何もせず終わる
+    return ['pr', 'edit', number, '-R', repo, '--body-file', body]
 MAX_DEPTH = 5
 GITHUB_URL_REPO = re.compile(r'github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$')
 URL_REPO = re.compile(r'^https?://github\.com/([^/\s]+)/([^/\s]+)')
@@ -629,21 +652,35 @@ def analyse(command, owners, cwd, resolve_node_owner, depth=0):
             continue
         # bash -c "..." や ssh host "..." の引数の文字列は、コマンドとして実行されうるので同じ判定に
         # 掛ける。gh と git の引数（本文やコミットのメッセージ）はデータなので読み直さない。
-        if name not in ('gh', 'git') and depth < MAX_DEPTH:
+        if name not in GH_PROGRAMS + GH_WRAPPERS + ('git',) and depth < MAX_DEPTH:
             for word in without_redirects:
                 if re.search(r'\s', word):
                     analyse(word, owners, cwd, resolve_node_owner, depth + 1)
         if name == 'git':
             check_git(tokens, cwd, owners)
-        elif name not in ('gh',) + HTTP_PROGRAMS:
+        elif name not in GH_PROGRAMS + GH_WRAPPERS + HTTP_PROGRAMS:
             check_program(tokens, cwd, owners, resolve_node_owner, depth)
         # timeout や xargs などの前置きが何であっても、その後ろの gh / curl に同じ判定を掛ける。
         for at, word in enumerate(without_redirects):
             found = program([word.strip('`')])
-            if found == 'gh':
+            if found in GH_WRAPPERS:
+                args = gh_pr_body_args(without_redirects[at + 1:])
+                if check_gh(args, owners, resolve_node_owner):
+                    writes = True
+                    for file_name in body_file_names(args):
+                        text = read_text(file_name, cwd)
+                        if text is None:
+                            raise Deny('stdin', f'{file_name} を読めません')
+                        check_body(text, owners)
+            elif found in GH_PROGRAMS:
                 args = without_redirects[at + 1:]
+                piped = found == 'ghf' and segments[index][0] == '|'
+                if piped:
+                    args = args + [PIPED_ARG]
                 call = at == len(without_redirects) - len(tokens) or name in RUNNERS
                 if check_gh(args, owners, resolve_node_owner, call):
+                    if piped:
+                        raise Deny('stdin', 'ghf はパイプの標準入力を gh の引数に足します')
                     writes = True
                     for file_name in body_file_names(args):
                         text = (stdin_text(segments, index, cwd) if file_name == '-'
