@@ -66,13 +66,6 @@
         "color": "hex:3fc4de"
       },
       {
-        "id": "issue-pr-links",
-        "type": "custom-command",
-        "commandPath": "$HOME/.config/ccstatusline/issue-pr-links.sh",
-        "timeout": 1000,
-        "color": "hex:ee64ac"
-      },
-      {
         "id": "git-ci-status",
         "type": "git-ci-status",
         "color": "hex:ee64ac",
