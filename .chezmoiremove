@@ -4,3 +4,5 @@
 .config/ccstatusline/issue-pr-links.sh
 .config/ccstatusline/github-refs.sh
 .config/herdr/plugins/local/open-github
+# 上流の japanese-guard.py の Stop hook（Mod の skills/japanese-guard に置き換えた。dotfiles#79）
+.claude/hooks/japanese-guard.py
