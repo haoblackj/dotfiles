@@ -200,6 +200,7 @@ Mod のテストは `claude plugin test skills/<名前>`、読み込みの検査
 | Mod | 何をするか |
 |---|---|
 | `bg-progress` | Claude が背景の Bash で始めた長い処理（モデルのダウンロード、ローカル LLM の一括の推論）を道具 `mcp__bg-progress__watch` で登録すると、入力欄の上に一本一行で何％、速さ、JST の終了時刻を出す。測る場所の大きさ（`du -sb`）か行数（`wc -l`）を 4 秒おきに測り、全体に届いたら完了の通知を出して外す。全体の前に背景タスクが終わったら「止まった」と出して外し、1 分増えなければ「停滞中」と出す。設計は `docs/superpowers/specs/2026-11-02-bg-progress-band-design.md` |
+| `issue-link` | セッションに出てきた GitHub の Issue を、モードの表示の右（画面ではステータスラインの行の右端）に `#73 タイトルの先頭十文字` のリンクで出す。拾うのは、プロンプトの Issue の URL と `#<番号>`、`gh issue create` の出力の URL、`gh issue <動詞> <番号>` と `gh api repos/<owner>/<repo>/issues/<番号>` のコマンド。プロンプトの裸の `#<番号>` は GitHub に問い合わせて Issue と分かったときだけ出し、PR は出さない。新しく出てきたものを左に三つまで。Herdr の中では Claude Code が端末をリンク非対応とみなして URL を文字で並べるので、`linked/claude/settings.json` の `env` で `FORCE_HYPERLINK=1` を渡している。設計は `docs/superpowers/specs/2026-11-02-issue-link-design.md` |
 
 リポジトリ直下に、プラグインが自動で拾うディレクトリ（`agents/`、`commands/`、`hooks/`、`bin/`、`.mcp.json` など）を足すと、手順 2 で余計なものまで読まれる。
 本チェックアウトを main 以外へ切り替えると、全セッションのスキルがそのブランチの版になる。
@@ -411,6 +412,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
 | リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。写したスキルがクラウドのセッションのスキル一覧に出ることは、`research-design` で確かめた（dotfiles#48） |
 | リポジトリ直下の `skills/bg-progress/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドでは背景で長いダウンロードや推論を回すことがほぼ無く、帯を出す入力欄も手元の端末とは違う |
+| リポジトリ直下の `skills/issue-link/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドの画面は Herdr の端末ではなく、`FORCE_HYPERLINK` の前提も違う |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
 | hooks / statusLine / keybindings | 配らない（下の japanese-guard を除く） | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
 | japanese-guard（Stop hook）。`.chezmoiexternal.toml` の `.claude/hooks/` 配下の file external と、settings.json の `hooks.Stop` のうち `CLOUD_HOOK_COMMANDS` に挙げたもの | 配る | 応答が英語に切り替わったら日本語で書き直させる（dotfiles#56）。Python 3 だけで動き、手元の道具に依存しない。既存の `hooks.Stop` は残し、同じ command があれば足さない |
