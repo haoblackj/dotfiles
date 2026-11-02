@@ -182,8 +182,54 @@ def test_every_gh_in_a_compound_command_is_checked():
     assert decide('GH_TOKEN=x env -u GH_TOKEN gh pr create --title t') == 'deny'
 
 
-def test_mentions_inside_quotes_are_not_commands():
-    assert decide('echo "gh issue create"') is None
+def test_gh_after_any_prefix_is_checked():
+    for prefix in ('timeout 30', 'nice -n 5', 'stdbuf -oL', 'echo 1 | xargs', 'time -p', 'flock /x'):
+        assert decide(f'{prefix} gh issue create --title t') == 'deny', prefix
+        assert decide(f'{prefix} gh issue create -R kot149/r --title t') == 'deny', prefix
+        assert decide(f'{prefix} gh issue create -R haoblackj/r --title t --body b') is None, prefix
+    assert decide('if gh issue create --title t; then :; fi') == 'deny'
+    assert decide('echo `gh issue create --title t`') == 'deny'
+
+
+def test_gh_inside_quoted_commands_is_checked():
+    assert decide('bash -c "gh issue create --title t"') == 'deny'
+    assert decide("ssh host 'gh issue comment 1 -R kot149/r --body x'") == 'deny'
+    assert decide('echo "$(gh issue create --title t)"') == 'deny'
+    assert decide('echo "gh issue create --title t" | bash') == 'deny'
+    assert decide('bash -c "gh issue create -R haoblackj/r --title t --body b"') is None
+    assert decide('bash -c "gh issue list"') is None
+
+
+def test_bodies_and_commit_messages_are_not_read_as_commands():
+    assert decide('gh issue comment 1 -R haoblackj/r --body "run gh issue create without -R"') is None
+    assert decide('git commit -m "docs: gh issue create needs -R"') is None
+
+
+def test_reference_after_japanese_is_denied():
+    assert decide('gh issue comment 1 -R haoblackj/r --body "別件はkot149/zmk-workspace#4で"') == 'deny'
+    assert decide('gh issue comment 1 -R haoblackj/r --body "確認お願いします@kot149"') == 'deny'
+
+
+def test_scripts_that_call_gh_are_checked(tmp_path):
+    shell = tmp_path / 'post.sh'
+    shell.write_text('#!/bin/sh\ngh issue create --title t\n')
+    assert decide(f'bash {shell}') == 'deny'
+    assert decide(str(shell)) == 'deny'
+    shell.write_text('#!/bin/sh\ngh issue list -R kot149/r\n')
+    assert decide(f'bash {shell}') is None
+    assert decide("python3 -c \"import subprocess; subprocess.run(['gh', 'issue', 'create'])\"") == 'deny'
+
+
+def test_pr_body_heredoc_with_apostrophe_passes():
+    command = ("gh pr create -R haoblackj/r --title t --body \"$(cat <<'EOF'\n"
+               "It's done\nEOF\n)\"")
+    assert decide(command) is None
+
+
+def test_reads_with_quotes_and_unrelated_words_pass():
+    assert decide('echo "gh issue list"') is None
+    assert decide('brew upgrade gh git') is None
+    assert decide('grep -rn "gh issue" .') is None
 
 
 # --- git push ----------------------------------------------------------------------------

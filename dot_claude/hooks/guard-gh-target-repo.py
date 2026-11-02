@@ -32,10 +32,14 @@ import sys
 
 OWN_ACCOUNTS = {'penguinex-agent'}
 ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z_0-9]*=')
+# re.ASCII: GitHub は日本語の直後（「別件はowner/repo#4」「確認@user」）でもリンクするので、
+# \w を ASCII に限り、日本語を語の境界として扱う。
 REFERENCE = re.compile(
     r'(?<![\w./-])([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)#\d+'
-    r'|https?://github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull|discussions|commit)/\w+')
-MENTION = re.compile(r'(?<![\w.@/`-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?![\w.-]*\.\w)')
+    r'|https?://github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull|discussions|commit)/\w+', re.ASCII)
+MENTION = re.compile(r'(?<![\w.@/`-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?![\w.-]*\.\w)', re.ASCII)
+HTTP_PROGRAMS = ('curl', 'wget', 'http', 'https', 'xh')
+MAX_DEPTH = 5
 GITHUB_URL_REPO = re.compile(r'github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$')
 URL_REPO = re.compile(r'^https?://github\.com/([^/\s]+)/([^/\s]+)')
 API_REPO = re.compile(r'(?:^|api\.github\.com)/?repos/([^/\s?]+)/([^/\s?]+)')
@@ -417,23 +421,30 @@ def check_http(tokens, owners):
             raise Deny('foreign', f'{m.group(1)}/{m.group(2)}')
 
 
-def check_program(tokens, cwd):
-    """GitHub API に触れるそのほかのプログラムを止める。"""
+def check_program(tokens, cwd, owners, resolve_node_owner, depth):
+    """GitHub API に触れる、またはスクリプトの中から gh を呼ぶそのほかのプログラムを止める。"""
     name = program(tokens)
     if name in ('gh', 'git', 'curl', 'wget', 'http', 'https', 'xh') or name in STDIN_FRIENDLY:
         return
     texts = [' '.join(tokens)]
-    # インタープリターが直接実行するスクリプトだけ中身を読む（テストの引数などは読まない）。
+    # 実行するスクリプトだけ中身を読む（テストの引数などは読まない）。
+    script = None
     if re.fullmatch(r'(python|python3|python3\.\d+|node|bash|sh|zsh|ruby|perl|deno|bun)', name) \
             and '-m' not in tokens and '-c' not in tokens:
         script = next((t for t in tokens[1:] if not t.startswith('-')), None)
-        if script:
-            text = read_text(script, cwd)
-            if text:
-                texts.append(text)
+    elif tokens and '/' in tokens[0]:
+        script = tokens[0]  # ./x.sh や ~/bin/x.py のようにパスで直接実行するもの
+    text = read_text(script, cwd) if script else None
+    if text:
+        texts.append(text)
+        first = text.split('\n', 1)[0]
+        if (name in ('bash', 'sh', 'zsh') or re.search(r'^#!.*\b(?:ba|z)?sh\b', first)) and depth < MAX_DEPTH:
+            analyse(text, owners, cwd, resolve_node_owner, depth + 1)
     for text in texts:
-        if 'api.github.com' in text or 'uploads.github.com' in text:
+        if re.search(r'(?:api|uploads)\.github\.com', text, re.I):
             raise Deny('unverified', f'{name} が GitHub API に触れます')
+        if re.search(r'[\'"]gh(?:\.exe)?[\'"]', text):
+            raise Deny('unverified', f'{name} がスクリプトの中から gh を呼びます')
 
 
 # --- whole command ---------------------------------------------------------------------------
@@ -468,7 +479,11 @@ def stdin_text(segments, index, cwd):
 
 def substitution_texts(command, cwd):
     for m in re.finditer(r'\$\(\s*(?:cat\s+|<\s*)([^)]+)\)', command):
-        for name in shlex.split(m.group(1)):
+        try:
+            names = shlex.split(m.group(1))
+        except ValueError:
+            continue  # $(cat <<'EOF' ... EOF) の本文はコマンドの文字列に含まれ、全体で検査済み
+        for name in names:
             text = read_text(name, cwd)
             if text is not None:
                 yield text
@@ -488,37 +503,52 @@ def resolve_node_owner_via_gh(node_id):
     return ((node.get('repository') or {}).get('owner') or node.get('owner') or {}).get('login')
 
 
-def decision(command, owners, cwd=None, resolve_node_owner=resolve_node_owner_via_gh):
-    """('deny' | None, reason)"""
-    try:
-        segments = split_command(command)
-        writes = False
-        for index, (_, raw) in enumerate(segments):
-            stdin_file, heredoc, without_redirects = redirects(raw)
-            tokens = strip_prefix(without_redirects)
-            name = program(tokens)
-            if name == 'cd' and len(tokens) > 1:
-                cwd = str(Path(cwd or Path.cwd()) / Path(tokens[1]).expanduser())
-                continue
-            if name == 'gh':
-                if check_gh(tokens[1:], owners, resolve_node_owner):
+def analyse(command, owners, cwd, resolve_node_owner, depth=0):
+    """コマンドを調べ、止めるべきなら Deny を投げる。"""
+    segments = split_command(command)
+    writes = False
+    for index, (_, raw) in enumerate(segments):
+        stdin_file, heredoc, without_redirects = redirects(raw)
+        tokens = strip_prefix(without_redirects)
+        name = program(tokens)
+        if name == 'cd' and len(tokens) > 1:
+            cwd = str(Path(cwd or Path.cwd()) / Path(tokens[1]).expanduser())
+            continue
+        # bash -c "..." や ssh host "..." の引数の文字列は、コマンドとして実行されうるので同じ判定に
+        # 掛ける。gh と git の引数（本文やコミットのメッセージ）はデータなので読み直さない。
+        if name not in ('gh', 'git') and depth < MAX_DEPTH:
+            for word in without_redirects:
+                if re.search(r'\s', word):
+                    analyse(word, owners, cwd, resolve_node_owner, depth + 1)
+        if name == 'git':
+            check_git(tokens, cwd, owners)
+        elif name not in ('gh',) + HTTP_PROGRAMS:
+            check_program(tokens, cwd, owners, resolve_node_owner, depth)
+        # timeout や xargs などの前置きが何であっても、その後ろの gh / curl に同じ判定を掛ける。
+        for at, word in enumerate(without_redirects):
+            found = program([word.strip('`')])
+            if found == 'gh':
+                args = without_redirects[at + 1:]
+                if check_gh(args, owners, resolve_node_owner):
                     writes = True
-                    for file_name in body_file_names(tokens[1:]):
+                    for file_name in body_file_names(args):
                         text = (stdin_text(segments, index, cwd) if file_name == '-'
                                 else read_text(file_name, cwd))
                         if text is None:
                             raise Deny('stdin', f'{file_name} を読めません')
                         check_body(text, owners)
-            elif name == 'git':
-                check_git(tokens, cwd, owners)
-            elif name in ('curl', 'wget', 'http', 'https', 'xh'):
-                check_http(tokens, owners)
-            else:
-                check_program(tokens, cwd)
-        if writes:
-            check_body(command, owners)
-            for text in substitution_texts(command, cwd):
-                check_body(text, owners)
+            elif found in HTTP_PROGRAMS:
+                check_http(without_redirects[at:], owners)
+    if writes:
+        check_body(command, owners)
+        for text in substitution_texts(command, cwd):
+            check_body(text, owners)
+
+
+def decision(command, owners, cwd=None, resolve_node_owner=resolve_node_owner_via_gh):
+    """('deny' | None, reason)"""
+    try:
+        analyse(command, owners, cwd, resolve_node_owner)
     except Deny as deny:
         return 'deny', deny.reason(command)
     return None, ''
