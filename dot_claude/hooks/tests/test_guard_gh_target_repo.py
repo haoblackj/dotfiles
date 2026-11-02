@@ -217,7 +217,6 @@ def test_scripts_that_call_gh_are_checked(tmp_path):
     assert decide(str(shell)) == 'deny'
     shell.write_text('#!/bin/sh\ngh issue list -R kot149/r\n')
     assert decide(f'bash {shell}') is None
-    assert decide("python3 -c \"import subprocess; subprocess.run(['gh', 'issue', 'create'])\"") == 'deny'
 
 
 def test_pr_body_heredoc_with_apostrophe_passes():
@@ -230,6 +229,8 @@ def test_reads_with_quotes_and_unrelated_words_pass():
     assert decide('echo "gh issue list"') is None
     assert decide('brew upgrade gh git') is None
     assert decide('grep -rn "gh issue" .') is None
+    assert decide("grep -n \"'gh'\\|\\\"gh\\\"\" hook.py") is None
+    assert decide("python3 -c \"print('gh')\"") is None
 
 
 # --- git push ----------------------------------------------------------------------------
@@ -305,6 +306,7 @@ def test_hook_emits_permission_decision():
     result = run_hook({'tool_name': 'Bash', 'tool_input': {'command': 'gh issue create --title t'}})
     assert result['permissionDecision'] == 'deny'
     assert '-R' in result['permissionDecisionReason']
+    assert '2 回止められたら' in result['permissionDecisionReason']
 
 
 def test_hook_handles_mcp_payloads():

@@ -71,6 +71,8 @@ MCP_WRITE_WORDS = ('create', 'update', 'add', 'delete', 'remove', 'merge', 'push
                    'mark', 'dismiss', 'lock', 'set')
 
 RULE = '外部のリポジトリへの起票、コメント、言及は、リーダーの指示で当面すべて禁止です（2026-11-02）。'
+RETRY_LIMIT = ('\n同じ書き込みをこのフックに 2 回止められたら、書き方を変えて通そうとせず、投稿先と本文を'
+               '示してリーダーに明示的な許可を求めてください。')
 REASONS = {
     'unnamed': '投稿先のリポジトリを確かめられません（{detail}）。-R owner/repo（gh api なら '
                'repos/owner/repo/... のパス）で投稿先を名指ししてください。',
@@ -93,7 +95,8 @@ class Deny(Exception):
         self.detail = detail
 
     def reason(self, command):
-        return REASONS[self.kind].format(detail=self.detail) + f'\n対象: {command[:300]}'
+        return (REASONS[self.kind].format(detail=self.detail) + RETRY_LIMIT +
+                f'\n対象: {command[:300]}')
 
 
 def owner_of(slug):
@@ -422,7 +425,14 @@ def check_http(tokens, owners):
 
 
 def check_program(tokens, cwd, owners, resolve_node_owner, depth):
-    """GitHub API に触れる、またはスクリプトの中から gh を呼ぶそのほかのプログラムを止める。"""
+    """GitHub API に触れるそのほかのプログラムを止め、シェルのスクリプトは中身を同じ判定に掛ける。
+
+    シェル以外のコードの中の gh の呼び出しは探さない（リーダー、2026-11-03）。'gh' の文字列で
+    止めると、過去の Bash のコマンド約 3.4 万件のうち約 40 件の正当な処理（research-design の
+    post_design.py などリーダーの issue への投稿と、会話の記録を読む処理）を止め、他人の
+    リポジトリへの書き込みは 1 件も含まれていなかった。プロセスを起動する API と並ぶときだけ
+    止める形に狭めても同じだった。
+    """
     name = program(tokens)
     if name in ('gh', 'git', 'curl', 'wget', 'http', 'https', 'xh') or name in STDIN_FRIENDLY:
         return
@@ -443,8 +453,6 @@ def check_program(tokens, cwd, owners, resolve_node_owner, depth):
     for text in texts:
         if re.search(r'(?:api|uploads)\.github\.com', text, re.I):
             raise Deny('unverified', f'{name} が GitHub API に触れます')
-        if re.search(r'[\'"]gh(?:\.exe)?[\'"]', text):
-            raise Deny('unverified', f'{name} がスクリプトの中から gh を呼びます')
 
 
 # --- whole command ---------------------------------------------------------------------------
