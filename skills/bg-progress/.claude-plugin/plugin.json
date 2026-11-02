@@ -1,0 +1,6 @@
+{
+  "name": "bg-progress",
+  "version": "0.1.0",
+  "description": "背景の処理の進捗と JST の終了時刻を入力欄の上に出す",
+  "types": "./types/index.d.ts"
+}
