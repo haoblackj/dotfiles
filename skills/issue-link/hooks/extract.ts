@@ -9,6 +9,16 @@ const GH_API_ISSUE = /\bgh\s+api\b[^|;&\n]*?\brepos\/([\w.-]+)\/([\w.-]+)\/issue
 const REPO_FLAG = /(?:^|\s)(?:-R|--repo)[\s=]+([\w.-]+)\/([\w.-]+)/
 // 番号を取らない gh issue の動詞
 const NO_NUMBER_VERBS = new Set(['create', 'list', 'status'])
+// 値を一つ取る gh issue のフラグ。値の中の番号や URL を Issue と読まないよう、値ごと飛ばす
+const VALUE_FLAGS = new Set([
+  '-b', '--body', '-F', '--body-file', '-t', '--title', '-R', '--repo',
+  '-l', '--label', '--add-label', '--remove-label',
+  '-a', '--assignee', '--add-assignee', '--remove-assignee',
+  '-m', '--milestone', '--remove-milestone', '-p', '--project', '--add-project', '--remove-project',
+  '-r', '--reason', '-q', '--jq', '--template', '--json',
+])
+const TOKEN = /"[^"]*"|'[^']*'|\S+/g
+const OSC8 = /\x1b\]8;[^\x07\x1b]*;[^\x07\x1b]*(?:\x07|\x1b\\)/g
 
 type At = { at: number; found: Found }
 
@@ -44,6 +54,23 @@ export const fromPrompt = (text: string, here: RepoRef | null): Found[] => {
   return latestFirst(hits)
 }
 
+// gh issue の動詞の後の、フラグとその値を飛ばした最初の引数（名指しされた Issue）
+const firstPositional = (args: string): string | undefined => {
+  const tokens = args.match(TOKEN) ?? []
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i] ?? ''
+    if (t.startsWith('-')) {
+      if (!t.includes('=') && VALUE_FLAGS.has(t)) i++
+      continue
+    }
+    return t
+  }
+  return undefined
+}
+
+// FORCE_HYPERLINK=1 を受けた CLI の出力のリンクの囲みを外し、見える文字だけ残す
+export const stripHyperlinks = (text: string): string => text.replace(OSC8, '')
+
 export const fromBash = (command: string, stdout: string, here: RepoRef | null): Found[] => {
   const hits: At[] = []
   for (const m of command.matchAll(GH_ISSUE)) {
@@ -54,15 +81,16 @@ export const fromBash = (command: string, stdout: string, here: RepoRef | null):
       continue
     }
     if (NO_NUMBER_VERBS.has(verb)) continue
-    const inArgs = urlsIn(args, 'command')
-    if (inArgs.length > 0) {
-      hits.push(...inArgs.map(h => ({ ...h, at: m.index + h.at })))
+    const target = firstPositional(args)
+    if (target === undefined) continue
+    const asUrl = urlsIn(target, 'command')[0]
+    if (asUrl) {
+      hits.push({ ...asUrl, at: m.index })
       continue
     }
     const flag = args.match(REPO_FLAG)
     const repo = flag ? { owner: g(flag, 1), repo: g(flag, 2) } : here
-    const number = args.split(/\s+/).find(t => /^\d+$/.test(t))
-    if (repo && number) hits.push({ at: m.index, found: { ...repo, number: Number(number), source: 'command' } })
+    if (repo && /^\d+$/.test(target)) hits.push({ at: m.index, found: { ...repo, number: Number(target), source: 'command' } })
   }
   for (const m of command.matchAll(GH_API_ISSUE)) {
     hits.push({ at: m.index, found: { owner: g(m, 1), repo: g(m, 2), number: Number(g(m, 3)), source: 'command' } })

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Entry, Found, RepoRef } from '../types'
-import { fromBash, fromPrompt, keyOf, mergeFound, repoOfRemote } from './extract'
+import { fromBash, fromPrompt, keyOf, mergeFound, repoOfRemote, stripHyperlinks } from './extract'
 
 const entries = atom({ plugin: 'issue-link', key: 'entries' } as const, [] as Entry[])
 
@@ -27,6 +27,19 @@ const hereOf = async ($: EngineInterface): Promise<RepoRef | null> => {
 
 // --resume で戻ったときのために、セッション ID を鍵にしてセッションの外へも写す
 const storeKey = async ($: EngineInterface) => `entries:${await $.session.id()}`
+
+// 一覧をどのセッション ID の分として読み込んだか。アプリ内の /resume は session.start を起こさず
+// プロセスのまま ID だけ変わるので、ID が変わったら一覧が空のときに限り戻った先の保存から読む
+let loadedFor: string | undefined
+
+const ensureLoaded = async ($: EngineInterface) => {
+  const id = await $.session.id()
+  if (loadedFor === id) return
+  loadedFor = id
+  if ((await read($, entries)).length > 0) return
+  const saved = await $.store.get(`entries:${id}`).catch(() => undefined)
+  if (Array.isArray(saved) && saved.length > 0) await update($, entries, () => saved as Entry[])
+}
 
 const apply = async ($: EngineInterface, fn: (list: Entry[]) => Entry[]) => {
   let after: Entry[] = []
@@ -72,6 +85,7 @@ const resolveTitles = async ($: EngineInterface) => {
 
 const track = async ($: EngineInterface, find: (home: RepoRef | null) => Found[]) => {
   try {
+    await ensureLoaded($)
     const found = find(await hereOf($))
     if (found.length === 0) return
     await apply($, list => mergeFound(list, found))
@@ -90,27 +104,40 @@ const labelOf = (e: Entry, here: RepoRef | null) => {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    if ((await read($, entries)).length === 0) {
-      const saved = await $.store.get(await storeKey($)).catch(() => undefined)
-      if (Array.isArray(saved) && saved.length > 0) await update($, entries, () => saved as Entry[])
-    }
+    await ensureLoaded($).catch(() => {})
     void resolveTitles($).catch(() => {})
     return started
   })
 
+  // /clear は同じ Issue の作業の続きとみなして一覧を引き継ぎ、それ以外（/resume など）は空にして
+  // 戻った先の保存から読み直させる。空にするだけで store へは書かない（終わるセッションの保存を残す）
+  on('session.end', async ($, e, next) => {
+    if (e.reason !== 'clear') {
+      await update($, entries, () => []).catch(() => {})
+      loadedFor = undefined
+    }
+    return next(e)
+  })
+
   // タイトルの問い合わせで送信やツールの結果を待たせないよう、拾う処理は待たずに走らせる
   on('prompt.submit', ($, e, next) => {
-    if (!e.command && !e.isMeta) void track($, home => fromPrompt(e.text, home))
+    void track($, home => (e.command || e.isMeta ? [] : fromPrompt(e.text, home)))
     return next(e)
   })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
-    if (ran.deny === undefined) {
-      const stdout = (ran.result as { stdout?: unknown } | undefined)?.stdout
-      void track($, home => fromBash(e.command, typeof stdout === 'string' ? stdout : '', home))
-    }
-    return ran
+    if (ran.deny !== undefined) return ran
+    const result = ran.result as { stdout?: unknown; stderr?: unknown } | undefined
+    const stdout = typeof result?.stdout === 'string' ? stripHyperlinks(result.stdout) : undefined
+    const stderr = typeof result?.stderr === 'string' ? stripHyperlinks(result.stderr) : undefined
+    void track($, home => fromBash(e.command, stdout ?? '', home))
+    if (stdout === result?.stdout && stderr === result?.stderr) return ran
+    // FORCE_HYPERLINK=1 は Bash の子プロセスにも渡るので、モデルが読む結果からリンクの囲みを外す
+    return {
+      ...ran,
+      result: { ...result, ...(stdout === undefined ? {} : { stdout }), ...(stderr === undefined ? {} : { stderr }) },
+    } as typeof ran
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {

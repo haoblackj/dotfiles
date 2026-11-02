@@ -64,7 +64,9 @@ Mod はセッションの中の出来事（プロンプト、ツールの呼び�
 
 `linked/claude/settings.json` の `env` に `FORCE_HYPERLINK=1` を入れる。
 設定の `env` で効くことは実機で確かめた（2026-11-02、Herdr のタブで `--settings` に `{"env":{"FORCE_HYPERLINK":"1"}}` を渡すと `· #73` だけが出て、渡さないと `· #73 https://github.com/...` と URL が文字で出た）。
-zsh で `export` する案は、Claude Code 以外のコマンドまで OSC 8 を出すようになるので採らない。
+zsh で `export` する案は、リーダーのシェルのコマンドまで OSC 8 を出すようになるので採らない。
+ただし設定の `env` も Claude Code の Bash の子プロセスへ渡る。`FORCE_HYPERLINK=1` を見て OSC 8 を出す CLI（Node の `supports-hyperlinks` を使うものなど）の出力は、モデルが読む結果に `]8;;<URL>\` の文字が残る（2026-11-02 に確かめた。ESC は外れるが残りの文字は残る）。
+そこで Mod は Bash の結果の `stdout` と `stderr` から OSC 8 の囲みを外してから返す（最終レビューを受けたあたしの判断）。
 README に、この設定が何のためにあるかを書く。
 
 ### 拾う Issue
@@ -90,6 +92,8 @@ API の答えに `pull_request` があれば PR なので、一覧から外す�
 同じ Issue がまた出てきたら、並びの先頭（左）へ移す（最後に出てきた順。あたしの判断）。
 
 拾った一覧はセッションをまたいで残す（`--resume` で戻ったときに消えないように）。
+アプリ内の `/resume` はプロセスのままセッション ID だけが変わるので、戻った先の保存から読み直す。
+`/clear` は同じ Issue の作業の続きとみなして一覧を引き継ぐ（最終レビューを受けたあたしの判断。セッションは Issue 単位で立てるので）。
 
 ### 撤去するもの
 

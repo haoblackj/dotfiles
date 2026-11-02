@@ -71,6 +71,16 @@ test('gh issue の -R と --repo はそのリポジトリにする', () => {
   }
 })
 
+test('gh issue は最初の位置引数だけを読み、フラグの値の番号や URL を拾わない', () => {
+  const only73 = [{ owner: 'haoblackj', repo: 'dotfiles', number: 73, source: 'command' }]
+  expect(fromBash('gh issue comment 73 --body "dup of https://github.com/o/r/issues/5"', '', here)).toEqual(only73)
+  expect(fromBash('gh issue comment --body "fixed in 2 places" 73', '', here)).toEqual(only73)
+  expect(fromBash("gh issue edit -t 'v 2' --add-label x 73", '', here)).toEqual(only73)
+  expect(fromBash('gh issue view https://github.com/o/r/issues/4 --comments', '', here)).toEqual([
+    { owner: 'o', repo: 'r', number: 4, source: 'command' },
+  ])
+})
+
 test('gh api の issues のパスを拾う', () => {
   expect(
     fromBash("gh api repos/haoblackj/dotfiles/issues/73/comments --paginate | jq -rs '.'", '', null),

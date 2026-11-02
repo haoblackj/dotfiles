@@ -200,7 +200,7 @@ Mod のテストは `claude plugin test skills/<名前>`、読み込みの検査
 | Mod | 何をするか |
 |---|---|
 | `bg-progress` | Claude が背景の Bash で始めた長い処理（モデルのダウンロード、ローカル LLM の一括の推論）を道具 `mcp__bg-progress__watch` で登録すると、入力欄の上に一本一行で何％、速さ、JST の終了時刻を出す。測る場所の大きさ（`du -sb`）か行数（`wc -l`）を 4 秒おきに測り、全体に届いたら完了の通知を出して外す。全体の前に背景タスクが終わったら「止まった」と出して外し、1 分増えなければ「停滞中」と出す。設計は `docs/superpowers/specs/2026-11-02-bg-progress-band-design.md` |
-| `issue-link` | セッションに出てきた GitHub の Issue を、モードの表示の右（画面ではステータスラインの行の右端）に `#73 タイトルの先頭十文字` のリンクで出す。拾うのは、プロンプトの Issue の URL と `#<番号>`、`gh issue create` の出力の URL、`gh issue <動詞> <番号>` と `gh api repos/<owner>/<repo>/issues/<番号>` のコマンド。プロンプトの裸の `#<番号>` は GitHub に問い合わせて Issue と分かったときだけ出し、PR は出さない。新しく出てきたものを左に三つまで。Herdr の中では Claude Code が端末をリンク非対応とみなして URL を文字で並べるので、`linked/claude/settings.json` の `env` で `FORCE_HYPERLINK=1` を渡している。設計は `docs/superpowers/specs/2026-11-02-issue-link-design.md` |
+| `issue-link` | セッションに出てきた GitHub の Issue を、モードの表示の右（画面ではステータスラインの行の右端）に `#73 タイトルの先頭十文字` のリンクで出す。拾うのは、プロンプトの Issue の URL と `#<番号>`、`gh issue create` の出力の URL、`gh issue <動詞> <番号>` と `gh api repos/<owner>/<repo>/issues/<番号>` のコマンド。プロンプトの裸の `#<番号>` は GitHub に問い合わせて Issue と分かったときだけ出し、PR は出さない。新しく出てきたものを左に三つまで。Herdr の中では Claude Code が端末をリンク非対応とみなして URL を文字で並べるので、`linked/claude/settings.json` の `env` で `FORCE_HYPERLINK=1` を渡している。この値は Bash の子プロセスにも渡るので、Mod は Bash の結果から OSC 8 の囲みを外してからモデルへ返す。設計は `docs/superpowers/specs/2026-11-02-issue-link-design.md` |
 
 リポジトリ直下に、プラグインが自動で拾うディレクトリ（`agents/`、`commands/`、`hooks/`、`bin/`、`.mcp.json` など）を足すと、手順 2 で余計なものまで読まれる。
 本チェックアウトを main 以外へ切り替えると、全セッションのスキルがそのブランチの版になる。
