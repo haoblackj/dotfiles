@@ -166,6 +166,14 @@ def test_variable_subcommands_are_denied():
     assert decide('for c in issue pr; do gh $c --help; done') is None
 
 
+def test_help_as_an_option_value_is_not_help(aliases):
+    assert decide('gh issue create --help') is None
+    assert decide('gh issue create -R kot149/r --title --help') == 'deny'
+    assert decide('gh issue create --title --help') == 'deny'
+    assert decide('gh dep approve --group --help') == 'deny'
+    assert decide('gh dep approve --help') is None
+
+
 # --- gh api graphql ----------------------------------------------------------------------
 
 MINIMIZE = ("gh api graphql -f query='mutation($id:ID!){minimizeComment(input:{subjectId:$id,"

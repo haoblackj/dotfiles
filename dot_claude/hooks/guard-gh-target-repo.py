@@ -366,12 +366,18 @@ def expand_alias(expansion, extra):
     return words + [w for i, w in enumerate(extra) if i not in used]
 
 
+def asks_help(rest):
+    """gh <cmd> [<sub>] --help の形か。--help がオプションの値（--title --help）のときは偽。"""
+    return (len(rest) <= 3 and rest[-1] in ('--help', '-h')
+            and all(not w.startswith('-') for w in rest[:-1]))
+
+
 def check_extension(name, rest, repo, owners):
     rule = EXTENSIONS[name]
     if rule is None:
         return False
     sub = rest[1] if len(rest) > 1 and not rest[1].startswith('-') else None
-    if sub in rule['reads'] or any(w in ('-h', '--help') for w in rest):
+    if sub in rule['reads'] or asks_help(rest):
         return False
     targets = [t for t in (repo or '').split(',') if t]
     for i, word in enumerate(rest):
@@ -392,7 +398,7 @@ def check_gh(args, owners, resolve_node_owner, call=True, depth=0):
     （brew upgrade gh など）、知らないサブコマンドでも止めない。"""
     repo = repo_flag(args)
     rest = without_repo_flag(args)
-    if not rest or rest[0].startswith('-') or '--help' in rest:
+    if not rest or rest[0].startswith('-') or asks_help(rest):
         return False
     kind = rest[0].strip('`')
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', kind):
