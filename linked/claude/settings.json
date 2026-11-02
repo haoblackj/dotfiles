@@ -17,6 +17,7 @@
   "env": {
     "CLAUDE_CODE_THRIFTY_SONIC": "0",
     "CLAUDE_CODE_TMPDIR": "/home/yagu001/.cache/cc-tmp",
+    "CLAUDE_CODE_TOOL_MEMORY_LIMIT": "24G",
     "ENABLE_COMMIT_REVIEW": "0",
     "FORCE_HYPERLINK": "1"
   },
