@@ -12,6 +12,8 @@
 #     確かめられない（gists などリポジトリ外、{owner} の置き換え、--fill）ときは止める。
 #     gh api graphql の mutation は、書き込む先のノード ID の持ち主を GitHub に問い合わせ、
 #     すべてリーダーの持ち物と確かめられたときだけ通す。
+#     gh の alias は gh alias list で展開してから同じ判定に掛け、シェルの alias は止める。
+#     拡張コマンドは中身を読んで決めたもの（EXTENSIONS）だけ判定し、ほかは止める。
 #   - git push: 送り先の remote の URL を git に聞き、リーダーの持ち物でなければ止める。
 #     送る commit のメッセージに他人の issue / PR への参照があれば止める。
 #   - curl / wget の GitHub API への書き込みは、パスの持ち主で判定する（graphql は止める）。
@@ -48,18 +50,40 @@ WRITES = {
     'issue': {'create', 'comment', 'edit', 'close', 'reopen', 'delete', 'lock', 'unlock',
               'pin', 'unpin', 'transfer', 'develop'},
     'pr': {'create', 'comment', 'edit', 'close', 'reopen', 'merge', 'review', 'ready',
-           'lock', 'unlock'},
+           'lock', 'unlock', 'revert', 'update-branch'},
+    'discussion': {'create', 'comment', 'edit'},
+    'agent-task': {'create'},
+    'skill': {'publish'},
     'label': {'create', 'edit', 'delete', 'clone'},
     'release': {'create', 'edit', 'delete', 'upload', 'delete-asset'},
     'repo': {'create', 'fork', 'edit', 'delete', 'rename', 'archive', 'unarchive', 'sync'},
-    'gist': {'create', 'edit', 'delete', 'clone'},
+    'gist': {'create', 'edit', 'delete', 'clone', 'rename'},
     'workflow': {'run', 'enable', 'disable'},
     'run': {'rerun', 'cancel', 'delete'},
     'secret': {'set', 'delete'},
     'variable': {'set', 'delete'},
     'cache': {'delete'},
 }
-REPO_OPTIONAL = {('gist', 'create'), ('gist', 'edit'), ('gist', 'delete'), ('gist', 'clone')}
+NESTED_WRITES = {('repo', 'autolink'): {'create', 'delete'},
+                 ('repo', 'deploy-key'): {'add', 'delete'}}
+REPO_OPTIONAL = {('gist', 'create'), ('gist', 'edit'), ('gist', 'delete'), ('gist', 'clone'),
+                 ('gist', 'rename')}
+# gh 2.103 の組み込みのコマンドと、ヘルプの話題。これ以外の最初の語は alias か拡張コマンドで、
+# フックからは中身が見えないので、alias は展開し、拡張は EXTENSIONS で判定する。
+BUILTINS = {'auth', 'browse', 'codespace', 'discussion', 'gist', 'issue', 'org', 'pr', 'project',
+            'release', 'repo', 'skill', 'cache', 'run', 'workflow', 'agent-task', 'alias', 'api',
+            'attestation', 'completion', 'config', 'copilot', 'extension', 'gpg-key', 'label',
+            'licenses', 'preview', 'ruleset', 'search', 'secret', 'ssh-key', 'status', 'variable',
+            'help', 'version', 'accessibility', 'actions', 'environment', 'exit-codes',
+            'formatting', 'mintty', 'reference', 'telemetry'}
+# 中身を読んで判定を決めた拡張（2026-11-03）。None は GitHub へ書き込まないもの
+# （q は自分のリポジトリの一覧と clone、token は App の token の発行と失効）。
+# dep は依存の更新の PR をまとめて承認、マージする。引数なしは対話の画面で、既定は承認。
+EXTENSIONS = {'q': None, 'token': None,
+              'dep': {'reads': {'list', 'groups', 'completion', 'help'}}}
+# 後ろの語をコマンドとして実行するもの。gh がこれらの引数にあれば、呼び出しとして判定する。
+RUNNERS = {'timeout', 'xargs', 'nice', 'ionice', 'stdbuf', 'watch', 'sudo', 'doas', 'unbuffer',
+           'flock', 'chronic', 'nohup', 'time', 'exec', 'command', 'env'}
 API_VALUE_OPTS = {'-f', '-F', '--field', '--raw-field', '--input', '-X', '--method', '-H',
                   '--header', '--hostname', '-q', '--jq', '-t', '--template', '--cache',
                   '-p', '--preview'}
@@ -313,13 +337,84 @@ def graphql_targets(values, resolve_node_owner, owners):
             raise Deny('foreign', f'ノード ID {node_id} は {owner} の持ち物')
 
 
-def check_gh(args, owners, resolve_node_owner):
-    """gh の呼び出しを調べ、書き込みなら True。"""
+def gh_aliases():
+    """gh alias list の {名前: 展開}。読めなければ空（未知のサブコマンドとして止まる）。"""
+    try:
+        out = subprocess.run(['gh', 'alias', 'list'], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    table = {}
+    for line in out.stdout.splitlines():
+        name, sep, expansion = line.partition(':')
+        if sep and name.strip() and not name.startswith(' '):
+            table[name.strip()] = expansion.strip()
+    return table
+
+
+def expand_alias(expansion, extra):
+    """gh と同じく $1.. を後ろの引数で置き換え、使わなかった引数を末尾に足す。"""
+    used = set()
+
+    def replace(m):
+        n = int(m.group(1))
+        if 0 < n <= len(extra):
+            used.add(n - 1)
+            return extra[n - 1]
+        return m.group(0)
+
+    words = [re.sub(r'\$(\d+)', replace, w) for w in shlex.split(expansion)]
+    return words + [w for i, w in enumerate(extra) if i not in used]
+
+
+def check_extension(name, rest, repo, owners):
+    rule = EXTENSIONS[name]
+    if rule is None:
+        return False
+    sub = rest[1] if len(rest) > 1 and not rest[1].startswith('-') else None
+    if sub in rule['reads'] or any(w in ('-h', '--help') for w in rest):
+        return False
+    targets = [t for t in (repo or '').split(',') if t]
+    for i, word in enumerate(rest):
+        if word == '--owner' and i + 1 < len(rest):
+            targets.append(rest[i + 1] + '/*')
+        elif word.startswith('--owner='):
+            targets.append(word.split('=', 1)[1] + '/*')
+    if not targets:
+        raise Deny('unnamed', f'gh {name} {sub or "（対話の画面）"}')
+    foreign = [t for t in targets if owner_of(t) not in owners]
+    if foreign:
+        raise Deny('foreign', ', '.join(dict.fromkeys(foreign)))
+    return True
+
+
+def check_gh(args, owners, resolve_node_owner, call=True, depth=0):
+    """gh の呼び出しを調べ、書き込みなら True。call が偽なら gh は単なる語の位置にあり
+    （brew upgrade gh など）、知らないサブコマンドでも止めない。"""
     repo = repo_flag(args)
     rest = without_repo_flag(args)
-    if not rest:
+    if not rest or rest[0].startswith('-') or '--help' in rest:
         return False
-    kind = rest[0]
+    kind = rest[0].strip('`')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', kind):
+        # 日本語の文の「gh が」などは呼び出しではない。$c のような変数は中身を確かめられない。
+        if call and '$' in kind:
+            raise Deny('unverified', f'gh のサブコマンド {kind} を確かめられません')
+        return False
+    if kind not in BUILTINS:
+        aliases = gh_aliases()
+        if kind in aliases:
+            expansion = aliases[kind]
+            if expansion.startswith('!'):
+                raise Deny('unverified', f'gh {kind} はシェルを実行する alias（{expansion}）')
+            if depth >= MAX_DEPTH:
+                raise Deny('unverified', f'gh {kind} の alias を展開しきれません')
+            expanded = (['-R', repo] if repo else []) + expand_alias(expansion, rest[1:])
+            return check_gh(expanded, owners, resolve_node_owner, True, depth + 1)
+        if kind in EXTENSIONS:
+            return check_extension(kind, rest, repo, owners)
+        if call:
+            raise Deny('unverified', f'gh {kind} は中身を判定できないサブコマンド（拡張か alias）')
+        return False
     if kind == 'api':
         endpoint, writes, values = api_parts(rest)
         if not writes or endpoint is None:
@@ -335,7 +430,11 @@ def check_gh(args, owners, resolve_node_owner):
         if m.group(1) not in owners:
             raise Deny('foreign', f'{m.group(1)}/{m.group(2)}')
         return True
-    if len(rest) < 2 or rest[1] not in WRITES.get(kind, ()):
+    nested = NESTED_WRITES.get((kind, rest[1] if len(rest) > 1 else None))
+    if nested is not None:
+        if len(rest) < 3 or rest[2] not in nested:
+            return False
+    elif len(rest) < 2 or rest[1] not in WRITES.get(kind, ()):
         return False
     if any(w in ('--fill', '--fill-first', '--fill-verbose') for w in rest):
         raise Deny('unverified', '--fill は commit のメッセージを本文にする')
@@ -537,7 +636,8 @@ def analyse(command, owners, cwd, resolve_node_owner, depth=0):
             found = program([word.strip('`')])
             if found == 'gh':
                 args = without_redirects[at + 1:]
-                if check_gh(args, owners, resolve_node_owner):
+                call = at == len(without_redirects) - len(tokens) or name in RUNNERS
+                if check_gh(args, owners, resolve_node_owner, call):
                     writes = True
                     for file_name in body_file_names(args):
                         text = (stdin_text(segments, index, cwd) if file_name == '-'

@@ -10,6 +10,7 @@ HOOK = Path(__file__).resolve().parent.parent / 'guard-gh-target-repo.py'
 spec = importlib.util.spec_from_file_location('guard_gh_target_repo', HOOK)
 guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard)
+REAL_GH_ALIASES = guard.gh_aliases
 
 OWN = {'haoblackj'}
 # Real node IDs look like IC_kwDO...; the hook only picks up IDs of that shape.
@@ -18,6 +19,12 @@ NODE_OWNERS = {'IC_kwDOown0001': 'haoblackj', 'IC_kwDOother01': 'kot149'}
 
 def resolve(node_id):
     return NODE_OWNERS.get(node_id)
+
+
+@pytest.fixture(autouse=True)
+def no_aliases(monkeypatch):
+    """手元の gh の alias に結果を左右させない。"""
+    monkeypatch.setattr(guard, 'gh_aliases', lambda: {})
 
 
 def decide(command, cwd=None):
@@ -87,6 +94,76 @@ def test_api_write_outside_repos_is_denied():
 def test_pr_create_fill_is_denied():
     # The body would come from commit messages the hook does not see.
     assert decide('gh pr create -R haoblackj/r --fill') == 'deny'
+
+
+def test_alias_list_output_is_parsed(monkeypatch):
+    out = 'co: pr checkout\nprc: pr create -w\nsh: !gh issue create --title "a: b"\n'
+    monkeypatch.setattr(guard.subprocess, 'run',
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=out, stderr=''))
+    assert REAL_GH_ALIASES() == {'co': 'pr checkout', 'prc': 'pr create -w',
+                                 'sh': '!gh issue create --title "a: b"'}
+
+
+def test_newer_builtin_writes_need_a_repo():
+    for command in ('gh discussion create --title t --body b', 'gh discussion comment 3 --body b',
+                    'gh discussion edit 3 --body b', 'gh agent-task create "do it"',
+                    'gh pr revert 3', 'gh pr update-branch 3', 'gh skill publish',
+                    'gh repo autolink create JIRA- https://x/<num>', 'gh repo deploy-key add k.pub'):
+        assert decide(command) == 'deny', command
+    assert decide('gh discussion create -R haoblackj/r --title t --body b') is None
+    assert decide('gh repo autolink list') is None
+    assert decide('gh repo deploy-key list') is None
+
+
+# --- gh: aliases and extensions -------------------------------------------------------------
+
+@pytest.fixture
+def aliases(monkeypatch):
+    table = {'co': 'pr checkout', 'ic': 'issue create', 'icr': 'issue create -R $1',
+             'sh': '!gh issue create'}
+    monkeypatch.setattr(guard, 'gh_aliases', lambda: table)
+    return table
+
+
+def test_aliases_are_expanded_before_the_check(aliases):
+    assert decide('gh co 3') is None
+    assert decide('gh ic --title t --body b') == 'deny'
+    assert decide('gh ic -R haoblackj/r --title t --body b') is None
+    assert decide('gh icr kot149/r --title t --body b') == 'deny'
+    assert decide('gh icr haoblackj/r --title t --body b') is None
+
+
+def test_shell_aliases_are_denied(aliases):
+    assert decide('gh sh') == 'deny'
+
+
+def test_unknown_subcommands_are_denied(aliases):
+    assert decide('gh nosuch issue create') == 'deny'
+    assert decide('timeout 10 gh nosuch') == 'deny'
+
+
+def test_known_extensions(aliases):
+    assert decide('gh q') is None
+    assert decide('gh token generate --app-id 1') is None
+    assert decide('gh dep list --owner kot149') is None
+    assert decide('gh dep') == 'deny'
+    assert decide('gh dep approve --group g') == 'deny'
+    assert decide('gh dep merge --group g -R haoblackj/a,kot149/b') == 'deny'
+    assert decide('gh dep merge --group g -R haoblackj/a,haoblackj/b') is None
+    assert decide('gh dep approve --group g --owner haoblackj') is None
+
+
+def test_gh_as_a_plain_word_is_not_a_call(aliases):
+    assert decide('brew upgrade gh git') is None
+    assert decide('which gh') is None
+    assert decide('gh --version') is None
+    assert decide("git commit -m \"$(cat <<'EOF'\ngh が PATH に無ければ止める\nEOF\n)\"") is None
+    assert decide('echo "`gh api` を使う"') is None
+
+
+def test_variable_subcommands_are_denied():
+    assert decide('for c in issue pr; do gh $c create --title t; done') == 'deny'
+    assert decide('for c in issue pr; do gh $c --help; done') is None
 
 
 # --- gh api graphql ----------------------------------------------------------------------
