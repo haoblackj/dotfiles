@@ -200,6 +200,7 @@ Mod のテストは `claude plugin test skills/<名前>`、読み込みの検査
 | Mod | 何をするか |
 |---|---|
 | `bg-progress` | Claude が背景の Bash で始めた長い処理（モデルのダウンロード、ローカル LLM の一括の推論）を道具 `mcp__bg-progress__watch` で登録すると、入力欄の上に一本一行で何％、速さ、JST の終了時刻を出す。測る場所の大きさ（`du -sb`）か行数（`wc -l`）を 4 秒おきに測り、全体に届いたら完了の通知を出して外す。全体の前に背景タスクが終わったら「止まった」と出して外し、1 分増えなければ「停滞中」と出す。設計は `docs/superpowers/specs/2026-11-02-bg-progress-band-design.md` |
+| `japanese-guard` | 最終回答と、ツールを呼ぶ前の報告が英語か中国語なら、同じターンのうちに日本語で書き直させる。最終回答は `classic.Stop` で block し、ツールの前の報告は `tool.call` でツールを差し戻す（1 行の前置きは見逃し、1 ターンに 2 回まで）。デスクトップアプリの「次の一手」の箱（`wrap_up`）も見る。上流 `minorun365/claude-code-japanese-guard`（Apache-2.0）の Python の Stop hook を移植したもので、移した時点の上流のコミットを `skills/japanese-guard/UPSTREAM` に記録する。上流が進むと、週 1 回の workflow（`.github/workflows/japanese-guard-upstream.yml`）が Claude に移植させて PR を開き、リーダーにレビューを頼む。クラウドへも配る。設計は `docs/superpowers/specs/2026-11-02-japanese-guard-mod-design.md` |
 | `issue-link` | セッションに出てきた GitHub の Issue を、モードの表示の右（画面ではステータスラインの行の右端）に `#73 タイトルの先頭十文字` のリンクで出す。拾うのは、プロンプトの Issue の URL と `#<番号>`、`gh issue create` の出力の URL、`gh issue <動詞> <番号>` と `gh api repos/<owner>/<repo>/issues/<番号>` のコマンド。プロンプトの裸の `#<番号>` は GitHub に問い合わせて Issue と分かったときだけ出し、PR は出さない。新しく出てきたものを左に三つまで。Herdr の中では Claude Code が端末をリンク非対応とみなして URL を文字で並べるので、`linked/claude/settings.json` の `env` で `FORCE_HYPERLINK=1` を渡している。この値は Bash の子プロセスにも渡るので、Mod は Bash の結果から OSC 8 の囲みを外してからモデルへ返す。設計は `docs/superpowers/specs/2026-11-02-issue-link-design.md` |
 
 リポジトリ直下に、プラグインが自動で拾うディレクトリ（`agents/`、`commands/`、`hooks/`、`bin/`、`.mcp.json` など）を足すと、手順 2 で余計なものまで読まれる。
@@ -414,8 +415,8 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | リポジトリ直下の `skills/bg-progress/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドでは背景で長いダウンロードや推論を回すことがほぼ無く、帯を出す入力欄も手元の端末とは違う |
 | リポジトリ直下の `skills/issue-link/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドの画面は Herdr の端末ではなく、`FORCE_HYPERLINK` の前提も違う |
 | memory / 機密スキル（claude-private） | 配らない | 認証が要る。公開/非公開の境界を広げない。memory はパス名が手元と違い（`-home-user-<repo>`）、そもそも対応しない |
-| hooks / statusLine / keybindings | 配らない（下の japanese-guard を除く） | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い |
-| japanese-guard（Stop hook）。`.chezmoiexternal.toml` の `.claude/hooks/` 配下の file external と、settings.json の `hooks.Stop` のうち `CLOUD_HOOK_COMMANDS` に挙げたもの | 配る | 応答が英語に切り替わったら日本語で書き直させる（dotfiles#56）。Python 3 だけで動き、手元の道具に依存しない。既存の `hooks.Stop` は残し、同じ command があれば足さない |
+| リポジトリ直下の `skills/japanese-guard/`（Mod） | 配る | `install-cloud.sh` の `CLOUD_MODS` に挙げてあるので、`SKILL.md` が無くても `~/.claude/skills/japanese-guard/` へ写す。クラウドのコンテナで Mod が読み込まれ、`classic.Stop` の block が効くことは確かめた（dotfiles#79）。ただし、起動の直後は hooks module の段階公開の切り替えを受け取るまで読み込まれず、それより先に始まった最初のターンは守られない |
+| hooks / statusLine / keybindings | 配らない | herdr・chezmoi・rtk・Cloudflare のトークンなど手元の道具に依存する。Web にはステータスラインもキーバインドも無い。`CLOUD_HOOK_COMMANDS`（クラウドへも配る Stop hook）はいま空 |
 | `permissions` | 配らない | `deny` の `rm` を持ち込むと、`trash-put` の無いクラウドで削除の手段が無くなる。`defaultMode` はセッション側で決まる |
 | プラグイン（`enabledPlugins`） | 配らない | クラウドは settings 経由のプラグインを入れない（公式）。codex は CLI 自体が無い |
 
@@ -427,6 +428,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 - `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external と、`.claude/hooks/` 配下に足した `type = "file"` の external は自動で配られる（`archive` とそれ以外の `file` は飛ばし、`clone.args` などのオプションは読まない）。
 - クラウドへも配る hook を足すときは、本体を `.claude/hooks/` 配下の file external にし、command を `install-cloud.sh` の `CLOUD_HOOK_COMMANDS` に足す（今は `hooks.Stop` だけを扱う）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
 - `skills/` に足したスキルは、`install-cloud.sh` が自動で写す。非公開のスキルを `skills/` に置かない（公開リポジトリなので境界を越える）。
+- `skills/` に足した Mod（`SKILL.md` が無く `.claude-plugin/plugin.json` があるもの）は写さない。クラウドへも配るなら `install-cloud.sh` の `CLOUD_MODS` に名前を足し、この表と `install-cloud.bats` を合わせる。
 - 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。
 - 取得に失敗しても exit 0 で抜ける（環境のセットアップ全体を落とさない）。効いていないと感じたら、セッションの Setup script のログに出る `[install-cloud]` の行を見る。
 - 手元で走らせると chezmoi 管理の `~/.claude` を上書きしうるので、`~/.claude/settings.json` が symlink、chezmoi のソースがある、chezmoi が PATH にある、のどれかなら何もせず exit 1 で抜ける。

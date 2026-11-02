@@ -1,0 +1,14 @@
+claude-code-japanese-guard
+Copyright 2026 Minoru Onda
+
+この Mod の英語の判定（hooks/detect.ts の isEnglish、isMidReportForeign の英語の閾値）と、
+差し戻しの方針（最終回答と途中の報告の見分け、次の一手の箱の検査）は、
+https://github.com/minorun365/claude-code-japanese-guard の hooks/japanese-guard.py を
+TypeScript の Claude Code の Mod へ移したもの。移した時点の上流のコミットは UPSTREAM に記録する。
+
+変更点:
+- Stop フックから、Claude Code の Mod の classic.Stop と tool.call へ移した。transcript を読まず、
+  セッションの行（$.session.messages()）から本文を取る。
+- ツールの前の報告は、ターンの終わりではなくツールが走る直前に差し戻す。
+- 中国語の判定を足した。
+- thinking の updates 表示の途中報告は見ない（セッションの行に thinking の中身が入らないため）。

@@ -28,8 +28,12 @@ SETTINGS_KEYS=(outputStyle language spinnerVerbs)
 # 依存しないものだけを挙げる。本体のファイルは .chezmoiexternal.toml の
 # .claude/hooks/ 配下の file external として手順 3 で取る。
 # 値は settings.json の command の文字列と一致させるので、~ は展開させない。
-# shellcheck disable=SC2088
-CLOUD_HOOK_COMMANDS=("~/.claude/hooks/japanese-guard.py")
+# いまは無い（japanese-guard は Mod に置き換え、CLOUD_MODS で配る。dotfiles#79）。
+CLOUD_HOOK_COMMANDS=()
+
+# リポジトリ直下の skills/ のうち、SKILL.md を持たない Mod でクラウドへも配るもの。
+# 手元の端末や道具を前提にする Mod（bg-progress、issue-link）は挙げない。
+CLOUD_MODS=(japanese-guard)
 
 log() { echo "[install-cloud] $*" >&2; }
 
@@ -95,7 +99,8 @@ fi
 
 # 2b. settings.json の hooks.Stop のうち CLOUD_HOOK_COMMANDS に挙げたもの。
 #     宛先の既存の hooks は残し、同じ command の要素が既にあれば足さない。
-if [ -f "$src_settings" ] && [ -f "$dst_settings" ] && command -v jq >/dev/null 2>&1; then
+if [ "${#CLOUD_HOOK_COMMANDS[@]}" -gt 0 ] && [ -f "$src_settings" ] && [ -f "$dst_settings" ] &&
+  command -v jq >/dev/null 2>&1; then
   if jq --slurpfile src "$src_settings" '
     $ARGS.positional as $cmds
     | ([$src[0].hooks.Stop[]? | select(any(.hooks[]?; .command | IN($cmds[])))]) as $add
@@ -170,10 +175,14 @@ fi
 
 # 4. リポジトリ直下の skills/（公開の自作スキル）。手元では chezmoi が
 #    dot_claude/skills/symlink_<名前>.tmpl で本チェックアウトへの symlink を張るが、
-#    クラウドには chezmoi が無いので実体を写す。SKILL.md を持たないものは写さない。
+#    クラウドには chezmoi が無いので実体を写す。SKILL.md を持たないものは、
+#    CLOUD_MODS に挙げた Mod（.claude-plugin/plugin.json を持つもの）だけを写す。
 for sk in "$SRC"/skills/*/; do
-  [ -f "${sk}SKILL.md" ] || continue
   name=$(basename "$sk")
+  if [ ! -f "${sk}SKILL.md" ]; then
+    [ -f "${sk}.claude-plugin/plugin.json" ] || continue
+    [[ " ${CLOUD_MODS[*]} " == *" $name "* ]] || continue
+  fi
   mkdir -p "$HOME/.claude/skills"
   rm -rf "${HOME:?}/.claude/skills/$name"
   cp -R "${sk%/}" "$HOME/.claude/skills/$name"
