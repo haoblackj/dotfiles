@@ -141,6 +141,140 @@ test('行数は sh で数える', async ($, on) => {
   expect((await jobsOf($))[0]?.samples.at(-1)?.amount).toBe(3)
 })
 
+const band = (surface: 'terminal' | 'desktop') =>
+  ({
+    plugin: 'bg-progress',
+    component: 'AbovePrompt',
+    surface,
+    props: {
+      hasSurvey: false,
+      isWorking: false,
+      maxRows: 20,
+      bodyColumns: 120,
+      scroll: { offset: 0, bodyRows: 20 },
+      view: {},
+    },
+  }) as const
+
+const seeded = (over: Partial<Job> = {}): Job => ({
+  name: 'a',
+  paths: ['/d'],
+  unit: 'bytes',
+  total: 12.6e9,
+  taskId: 'bq1',
+  startedAt: T0 - 60_000,
+  samples: [
+    { at: T0 - 20_000, amount: 7.6e9 },
+    { at: T0, amount: 7.8e9 },
+  ],
+  lastGrowthAt: T0,
+  ...over,
+})
+
+// Mod が書き込むまで、前から在った登録として返す
+const seed = (on: On, jobs: Job[]) =>
+  on('state.get', (_, e, next) =>
+    written.length > 0 ? next(e) : { value: { value: jobs, version: 0 } },
+  )
+
+const notify = ($: Engine, body: string) =>
+  $.prompt.submit({
+    text: `<task-notification>${body}</task-notification>`,
+    wait: false,
+    origin: { kind: 'task-notification' },
+  } as never)
+
+test('帯は一本一行', async ($, on) => {
+  seed(on, [seeded({ name: 'a' }), seeded({ name: 'b' })])
+  engine(on, { stdout: '' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount(band(surface) as never)
+    const a = await ui.find({ type: 'Text', text: /⬇ a/ })
+    const b = await ui.find({ type: 'Text', text: /⬇ b/ })
+    expect(a?.text).toContain('61%')
+    expect(a?.text).toContain('JST')
+    expect(b).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('6 本ならほか 2 本と出す', async ($, on) => {
+  seed(on, ['a', 'b', 'c', 'd', 'e', 'f'].map(name => seeded({ name })))
+  engine(on, { stdout: '' })
+  const ui = await $.ui.mount(band('terminal') as never)
+  expect((await ui.find({ type: 'Text', text: /ほか 2 本/ }))?.text).toContain('ほか 2 本')
+  await ui.unmount()
+})
+
+test('登録が無ければ帯を出さない', async ($, on) => {
+  engine(on, { stdout: '' })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  const ui = await $.ui.mount(band('terminal') as never)
+  expect((await ui.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
+  await ui.unmount()
+})
+
+test('失敗の通知で止まったと出す', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts } = engine(on, { stdout: '7800000000\t/d\n' })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await notify($, '<task-id>bq1</task-id><status>failed</status>')
+  expect(toasts).toEqual(['✖ a 止まった（61%）'])
+  expect(written).toEqual([])
+})
+
+test('通知の時点で全体に届いていれば完了', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts } = engine(on, { stdout: '12600000000\t/d\n' })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await notify($, '<task-id>bq1</task-id><status>completed</status>')
+  expect(toasts.length).toBe(1)
+  expect(toasts[0]).toMatch(/^✔ a 完了（12\.6 GB、/)
+  expect(written).toEqual([])
+})
+
+test('ほかのタスクの通知では外さない', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts, runs } = engine(on, { stdout: '7800000000\t/d\n' })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await notify($, '<task-id>other</task-id><status>failed</status>')
+  expect(toasts).toEqual([])
+  expect(runs).toEqual([])
+})
+
+test('人の入力では何もしない', async ($, on) => {
+  seed(on, [seeded()])
+  const { toasts, runs } = engine(on, { stdout: '' })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.prompt.submit({
+    text: '<task-notification><task-id>bq1</task-id><status>failed</status></task-notification>',
+    wait: false,
+    origin: { kind: 'composer' },
+  } as never)
+  expect(toasts).toEqual([])
+  expect(runs).toEqual([])
+})
+
+test('一節を末尾に足す', async ($, on) => {
+  engine(on, { stdout: '' })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'x', scope: 'shared' }] }) as never)
+  const { sections } = await $.prompt.compose({
+    model: 'm',
+    promptModel: 'm',
+    surfaces: ['terminal'],
+    tools: [],
+    outputStyle: null,
+    traits: [],
+  } as never)
+  const last = sections.at(-1)
+  expect(last?.id).toBe('bg-progress:guide')
+  expect(last?.scope).toBe('session')
+  expect(last?.text).toContain('mcp__bg-progress__watch')
+})
+
 test('読み込み直しで測定を再開する', async ($, on) => {
   const stored: Job = {
     name: 'x',
