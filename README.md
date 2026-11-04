@@ -411,6 +411,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | settings.json の `outputStyle` / `language` / `spinnerVerbs` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
 | settings.json の `effortLevel` | 配らない（手元でも持たない） | ユーザー設定の最上位の `effortLevel` は Opus 5.5 以降のモデルで無視される（公式の settings reference）。モデルの既定値（Opus 5.5 / Sonnet 5.5 は `medium`）に任せる |
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
+| `cloud-skills.txt` に挙げた第三者の公開スキル（`yomiyasu`） | 配る（クラウドだけ） | 既定のブランチの最新を浅く clone し、挙げたサブディレクトリ（`SKILL.md` を持つもの）を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` がリポジトリの直下に無く、git-repo の external では形が合わないスキルのため。手元へは配らない |
 | リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。写したスキルがクラウドのセッションのスキル一覧に出ることは、`research-design` で確かめた（dotfiles#48） |
 | リポジトリ直下の `skills/bg-progress/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドでは背景で長いダウンロードや推論を回すことがほぼ無く、帯を出す入力欄も手元の端末とは違う |
 | リポジトリ直下の `skills/issue-link/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドの画面は Herdr の端末ではなく、`FORCE_HYPERLINK` の前提も違う |
@@ -427,6 +428,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 - `dot_claude/CLAUDE.md` に手元専用の道具（chezmoi / herdr / codex / memory など）を前提にした節を足したら、冒頭の「クラウドセッションでの読み替え」節にも足す。
 - `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external と、`.claude/hooks/` 配下に足した `type = "file"` の external は自動で配られる（`archive` とそれ以外の `file` は飛ばし、`clone.args` などのオプションは読まない）。
 - クラウドへも配る hook を足すときは、本体を `.claude/hooks/` 配下の file external にし、command を `install-cloud.sh` の `CLOUD_HOOK_COMMANDS` に足す（今は `hooks.Stop` だけを扱う）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
+- クラウドにだけ入れたい第三者の公開スキルは、`cloud-skills.txt` に「名前 URL リポジトリ内のパス」の 1 行を足す。clone の失敗やパスに `SKILL.md` が無いときは、既存のものを残して飛ばす。
 - `skills/` に足したスキルは、`install-cloud.sh` が自動で写す。非公開のスキルを `skills/` に置かない（公開リポジトリなので境界を越える）。
 - `skills/` に足した Mod（`SKILL.md` が無く `.claude-plugin/plugin.json` があるもの）は写さない。クラウドへも配るなら `install-cloud.sh` の `CLOUD_MODS` に名前を足し、この表と `install-cloud.bats` を合わせる。
 - 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。

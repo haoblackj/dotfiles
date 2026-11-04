@@ -287,3 +287,69 @@ EOF
     [ ! -e "$HOME/.claude/skills/bg-progress" ]
     [ ! -e "$HOME/.claude/skills/issue-link" ]
 }
+
+# cloud-skills.txt のテストに使う、サブディレクトリにスキルを持つ git リポジトリ。
+# 一時ディレクトリに作り、file:// で clone させる（ネットワークを使わない）。
+make_subdir_skill_repo() {
+    UP="$BATS_TEST_TMPDIR/upstream"
+    mkdir -p "$UP/skills/demo/references"
+    echo '---' >"$UP/skills/demo/SKILL.md"
+    echo ref >"$UP/skills/demo/references/a.md"
+    echo top >"$UP/README.md"
+    git -C "$UP" init -q
+    git -C "$UP" add -A
+    git -C "$UP" -c user.name=t -c user.email=t@example.invalid commit -q -m init
+}
+
+@test "cloud-skills.txt のスキルをサブディレクトリだけ ~/.claude/skills へ写す" {
+    make_subdir_skill_repo
+    echo "# コメント" >"$SRC/cloud-skills.txt"
+    echo "demo file://$UP skills/demo" >>"$SRC/cloud-skills.txt"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    diff -r "$UP/skills/demo" "$HOME/.claude/skills/demo"
+    [ ! -e "$HOME/.claude/skills/demo/README.md" ]
+    [ ! -e "$HOME/.claude/skills/demo/.git" ]
+}
+
+@test "cloud-skills.txt のパスに SKILL.md が無ければ既存のものを残す" {
+    make_subdir_skill_repo
+    echo "demo file://$UP skills/missing" >"$SRC/cloud-skills.txt"
+    mkdir -p "$HOME/.claude/skills/demo"
+    echo keep >"$HOME/.claude/skills/demo/SKILL.md"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.claude/skills/demo/SKILL.md")" = keep ]
+    [[ "$output" == *"SKILL.md が無いので飛ばす"* ]]
+}
+
+@test "cloud-skills.txt の clone に失敗しても既存のものを残す" {
+    echo "demo file://$BATS_TEST_TMPDIR/missing skills/demo" >"$SRC/cloud-skills.txt"
+    mkdir -p "$HOME/.claude/skills/demo"
+    echo keep >"$HOME/.claude/skills/demo/SKILL.md"
+    run bash -c 'GIT_TERMINAL_PROMPT=0 bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$HOME/.claude/skills/demo/SKILL.md")" = keep ]
+}
+
+@test "cloud-skills.txt の名前やパスで ~/.claude/skills や clone の外を指させない" {
+    make_subdir_skill_repo
+    {
+        echo "../evil file://$UP skills/demo"
+        echo ".hidden file://$UP skills/demo"
+        echo "demo file://$UP skills/../.."
+    } >"$SRC/cloud-skills.txt"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/evil" ]
+    [ ! -e "$HOME/.claude/skills/.hidden" ]
+    [ ! -e "$HOME/.claude/skills/demo" ]
+}
+
+@test "本物の cloud-skills.txt の行はすべて「名前 URL パス」の形" {
+    run awk '!/^[[:space:]]*(#|$)/ && NF != 3' "$BATS_TEST_DIRNAME/cloud-skills.txt"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    grep -q '^yomiyasu https://github.com/nanaism/yomiyasu.git skills/yomiyasu$' \
+        "$BATS_TEST_DIRNAME/cloud-skills.txt"
+}

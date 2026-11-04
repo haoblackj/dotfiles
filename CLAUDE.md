@@ -33,6 +33,7 @@ linked/claude/settings.json           — グローバルClaude Code設定の実
 skills/<名前>/SKILL.md                — 公開の自作スキルの実体（.chezmoiignore でホームへは配らない）
 run_once_NN_*.sh.tmpl                 — 環境セットアップ（.claude/rules/run_once.md 参照）
 install-cloud.sh                      — Claude Code on the web の Setup script 用。dot_claude/ の一部を ~/.claude/ へ写す（README「クラウドセッション」）
+cloud-skills.txt                      — install-cloud.sh がクラウドにだけ配る第三者の公開スキルの一覧（サブディレクトリを写す）
 dot_zshrc.tmpl / dot_gitconfig.tmpl
 .chezmoiexternal.toml                 — book-to-skill (公開external) + claude-private clone定義
 ```
