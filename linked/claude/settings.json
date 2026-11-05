@@ -159,6 +159,17 @@
           }
         ],
         "matcher": "ScheduleWakeup|CronCreate"
+      },
+      {
+        "hooks": [
+          {
+            "command": "f=\"$HOME/.local/share/claude-private/hooks/guard-image-read.py\"; [ ! -f \"$f\" ] || python3 \"$f\"",
+            "onFailure": "block",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Read|mcp__comfyui__.*"
       }
     ],
     "SessionStart": [
