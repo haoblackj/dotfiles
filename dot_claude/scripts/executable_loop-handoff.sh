@@ -69,6 +69,7 @@ PROMPT="/loop $INSTRUCTION
 STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$NAME" "$PROMPT") || exit 1
 (( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
 PANE=$(jq -r .pane <<< "$STARTED")
+note_wish_moved "$CUR" "$PANE"
 
 jq -nc --arg name "$NAME" --arg pane "$PANE" --arg url "$STATE_URL" \
   '{handed_off: true, agent: $name, pane: $pane, state_url: $url}'

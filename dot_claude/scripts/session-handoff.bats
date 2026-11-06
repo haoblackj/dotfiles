@@ -10,6 +10,7 @@ setup() {
     TMPDIR_TEST="$(mktemp -d)"
     BIN="$TMPDIR_TEST/bin"
     CALLS="$TMPDIR_TEST/calls"
+    PRTS_CALLS="$TMPDIR_TEST/prts-calls"
     export HOME="$TMPDIR_TEST/home"
     mkdir -p "$BIN" "$HOME"
     cat > "$BIN/herdr" <<EOF
@@ -17,7 +18,7 @@ setup() {
 printf '%s\n' "\$*" >> "$CALLS"
 case "\$1 \$2" in
   "pane current") [ -n "\${FAKE_NO_CURRENT:-}" ] && exit 1
-                  echo '{"result":{"type":"pane_current","pane":{"pane_id":"w3:p1","workspace_id":"w3","tab_id":"w3:t1","cwd":"'"\$FAKE_CWD"'","focused":true,"agent_status":"working","revision":1,"terminal_id":"x"}}}' ;;
+                  echo '{"result":{"type":"pane_current","pane":{"pane_id":"w3:p1","workspace_id":"w3","tab_id":"w3:t1","cwd":"'"\$FAKE_CWD"'","focused":true,"agent_status":"working","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"from-pane"},"revision":1,"terminal_id":"x"}}}' ;;
   "pane wait-output") echo '{"result":{"matched":true}}' ;;
   "tab create") [ -n "\${FAKE_TAB_FAIL:-}" ] && { echo '{"error":{"code":"x"}}'; exit 1; }
                 [ -n "\${FAKE_NO_TAB_ID:-}" ] && { echo '{"result":{"root_pane":{"pane_id":"w1:p42"}}}'; exit 0; }
@@ -28,8 +29,16 @@ case "\$1 \$2" in
 esac
 EOF
     chmod +x "$BIN/herdr"
+    cat > "$BIN/prts" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$PRTS_CALLS"
+echo 標準出力へ出る文
+[ -z "\${FAKE_PRTS_FAIL:-}" ]
+EOF
+    chmod +x "$BIN/prts"
     export PATH="$BIN:$PATH"
     export HERDR_ENV=1 HERDR_WORKSPACE_ID=w1
+    unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
 }
 
@@ -155,4 +164,38 @@ EOF
         [[ "$stderr" == *"session-handoff: 共通部分 herdr-start-claude.sh を読み込めない"* ]]
     done
     run ! test -e "$CALLS"
+}
+
+@test "引き継ぎ先の枠を prts に書き、応答の JSON は崩さない" {
+    handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$PRTS_CALLS")" = "wish moved --from-session from-pane --pane w1:p42" ]
+    [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
+}
+
+@test "pane current が使えなければ、CLAUDE_CODE_SESSION_ID を元のセッションにする" {
+    FAKE_NO_CURRENT=1 CLAUDE_CODE_SESSION_ID=from-env handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$PRTS_CALLS")" = "wish moved --from-session from-env --pane w1:p42" ]
+}
+
+@test "元のセッションが分からなければ prts を呼ばない" {
+    FAKE_NO_CURRENT=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    [ ! -e "$PRTS_CALLS" ]
+}
+
+@test "prts が失敗しても引き継ぎは成功にする" {
+    FAKE_PRTS_FAIL=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    [ -e "$PRTS_CALLS" ]
+    [ "$(jq -r .handed_off <<< "$output")" = true ]
+}
+
+@test "prts が無くても引き継ぎは成功にする" {
+    mv "$BIN/prts" "$TMPDIR_TEST/prts-moved-away"
+    ln -s "$(command -v jq)" "$BIN/jq"
+    PATH="$BIN:/usr/bin:/bin" handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .handed_off <<< "$output")" = true ]
 }

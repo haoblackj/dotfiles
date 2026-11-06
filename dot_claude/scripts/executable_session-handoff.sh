@@ -59,6 +59,7 @@ NAME="chat-$(date +%m%d%H%M%S)"
 PROMPT="前のセッションからの引き継ぎ。最初に状態 $STATE を読み（issue のコメントなら、それより新しい \`## 状態\` も）、そこに書かれた作業フォルダ、ワークツリー、ブランチ、issue と PR を確かめてから「次の一手」から続ける。"
 STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$NAME" "$PROMPT") || exit 1
 (( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
+note_wish_moved "$CUR" "$(jq -r .pane <<< "$STARTED")"
 
 jq -nc --arg name "$NAME" --arg state "$STATE" --argjson started "$STARTED" \
   '{handed_off: true, agent: $name, tab: $started.tab, pane: $started.pane, state: $state}'

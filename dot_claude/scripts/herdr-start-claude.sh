@@ -51,3 +51,14 @@ start_claude_in_new_tab() {
 
   jq -nc --arg tab "$tab" --arg pane "$pane" '{tab: $tab, pane: $pane}'
 }
+
+# 元のセッションに望みが結ばれていたら、引き継ぎ先の枠を prts に書く。
+# 第 1 引数は herdr pane current の応答。呼ぶ側の標準出力は JSON なので、何も出さず、失敗しても引き継ぎを止めない。
+note_wish_moved() {
+  local cur="$1" pane="$2" from
+  command -v prts >/dev/null 2>&1 || return 0
+  from=$(jq -r '.result.pane.agent_session.value // empty' <<< "$cur" 2>/dev/null)
+  from="${from:-${CLAUDE_CODE_SESSION_ID:-}}"
+  [[ -n "$from" ]] || return 0
+  timeout 10 prts wish moved --from-session "$from" --pane "$pane" >/dev/null 2>&1 || true
+}
