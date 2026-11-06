@@ -224,6 +224,15 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "~/.local/bin/prts stop-hook",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
