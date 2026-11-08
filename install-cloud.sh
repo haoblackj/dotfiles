@@ -173,7 +173,38 @@ EOF
   done <<<"$targets"
 fi
 
-# 4. リポジトリ直下の skills/（公開の自作スキル）。手元では chezmoi が
+# 3b. cloud-skills.txt に挙げた第三者の公開スキル（リポジトリのサブディレクトリにあるもの）。
+#     clone して、指定のディレクトリに SKILL.md があるときだけ差し替える
+#     （clone の失敗や上流の配置の変化で既存を失わない）。
+list="$SRC/cloud-skills.txt"
+if [ -f "$list" ]; then
+  while read -r name url path _; do
+    case "$name" in "" | "#"*) continue ;; esac
+    if [ -z "$url" ] || [ -z "$path" ]; then
+      log "cloud-skills.txt の行の形が違うので飛ばす: $name"
+      continue
+    fi
+    # 名前とパスで ~/.claude/skills の外や clone の外を指させない
+    if [[ "$name" == */* || "$name" == .* || "/$path/" == */../* ]]; then
+      log "cloud-skills.txt の名前かパスが不正なので飛ばす: $name $path"
+      continue
+    fi
+    staging=$(mktemp -d)
+    if ! git clone -q --depth 1 "$url" "$staging/repo" </dev/null; then
+      log "clone に失敗したので飛ばす: $url"
+    elif [ ! -f "$staging/repo/$path/SKILL.md" ]; then
+      log "SKILL.md が無いので飛ばす: $url の $path"
+    else
+      mkdir -p "$HOME/.claude/skills"
+      rm -rf "${HOME:?}/.claude/skills/$name"
+      cp -R "$staging/repo/$path" "$HOME/.claude/skills/$name"
+      log "配置: ~/.claude/skills/$name（$url の $path）"
+    fi
+    rm -rf "$staging"
+  done <"$list"
+fi
+
+# 4.リポジトリ直下の skills/（公開の自作スキル）。手元では chezmoi が
 #    dot_claude/skills/symlink_<名前>.tmpl で本チェックアウトへの symlink を張るが、
 #    クラウドには chezmoi が無いので実体を写す。SKILL.md を持たないものは、
 #    CLOUD_MODS に挙げた Mod（.claude-plugin/plugin.json を持つもの）だけを写す。

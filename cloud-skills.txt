@@ -1,0 +1,11 @@
+# クラウドセッション（install-cloud.sh）にだけ配る、第三者の公開スキル。
+# 手元（chezmoi）へは配らない。
+#
+# 書式: 1 行に「名前 clone の URL リポジトリ内のパス」を空白で区切って書く。
+# 既定のブランチの最新を浅く clone し、「リポジトリ内のパス」のディレクトリ
+# （SKILL.md を持つもの）を ~/.claude/skills/<名前>/ へ写す。
+# .chezmoiexternal.toml の git-repo はリポジトリ全体を写すので、SKILL.md が
+# リポジトリの直下に無いスキルはこちらに書く。# で始まる行はコメント。
+
+# AI が書いた日本語の推敲。MIT。homoe4 の環境で既定で使えるように足した（2026-11-04）
+yomiyasu https://github.com/nanaism/yomiyasu.git skills/yomiyasu
