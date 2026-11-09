@@ -1,14 +1,24 @@
 {{- /*
-HIRO-DESKTOP から始まるホスト名の機械は、物理メモリ48GB以上であることを前提にしている。
-物理48GB未満の機械にこの名前を振ると memory=48GB がそのまま出力され、WSL2が物理を超える確保を試みてページファイルへ落ちる。
+HIRO-DESKTOP から始まるホスト名の機械は、物理メモリ32GB以上であることを前提にしている。
+物理32GB未満の機械にこの名前を振ると memory=32GB がそのまま出力され、WSL2が物理を超える確保を試みてページファイルへ落ちる。
 hasPrefix は大文字小文字とセパレータを区別する。
 hiro-desktop02 や HIRO_DESKTOP02 はこの条件に一致せず、memory行が出ない安全側になる。
+
+2026-11-10、実機（HIRO-DESKTOP02）の .wslconfig に合わせた。実機は memory=32GB に下がり、sparseVhd と autoMemoryReclaim が
+足されていた（いつ誰が変えたかの記録は見つからなかった。テンプレートは 2026-08-12 の 48GB のままだった）。
+autoMemoryReclaim は gradual から dropCache に変えた。gradual ではファイルのキャッシュが Windows へなかなか返らず、
+Windows 側の Strata（専門家を RAM に置くローカル LLM）が RAM を取れずに遅くなったため。
+sparseVhd と autoMemoryReclaim は、職場 PC の挙動を変えないよう HIRO-DESKTOP の機械にだけ出す。
 */ -}}
 [wsl2]
 {{- if hasPrefix "HIRO-DESKTOP" .chezmoi.hostname }}
-memory=48GB
+memory=32GB
 {{- end }}
 networkingMode=Mirrored
 
 [experimental]
 hostAddressLoopback=true
+{{- if hasPrefix "HIRO-DESKTOP" .chezmoi.hostname }}
+sparseVhd=true
+autoMemoryReclaim=dropCache
+{{- end }}
