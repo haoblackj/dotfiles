@@ -28,6 +28,9 @@ local.conf
 wsl-static-dns.sh
 wsl-static-dns.service
 earlyoom.default
+wsl-drop-caches.sh
+wsl-drop-caches.service
+wsl-drop-caches.timer
 # Pythonテスト実行で生成されるバイトコードとキャッシュはapply対象外
 **/__pycache__
 **/__pycache__/**

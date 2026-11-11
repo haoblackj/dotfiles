@@ -1,0 +1,6 @@
+[Unit]
+Description=Drop the page cache when it exceeds a threshold (haoblackj/dotfiles#88)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/bin/wsl-drop-caches.sh
