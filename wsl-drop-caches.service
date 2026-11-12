@@ -4,3 +4,7 @@ Description=Drop the page cache when it exceeds a threshold (haoblackj/dotfiles#
 [Service]
 Type=oneshot
 ExecStart=/bin/sh /usr/local/bin/wsl-drop-caches.sh
+# 毎分の起動と終了の行（systemd が info で書く）を journal に残さず、捨てたときの 1 行だけを残す。
+# スクリプトの出力は notice に上げて残す。失敗の知らせは warning 以上なので残る。
+SyslogLevel=notice
+LogLevelMax=notice
