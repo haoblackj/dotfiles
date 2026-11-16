@@ -3,7 +3,7 @@
   "askUserQuestionTimeout": "never",
   "cleanupPeriodDays": 36500,
   "enabledPlugins": {
-    "andrej-karpathy-skills@karpathy-skills": false,
+    "andrej-karpathy-skills@karpathy-skills": true,
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "codex@openai-codex": true,
