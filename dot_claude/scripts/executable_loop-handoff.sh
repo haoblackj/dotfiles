@@ -5,9 +5,7 @@
 # タブの作成、agent の起動、引き継ぎの文面は、ここが決まった形で行う。
 #
 # 使い方:
-#   loop-handoff.sh --state-url <状態コメントの URL> --title <名前> --model <モデル> --effort <エフォート> [--dry-run] -- <ループの指示>
-#
-# --title は引き継ぎ先のセッションの名前で、タブ名にもなる（herdr-start-claude.sh の check_title）。
+#   loop-handoff.sh --state-url <状態コメントの URL> --model <モデル> --effort <エフォート> [--dry-run] -- <ループの指示>
 #
 # 状態コメントの URL は、GitHub の issue か PR のコメントへのリンク（#issuecomment-<数字>）だけを受け付ける。
 # 引き継ぎの前に状態が書かれていることを、形の上で確かめるため。
@@ -24,11 +22,10 @@ die() { printf 'loop-handoff: %s\n' "$1" >&2; exit 1; }
 # shellcheck source=dot_claude/scripts/herdr-start-claude.sh
 source "$(dirname "${BASH_SOURCE[0]}")/herdr-start-claude.sh" || die "共通部分 herdr-start-claude.sh を読み込めない"
 
-STATE_URL="" TITLE="" MODEL="" EFFORT="" DRY=0
+STATE_URL="" MODEL="" EFFORT="" DRY=0
 while (( $# > 0 )); do
   case "$1" in
     --state-url) STATE_URL="${2:-}"; shift 2 || die "--state-url に値が無い" ;;
-    --title) TITLE="${2:-}"; shift 2 || die "--title に値が無い" ;;
     --model) MODEL="${2:-}"; shift 2 || die "--model に値が無い" ;;
     --effort) EFFORT="${2:-}"; shift 2 || die "--effort に値が無い" ;;
     --dry-run) DRY=1; shift ;;
@@ -44,7 +41,6 @@ INSTRUCTION="$*"
 MODEL_RE='^[][A-Za-z0-9._-]+$'
 [[ "$MODEL" =~ $MODEL_RE ]] || die "--model が無いか、形が違う"
 [[ "$EFFORT" =~ ^(low|medium|high|xhigh|max)$ ]] || die "--effort は low、medium、high、xhigh、max のどれか"
-WHY=$(check_title "$TITLE") || die "$WHY"
 INSTRUCTION="${INSTRUCTION#/loop }"
 [[ -n "${INSTRUCTION// /}" ]] || die "ループの指示が空"
 
@@ -70,7 +66,7 @@ PROMPT="/loop $INSTRUCTION
 
 （前のセッションからの引き継ぎ。毎回の最初に状態コメント $STATE_URL と、それより新しい \`## 状態\` を読み、「次の一手」から続ける。）"
 
-STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "$PROMPT") || exit 1
+STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$NAME" "$PROMPT") || exit 1
 (( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
 PANE=$(jq -r .pane <<< "$STARTED")
 note_wish_moved "$CUR" "$PANE"
