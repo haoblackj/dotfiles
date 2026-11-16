@@ -15,8 +15,21 @@ run() {
   "$@"
 }
 
+# 引き継ぎ先のセッションの名前（claude --name）を確かめる。名前が無いと、Claude Code は
+# 最初の発言（引き継ぎの定型文）から題を作り、「〇〇の引き継ぎ」になる（haoblackj/dotfiles#91）。
+# 名前はタブ名にもなるので短くする。文字数は jq でコードポイントを数える（bash の ${#} はロケール次第）。
+# 合わなければ理由を標準出力に出して 1 を返す。
+check_title() {
+  local title="$1" len
+  [[ -n "${title//[[:space:]]/}" ]] || { echo "--title が無い。作業の中身を表す短い名前（20 文字まで）を付ける"; return 1; }
+  [[ "$title" != *$'\n'* && "$title" != *$'\r'* ]] || { echo "--title に改行を入れない"; return 1; }
+  [[ "$title" != *引き継ぎ* ]] || { echo "--title に「引き継ぎ」を入れない。作業の中身を名前にする"; return 1; }
+  len=$(jq -rn --arg t "$title" '$t | length') || { echo "--title の長さを数えられない"; return 1; }
+  (( len <= 20 )) || { echo "--title は 20 文字までにする（いま $len 文字）"; return 1; }
+}
+
 start_claude_in_new_tab() {
-  local ws="$1" dir="$2" model="$3" effort="$4" name="$5" prompt="$6"
+  local ws="$1" dir="$2" model="$3" effort="$4" title="$5" name="$6" prompt="$7"
   local created pane tab out
   created=$(run herdr tab create --workspace "$ws" --cwd "$dir" --no-focus) || {
     printf 'herdr-start-claude: tab create で失敗: %s\n' "$created" >&2
@@ -37,7 +50,7 @@ start_claude_in_new_tab() {
   # 待ちが切れても先へ進む（プロンプトの形は人の設定しだいで、何も描かないシェルもありうる）
   run herdr pane wait-output "$pane" --regex '\S' --timeout 15000 >/dev/null 2>&1
 
-  out=$(run herdr agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- --model "$model" --effort "$effort") || {
+  out=$(run herdr agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- --model "$model" --effort "$effort" --name "$title") || {
     printf 'herdr-start-claude: agent start で失敗（ペイン %s は残してある）: %s\n' "$pane" "$out" >&2
     return 1
   }

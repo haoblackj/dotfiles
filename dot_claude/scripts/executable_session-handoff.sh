@@ -6,7 +6,9 @@
 # --dry-run は herdr を呼ばず、呼ぶはずのコマンドを出す。
 #
 # 使い方:
-#   session-handoff.sh --state <状態の場所> --cwd <dir> --model <モデル> --effort <エフォート> [--dry-run]
+#   session-handoff.sh --state <状態の場所> --cwd <dir> --title <名前> --model <モデル> --effort <エフォート> [--dry-run]
+#
+# --title は引き継ぎ先のセッションの名前で、タブ名にもなる（herdr-start-claude.sh の check_title）。
 
 set -uo pipefail
 
@@ -15,10 +17,11 @@ die() { printf 'session-handoff: %s\n' "$1" >&2; exit 1; }
 # shellcheck source=dot_claude/scripts/herdr-start-claude.sh
 source "$(dirname "${BASH_SOURCE[0]}")/herdr-start-claude.sh" || die "共通部分 herdr-start-claude.sh を読み込めない"
 
-STATE="" DIR="" MODEL="" EFFORT="" DRY=0
+STATE="" DIR="" TITLE="" MODEL="" EFFORT="" DRY=0
 while (( $# > 0 )); do
   case "$1" in
     --state) STATE="${2:-}"; shift 2 || die "--state に値が無い" ;;
+    --title) TITLE="${2:-}"; shift 2 || die "--title に値が無い" ;;
     --cwd) DIR="${2:-}"; shift 2 || die "--cwd に値が無い" ;;
     --model) MODEL="${2:-}"; shift 2 || die "--model に値が無い" ;;
     --effort) EFFORT="${2:-}"; shift 2 || die "--effort に値が無い" ;;
@@ -40,6 +43,7 @@ DIR=$(realpath -e -- "$DIR" 2>/dev/null) || die "作業ディレクトリの場�
 MODEL_RE='^[][A-Za-z0-9._-]+$'
 [[ "$MODEL" =~ $MODEL_RE ]] || die "--model が無いか、形が違う"
 [[ "$EFFORT" =~ ^(low|medium|high|xhigh|max)$ ]] || die "--effort は low、medium、high、xhigh、max のどれか"
+WHY=$(check_title "$TITLE") || die "$WHY"
 
 if (( DRY == 0 )); then
   [[ "${HERDR_ENV:-}" == 1 ]] || die "Herdr のペインの中で呼ぶ（HERDR_ENV が無い）"
@@ -57,7 +61,7 @@ fi
 
 NAME="chat-$(date +%m%d%H%M%S)"
 PROMPT="前のセッションからの引き継ぎ。最初に状態 $STATE を読み（issue のコメントなら、それより新しい \`## 状態\` も）、そこに書かれた作業フォルダ、ワークツリー、ブランチ、issue と PR を確かめてから「次の一手」から続ける。"
-STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$NAME" "$PROMPT") || exit 1
+STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "$PROMPT") || exit 1
 (( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
 note_wish_moved "$CUR" "$(jq -r .pane <<< "$STARTED")"
 
