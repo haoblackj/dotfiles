@@ -348,7 +348,7 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 通した予約の prompt を覚えておき、同じ prompt の発火（UserPromptSubmit）には、コンテキストの二段目と一段目をその回の作業の前に知らせる（一段目は一度だけ）。
 固定間隔のループは発火をフックから止められないので、既定で作らせない。`LOOP_GUARD_ALLOW_RECURRING_CRON=1` で許したときだけ、発火に振り先（stop、逼迫）の知らせも入れる。振り先のファイルはツールを呼んだときにしか書き換わらず、発火の時点では古いことがあるため、自己ペースのループでは予約の時点の判定に任せる。
 二段目の引き継ぎは `dot_claude/scripts/executable_loop-handoff.sh`（配置先 `~/.claude/scripts/loop-handoff.sh`）が受け持つ。
-Claude が渡すのは状態コメントの URL、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
+Claude が渡すのは状態コメントの URL、引き継ぎ先のセッションの名前（`--title`、作業の中身を表す 20 文字以内。タブ名にもなる）、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
 状態コメントへのリンク（`#issuecomment-<数字>`）でなければ止まる。
 
 コンテキストの閾値は `CONTEXT_GUARD_*`、逼迫の間隔と固定間隔の許可は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
@@ -378,7 +378,8 @@ Herdr の中では「移って」と言えば移れること、外では状態�
 状態は issue の `## 状態` コメントに書き、一つ前をたたむ。
 issue が無ければ、まず作ることをリーダーに提案して返答を待ち、却下されたら `~/.cache/claude-handoff/<日付>-<session_id>.md` に書く。
 済んだこと、決定、次の一手に加えて、作業フォルダ、ワークツリーのパスとブランチ、issue と PR、元の session_id、裏で走っている処理とその扱いを残す。
-残りの仕事からモデルとエフォートを選び、`~/.claude/scripts/session-handoff.sh --state <URLかファイル> --cwd <作業フォルダかワークツリー> --model <モデル> --effort <エフォート>` で引き継ぐ。
+残りの仕事からモデルとエフォートと、作業の中身を表す 20 文字以内の名前を選び、`~/.claude/scripts/session-handoff.sh --state <URLかファイル> --cwd <作業フォルダかワークツリー> --title <名前> --model <モデル> --effort <エフォート>` で引き継ぐ。
+名前は `claude --name` で渡り、セッションのタイトルとタブ名になる。渡さないと最初の発言（引き継ぎの定型文）から題が作られ、「〇〇の引き継ぎ」になる（#91）。
 失敗したら出力をリーダーに報告して止まり、掃除へ進まない。
 
 成功したら `~/.claude/scripts/herdr-closable.sh list --exclude-pane <立てたペイン>` で候補を出す。
