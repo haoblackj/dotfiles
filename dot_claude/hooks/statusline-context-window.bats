@@ -134,12 +134,13 @@ install_hooks_as_target() {
 #!/bin/bash
 if [ "$1" = tab ] && [ "$2" = get ]; then
   sleep "${FAKE_HERDR_DELAY:-0}"
-  printf '{"result":{"tab":{"pane_count":1}}}'
+  printf '{"result":{"tab":{"pane_count":1,"label":"3"}}}'
 fi
 { printf '%s|' "$@"; printf '\n'; } >> "$HERDR_LOG"
 exit 0
 EOS
     chmod +x "$FAKE_BIN/herdr"
+    export XDG_STATE_HOME="$TMPDIR_TEST/state"
     export HERDR_LOG="$TMPDIR_TEST/herdr.log"
     : > "$HERDR_LOG"
     export HERDR_ENV=1 HERDR_TAB_ID="w1:t1" HERDR_PANE_ID="w1:p1"
