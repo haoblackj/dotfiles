@@ -46,13 +46,13 @@ teardown() {
     rm -rf -- "$TMPDIR_TEST"
 }
 
-handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --effort medium "$@"; }
+handoff() { run bash "$SCRIPT" --model opus --effort medium "$@"; }
 
 @test "状態のコメントの URL で、指定の cwd に新しいタブを立てて渡す" {
     handoff --state "$URL" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     grep -q -- "tab create --workspace w3 --cwd $FAKE_CWD --no-focus" "$CALLS"
-    grep -q -- "agent start chat-.* --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium --name タブ名の付け方" "$CALLS"
+    grep -q -- "agent start chat-.* --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium" "$CALLS"
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     [ "$(jq -r .tab <<< "$output")" = "w1:t9" ]
     [ "$(jq -r .handed_off <<< "$output")" = true ]
@@ -84,7 +84,7 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     grep -q '^agent prompt chat-' "$CALLS"
     FAKE_NO_TAB_ID=1 run bash "$BATS_TEST_DIRNAME/executable_loop-handoff.sh" \
-        --state-url "$URL" --title "CI の赤の修正" --model opus --effort medium -- "/loop CI を見る"
+        --state-url "$URL" --model opus --effort medium -- "/loop CI を見る"
     [ "$status" -eq 0 ]
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     grep -q '^agent prompt loop-' "$CALLS"
@@ -97,25 +97,6 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     grep -Fx "agent prompt $(jq -r .agent <<< "$output") $expected" "$CALLS"
     prompt=$(grep "agent prompt" "$CALLS")
     run ! grep -q "/loop" <<< "$prompt"
-}
-@test "名前は 1 つの引数のまま claude の --name へ渡る" {
-    handoff --state "$URL" --cwd "$FAKE_CWD" --title '-x "引用" と 空白' --dry-run
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"--name -x\\ \\\"引用\\\"\\ と\\ 空白"* ]]
-}
-@test "名前が無いか、引き継ぎの語を含むか、20 文字を超えるか、改行を含めば止まり、herdr を呼ばない" {
-    run bash "$SCRIPT" --model opus --effort medium --state "$URL" --cwd "$FAKE_CWD"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"--title"* ]]
-    for bad in "prts issue #7 の引き継ぎ" "あいうえおかきくけこさしすせそたちつてとな" $'一行目\n二行目' "   "; do
-        handoff --state "$URL" --cwd "$FAKE_CWD" --title "$bad"
-        [ "$status" -eq 1 ]
-    done
-    [ ! -e "$CALLS" ]
-}
-@test "20 文字ちょうどの名前は通す" {
-    handoff --state "$URL" --cwd "$FAKE_CWD" --title "あいうえおかきくけこさしすせそたちつてと"
-    [ "$status" -eq 0 ]
 }
 @test "cwd にスペースがあっても渡る" { d="$TMPDIR_TEST/a b"; mkdir -p "$d"; handoff --state "$URL" --cwd "$d" --dry-run; [[ "$output" == *"a\\ b"* ]]; }
 @test "cwd が無いディレクトリなら止まる" { handoff --state "$URL" --cwd /nonexistent; [ "$status" -eq 1 ]; }
@@ -177,7 +158,7 @@ EOF
             echo 'return 1' > "$isolated/herdr-start-claude.sh"
         fi
         run --separate-stderr bash "$isolated/handoff.sh" \
-            --state "$URL" --cwd "$FAKE_CWD" --title "タブ名の付け方" --model opus --effort medium --dry-run
+            --state "$URL" --cwd "$FAKE_CWD" --model opus --effort medium --dry-run
         [ "$status" -eq 1 ]
         [ -z "$output" ]
         [[ "$stderr" == *"session-handoff: 共通部分 herdr-start-claude.sh を読み込めない"* ]]
