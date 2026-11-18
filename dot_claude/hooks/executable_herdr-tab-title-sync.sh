@@ -62,6 +62,38 @@ PANE_COUNT=$(jq -r '.result.tab.pane_count // empty' <<< "$TAB" 2>/dev/null)
 LABEL=$(jq -r '.result.tab.label // empty' <<< "$TAB" 2>/dev/null)
 [[ -n "$LABEL" ]] || exit 0
 
+# 閉じたセッションを新しいタブで戻すと（claude --resume）、タブは既定の番号の名前で始まる。
+# 前のタブに手で付けた名前があっても、上の記録はフックが付けた名前しか持たないので、
+# そのままでは session_name で上書きしていた（2026-11-18、「コイカツ読込高速化」が
+# 「penguinEx #98 からの引き継ぎ」に変わった）。herdr の保存記録はタブごとに custom_name と
+# そのタブのセッションの ID を持つので、新しい順に見て、このセッションが前にいたタブの名前を探す。
+# 名前の無いタブ（今の番号のタブ自身）は飛ばし、壊れた記録も飛ばす。
+# 見つけた名前が番号か、このフックが付けた名前なら、手の名前ではないので使わない。
+SNAPSHOT_DIR="${HERDR_TAB_TITLE_SNAPSHOT_DIR:-$HOME/.config/herdr/session-snapshots}"
+previous_hand_label() {
+  local f name
+  [[ -d "$SNAPSHOT_DIR" ]] || return 1
+  while IFS= read -r f; do
+    name=$(jq -r --arg s "$SESSION_ID" '
+      first(.workspaces[]?.tabs[]?
+            | select(any(.panes[]?; .agent_session.value? == $s))
+            | .custom_name // empty | select(. != "")) // empty' -- "$f" 2>/dev/null) || continue
+    [[ -n "$name" ]] || continue
+    [[ "$name" =~ ^[0-9]+$ || "$name" == "$NAME" ||
+       ( -n "$SESSION_OURS" && "$name" == "$SESSION_OURS" ) ]] && return 1
+    printf '%s' "$name"
+    return 0
+  done < <(ls -t -- "$SNAPSHOT_DIR"/*.json 2>/dev/null)
+  return 1
+}
+
+if [[ "$LABEL" =~ ^[0-9]+$ ]] && HAND=$(previous_hand_label); then
+  timeout 5 herdr tab rename "$TAB_ID" "$HAND" >/dev/null 2>&1 || exit 0
+  # 手の名前として扱う。このタブに付けた名前の記録は空にし、セッションの記録も書かない。
+  mkdir -p "$STATE_DIR/tab" 2>/dev/null && printf '%s\n%s\n' "$NAME" "" > "$TAB_STATE" 2>/dev/null
+  exit 0
+fi
+
 OURS="$TAB_OURS"
 if [[ "$LABEL" =~ ^[0-9]+$ || "$LABEL" == "$NAME" ||
       ( -n "$TAB_OURS" && "$LABEL" == "$TAB_OURS" ) ||
