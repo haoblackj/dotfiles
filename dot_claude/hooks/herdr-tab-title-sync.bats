@@ -51,7 +51,26 @@ EOS
     export HERDR_ENV=1
     export HERDR_TAB_ID="w1:t1"
     export HERDR_PANE_ID="w1:p1"
+    # 本物の herdr の保存記録を読ませない。
+    export HERDR_TAB_TITLE_SNAPSHOT_DIR="$TMPDIR_TEST/snapshots"
+    mkdir -p "$HERDR_TAB_TITLE_SNAPSHOT_DIR"
     unset FAKE_TAB_GET FAKE_PANE_COUNT FAKE_RENAME_FAIL FAKE_HANG
+}
+
+# herdr の保存記録を1つ置く。後に置いたものほど新しい（mtime を1秒ずつ進める）。
+#   snapshot <ファイル名> <session_id> [custom_name]
+# custom_name を省くと、そのタブは名前を持たない（既定の番号のまま）。
+SNAP_SEQ=0
+snapshot() {
+    SNAP_SEQ=$((SNAP_SEQ + 1))
+    local f="$HERDR_TAB_TITLE_SNAPSHOT_DIR/$1.json"
+    jq -nc --arg s "$2" --arg n "${3-}" --argjson has "$([ $# -ge 3 ] && echo true || echo false)" '
+      {version:1, workspaces:[{tabs:[
+        ({layout:{Pane:1}, panes:{"1":{cwd:"/x", agent_session:{source:"herdr:claude",agent:"claude",kind:"id",value:"other"}}}, custom_name:"別のタブ"}),
+        ({layout:{Pane:5}, panes:{"5":{cwd:"/x", agent_session:{source:"herdr:claude",agent:"claude",kind:"id",value:$s}}}}
+          + (if $has then {custom_name:$n} else {} end))
+      ]}]}' > "$f"
+    touch -d "@$((1700000000 + SNAP_SEQ))" "$f"
 }
 
 teardown() {
@@ -173,6 +192,72 @@ hand_rename() { printf '%s' "$1" > "$LABEL_FILE"; }
     hand_rename "5"
     sync "タイトル"
     grep -qxF 'tab|rename|w1:t2|タイトル|' "$HERDR_LOG"
+}
+
+@test "閉じたセッションを新しいタブで戻した（ラベルは番号）。前のタブに手の名前があった -> その名前を付け直す" {
+    snapshot s1 sess "手の名前"
+    hand_rename "18"
+    sync "タイトル"
+    grep -qxF 'tab|rename|w1:t1|手の名前|' "$HERDR_LOG"
+    [ "$(label)" = "手の名前" ]
+}
+
+@test "戻した手の名前は手の名前として扱い、session_nameが変わっても上書きしない" {
+    snapshot s1 sess "手の名前"
+    hand_rename "18"
+    sync "タイトル"
+    : > "$HERDR_LOG"
+    sync "次のタイトル"
+    ! renamed || false
+    [ "$(label)" = "手の名前" ]
+}
+
+@test "保存記録は新しいものを優先する。新しい記録で名前の無いタブ（今の番号のタブ）は飛ばす" {
+    snapshot s1 sess "古い手の名前"
+    snapshot s2 sess "新しい手の名前"
+    snapshot s3 sess
+    hand_rename "18"
+    sync "タイトル"
+    [ "$(label)" = "新しい手の名前" ]
+}
+
+@test "前のタブの名前が自分の付けた名前だった -> 今のsession_nameへ付け直す" {
+    sync "古いタイトル"
+    snapshot s1 sess "古いタイトル"
+    export HERDR_TAB_ID="w1:t2" HERDR_PANE_ID="w1:p2"
+    hand_rename "18"
+    sync "タイトル"
+    [ "$(label)" = "タイトル" ]
+}
+
+@test "前のタブの名前が番号だった -> session_nameへ付け直す" {
+    snapshot s1 sess "4"
+    hand_rename "18"
+    sync "タイトル"
+    [ "$(label)" = "タイトル" ]
+}
+
+@test "保存記録に別のセッションしか無い -> session_nameへ付け直す" {
+    snapshot s1 another "誰かの名前"
+    hand_rename "18"
+    sync "タイトル"
+    [ "$(label)" = "タイトル" ]
+}
+
+@test "壊れた保存記録は飛ばして、その前の記録を見る" {
+    snapshot s1 sess "手の名前"
+    printf 'not json' > "$HERDR_TAB_TITLE_SNAPSHOT_DIR/s2.json"
+    touch -d "@1800000000" "$HERDR_TAB_TITLE_SNAPSHOT_DIR/s2.json"
+    hand_rename "18"
+    sync "タイトル"
+    [ "$(label)" = "手の名前" ]
+}
+
+@test "ラベルが番号でないときは保存記録を読まない（手の名前を戻すのは新しいタブだけ）" {
+    sync "タイトル"
+    snapshot s1 sess "手の名前"
+    sync "次のタイトル"
+    [ "$(label)" = "次のタイトル" ]
 }
 
 @test "herdrの再起動でタブIDが変わり、手の名前が復元されている -> 触らない" {
