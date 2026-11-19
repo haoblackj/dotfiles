@@ -1,6 +1,6 @@
 ---
 title: 判断と進行状態の持ち方を作り直す
-status: active
+status: waiting
 wish: state-context
 ---
 
