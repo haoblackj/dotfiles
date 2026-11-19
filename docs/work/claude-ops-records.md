@@ -1,6 +1,6 @@
 ---
 title: 判断と進行状態の持ち方を作り直す
-status: active
+status: waiting
 wish: state-context
 ---
 
@@ -26,6 +26,7 @@ wish: state-context
 - 直近 30 日の実装は、ほとんどがこのセッションで自分で進める形で、subagent-driven-development の使用は 5 回だった。CLAUDE.md の「サブエージェント駆動を既定」と実際が食い違っていた。
 - planning-with-files を退けた理由（作業のファイルを既定で git から外す、次の作業で上書きする）は、どちらも設定で外せる違いだった（11-19 の決定の後に分かった）。2026-11-20 の依頼で既存の資産で作ると決まったので、出し直していない。
 - Herdr 経由で別の Claude が打ち込んだ文は、記録の上ではリーダーの発言と同じ形で残る。`prts quote` は形で分かる物（引き継ぎの定型文、セッションどうしの知らせ）だけを除く。
+- memory の中で「リーダー」「ユーザー」に続く引用 290 件を全部の会話の記録と照合し、原文どおりにあったのは 100 件、見つからなかったのは 190 件だった（2026-11-20）。見つからない物には、言い換え、会話の記録が残っていない 8 月より前の発言、句読点の違いが混ざり、作り話とは言い切れないので一括では書き換えていない。一覧は `~/.cache/claude-ops-backup/20261120/memory-quote-check.json`。確かめた 2 件（comfy-batch-runner と penguinEx の memory）は直した。
 
 ## 判断の経緯
 ### 2026-11-19 採用: 進行状態と決めたことを Issue に持たせない
@@ -91,21 +92,24 @@ wish: state-context
 - 状態: 有効
 
 ## いまの作業
-本番に入れた変更を、実際のセッションと PRTS の画面で確かめている。記録の仕組みが本番で働くことを確かめないと、移行が済んだと言えないため。
+本番に入れた形で使いながら、main への取り込みについてリーダーの答えを待っている。取り込みはリーダーが持つ判断のため。
 
 ## 済んだこと
-- PRTS: 作業記録の表示、「いま」の毎ターンの作り直し、古さの表示、`prts quote`（ブランチ `feat/work-record`、本番に入れた）。
+- PRTS: 作業記録の表示、「いま」の毎ターンの作り直し、古さの表示、`prts quote`（ブランチ `feat/work-record`、本番に入れ、画面のサーバーを再起動した）。
 - dotfiles: スキル work-record、読み戻しのフック、引き継ぎを作業記録に替えた、CLAUDE.md の書き換え（ブランチ `ops/work-records`、本番に反映した）。
+- 本番での確かめ: 試験（prts 418 件、dotfiles の bats 378 件と pytest 182 件、push 前の試験 2190 件）が全部通った。登録したとおりのコマンドで読み戻しのフックが記録の一覧を出した。Stop フックが記録を望みに結び、「いま」を作り直し、望みの画面と一覧に記録と決めてほしいことの件数が出た。スマートフォンの幅（390px）で横にはみ出さない。
+- memory の誤った引用 2 件を直した。全部の memory の引用を照合した（「判明した事実」）。
+- 両方のブランチを GitHub へ push した。
 - 本番の変更前の状態を `~/.cache/claude-ops-backup/20261120/` に残した。
 
 ## 残っていること
-- memory の誤った引用を、確かめられた範囲で直す。
-- 本番の確かめ（新しいセッションでのフックの出力、PRTS の画面）。
-- 両方のブランチを GitHub へ push する。
-- main への取り込みの後に、開いている issue に残る `status:` ラベルを外す（取り込む前に外すと、元へ戻したときに古い決まりと合わなくなる）。
+- main への取り込み（リーダーの答え待ち）。
+- 取り込みの後に、開いている issue に残る `status:` ラベルを外す（取り込む前に外すと、元へ戻したときに古い決まりと合わなくなる）。
+- prts のほかの開いている望み（az104、koikatsu-load、prts、strata-settings）には作業記録がまだ無い。それぞれのセッションが次に動くときに、CLAUDE.md の決まりで作る。
+- 原文が見つからなかった memory の引用 190 件は、使う場面で確かめる。
 
 ## 次に Claude がすること
-- memory の誤った引用を直し、本番の確かめを済ませて、この記録を今に合わせてから push する。
+- リーダーの答えが出たら、取り込むなら両方のリポジトリで PR を作り、取り込んだあとに `status:` ラベルを外し、本番の dotfiles のチェックアウトを main へ戻す。取り込まないなら、下の「参照」の戻し方で本番を元へ戻す。
 
 ## リーダーに決めてほしいこと
 - 二つのブランチ（dotfiles の `ops/work-records`、prts の `feat/work-record`）を main へ取り込むか。Claude の案: 数日使って問題が無ければ取り込む。答えで変わること: 取り込むまで、本番の dotfiles のチェックアウトは `ops/work-records` に切り替わったままになる。
@@ -115,4 +119,5 @@ wish: state-context
 - 書き方: [skills/work-record/SKILL.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/skills/work-record/SKILL.md)
 - PRTS の変更: https://github.com/haoblackj/prts/tree/feat/work-record
 - 本番の変更前の状態: `~/.cache/claude-ops-backup/20261120/`
+- 本番の戻し方: dotfiles は `git -C ~/.local/share/chezmoi switch main` のあと `chezmoi apply ~/.claude`（settings.json とスキルはチェックアウトへの symlink なので、切り替えで戻る。新しいフックのファイル `~/.claude/hooks/work-record-context.py` は登録が外れて動かなくなる。行き先の無くなる `~/.claude/skills/work-record` の symlink は `trash-put` で外す）。memory の 2 件の直しは claude-private の git の履歴から戻せる。prts は prts のリポジトリで `git switch main`、`uv tool install --force --reinstall .`、`systemctl --user restart prts-web.service`。
 - 会話: 3f8034b1-a008-4bec-a6ed-2bc115163166（この作業）、a0ad3736（11-19 の決定）
