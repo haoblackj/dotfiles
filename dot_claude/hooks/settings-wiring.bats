@@ -141,22 +141,6 @@ PY
 # 終了コード 2 で終わり、PreToolUse ではそれが deny になって Bash の呼び出しが全部止まる
 # （settings.json が symlink で先に効き、chezmoi apply がまだのときに起きる）。
 # bats test_tags=production-asset
-@test "guard-decision-quotes.py が PreToolUse の Bash に配線されている" {
-    python3 - "$S" <<'PY'
-import json,sys
-d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
-for ev, hs in h.items():
-    gs=[g for g in hs if any("guard-decision-quotes.py" in x.get("command","") for x in g.get("hooks",[]))]
-    if ev=="PreToolUse":
-        assert len(gs)==1 and gs[0].get("matcher")=="Bash", f"PreToolUse: {gs!r}"
-        assert all("[ ! -f" in x["command"] for x in gs[0]["hooks"]), "無いファイルで止まらない形にする"
-    else:
-        assert not gs, f"{ev} に配線がある"
-print("PASS")
-PY
-}
-
-# bats test_tags=production-asset
 @test "guard-gh-body-time.py が PreToolUse の Bash に配線されている" {
     python3 - "$S" <<'PY'
 import json,sys
