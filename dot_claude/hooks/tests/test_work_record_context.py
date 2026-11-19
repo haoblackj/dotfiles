@@ -81,6 +81,60 @@ class SessionTest(Base):
         text = run("session", {"cwd": str(self.root), "source": "compact"})
         self.assertIn("圧縮の前に決まったこと", text)
 
+    def test_current_instruction_outranks_record(self):
+        self.write()
+        text = run("session", {"cwd": str(self.root), "source": "startup"})
+        self.assertIn("この会話でのリーダーの指示が記録と食い違えば、リーダーの指示に従い", text)
+        self.assertNotIn("記録の新しい判断に従う", text)
+
+    def transcript(self, entries):
+        path = Path(self.tmp.name) / "t.jsonl"
+        with path.open("w", encoding="utf-8") as f:
+            for e in entries:
+                f.write(json.dumps(e, ensure_ascii=False, separators=(",", ":")) + "\n")
+        return str(path)
+
+    @staticmethod
+    def said(text, at, **extra):
+        base = {"type": "user", "timestamp": at, "message": {"role": "user", "content": text},
+                "origin": {"kind": "human"}, "promptSource": "typed"}
+        return {**base, **extra}
+
+    def test_compact_quotes_inputs_after_the_record(self):
+        p = self.write()
+        mtime = 1_800_000_000
+        os.utime(p, (mtime, mtime))
+        iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(t))  # noqa: E731
+        path = self.transcript([
+            self.said("記録より前の指示", iso(mtime - 60)),
+            self.said("やっぱり公開はしない", iso(mtime + 60)),
+            self.said("前のセッションからの引き継ぎ。続ける", iso(mtime + 70)),
+            self.said("候補の文", iso(mtime + 80), promptSource="suggestion_accepted"),
+            self.said("The plugin sent a message", iso(mtime + 90), origin={"kind": "plugin"}),
+            self.said("x" * 500, iso(mtime + 100)),
+        ])
+        text = run("session", {"cwd": str(self.root), "source": "compact", "transcript_path": path})
+        self.assertIn("「やっぱり公開はしない」", text)
+        self.assertIn("…（以下略）", text)
+        for absent in ("記録より前の指示", "前のセッションからの引き継ぎ", "候補の文", "The plugin"):
+            self.assertNotIn(absent, text)
+
+    def test_compact_keeps_only_the_latest_inputs(self):
+        p = self.write()
+        os.utime(p, (1_800_000_000, 1_800_000_000))
+        iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(t))  # noqa: E731
+        path = self.transcript([self.said(f"指示{i}", iso(1_800_000_000 + i)) for i in range(1, 10)])
+        text = run("session", {"cwd": str(self.root), "source": "compact", "transcript_path": path})
+        self.assertNotIn("「指示3」", text)
+        self.assertIn("「指示4」", text)
+        self.assertIn("「指示9」", text)
+
+    def test_startup_does_not_quote_inputs(self):
+        self.write()
+        path = self.transcript([self.said("あとの指示", "2099-01-01T00:00:00.000Z")])
+        text = run("session", {"cwd": str(self.root), "source": "startup", "transcript_path": path})
+        self.assertNotIn("あとの指示", text)
+
     def test_silent_without_records_or_repo(self):
         self.assertEqual(run("session", {"cwd": str(self.root), "source": "startup"}), "")
         self.assertEqual(run("session", {"cwd": self.tmp.name, "source": "startup"}), "")

@@ -5,6 +5,8 @@ session（SessionStart の startup、resume、clear、compact）:
   セッションの cwd のリポジトリ（ワークツリーを含む）の、開いている作業記録の一覧を差し込む。
   本文は差し込まず、題、状態、次の一手の 1 行、リーダーに決めてほしいことの件数、場所だけを出す。
   毎回の会話の頭と圧縮の後に一覧が入り、本文は Claude が要るときに Read で読む（トークンを抑える）。
+  圧縮の後には、記録の最後の更新より後の人の入力を原文で添える。要約に溶けた新しい指示を、
+  古い記録が覆さないようにするため（優先の順はいまの指示、記録、そのほか。グローバルの CLAUDE.md の「作業記録」）。
 prompt（UserPromptSubmit）:
   今の作業コピーの開いている記録が、最後のコミットより古いときだけ、一度だけ一行で知らせる。
   記録を直さずに作業が進んだ合図で、同じ（記録の時刻、コミット）の組では二度出さない。
@@ -18,6 +20,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 MAX_LIST = 8
@@ -130,11 +133,71 @@ def session(payload: dict) -> None:
         lines.append(f"- ほか {len(found) - MAX_LIST} 件")
     lines.append(
         "この会話の作業に当たる記録があれば、作業の前に Read で全部読む。"
-        "記録の判断と、CLAUDE.md、memory、会話の要約が食い違えば、記録の新しい判断に従う。"
+        "記録は過去の判断の記録で、この会話でのリーダーの指示が記録と食い違えば、リーダーの指示に従い、記録に変更として書く。"
+        "CLAUDE.md の一般の決まり、memory、issue のコメント、圧縮の要約と食い違えば、記録の判断に従う。"
     )
     if payload.get("source") == "compact":
+        newest = max(r["mtime"] for r in found)
+        recent = inputs_after(payload.get("transcript_path"), newest)
+        if recent:
+            lines.append(
+                "記録の最後の更新より後の、この会話の人の入力（会話の記録から原文で、古い順）。"
+                "いまの指示として、記録より先に読む。Herdr などで別の Claude が打ち込んだ文を含みうるので、"
+                "記録へ原文として引く前に prts quote で発言者を確かめる:"
+            )
+            for at, text in recent:
+                lines.append(f"- {at} 「{text}」")
         lines.append("圧縮の前に決まったことや分かったことが記録に無ければ、いま記録に書いてコミットする。")
     emit("SessionStart", "\n".join(lines))
+
+
+# 人の入力でない、Claude Code が user の役で差し込む文と、引き継ぎやセッションどうしの知らせの書き出し
+MACHINE_PREFIXES = (
+    "<command-", "<system-reminder>", "<task-notification>", "<local-command-", "<bash-", "<agent-message",
+    "前のセッションからの引き継ぎ", "別のセッション（",
+)
+MAX_INPUTS = 6
+MAX_INPUT_CHARS = 400
+
+
+def inputs_after(transcript_path, since: float) -> list[tuple[str, str]]:
+    """会話の記録から、since（UNIX 時刻）より後の人の入力を古い順に返す。多ければ新しいほうから MAX_INPUTS 件。"""
+    if not transcript_path:
+        return []
+    out = []
+    try:
+        with open(transcript_path, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                if '"user"' not in raw:
+                    continue
+                try:
+                    o = json.loads(raw)
+                except ValueError:
+                    continue
+                if o.get("isMeta") or o.get("isSidechain") or o.get("isCompactSummary"):
+                    continue
+                origin = o.get("origin")
+                if not isinstance(origin, dict) or origin.get("kind") != "human":
+                    continue
+                if o.get("promptSource") not in ("typed", "queued"):
+                    continue
+                text = (o.get("message") or {}).get("content")
+                if not isinstance(text, str) or not text.strip() or text.lstrip().startswith(MACHINE_PREFIXES):
+                    continue
+                at = o.get("timestamp", "")
+                try:
+                    t = datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp()
+                except ValueError:
+                    continue
+                if t > since:
+                    local = time.strftime("%m/%d %H:%M", time.localtime(t))
+                    body = text.strip()
+                    if len(body) > MAX_INPUT_CHARS:
+                        body = body[:MAX_INPUT_CHARS] + "…（以下略）"
+                    out.append((local, body))
+    except OSError:
+        return []
+    return out[-MAX_INPUTS:]
 
 
 def state_file() -> Path:

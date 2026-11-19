@@ -108,7 +108,7 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
 @test "引き継ぎの文面は、作業記録を読んで次の一手から続け、案を決定として扱わないよう言い、/loop を付けない" {
     handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
-    expected="前のセッションからの引き継ぎ。最初に作業記録 $STATEF を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。決めたこととして扱うのは「判断の経緯」で状態が有効の物だけで、「リーダーに決めてほしいこと」にある Claude の案は、リーダーの答えが出るまで決定として扱わない。記録の書き方はスキル work-record。"
+    expected="前のセッションからの引き継ぎ。最初に作業記録 $STATEF を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。決めたこととして扱うのは「判断の経緯」で状態が有効の物だけで、「リーダーに決めてほしいこと」にある Claude の案は、リーダーの答えが出るまで決定として扱わない。このあとリーダーが言ったことが記録と食い違えば、リーダーの言ったことに従い、記録に変更として書く。記録の書き方はスキル work-record。"
     grep -Fx "agent prompt $(jq -r .agent <<< "$output") $expected" "$CALLS"
     prompt=$(grep "agent prompt" "$CALLS")
     run ! grep -q "/loop" <<< "$prompt"
