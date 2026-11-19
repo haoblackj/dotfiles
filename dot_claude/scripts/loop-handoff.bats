@@ -41,8 +41,8 @@ EOF
     unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
     export HOME="$TMPDIR_TEST/home"
-    mkdir -p "$HOME/.cache/claude-handoff"
-    STATEF="$HOME/.cache/claude-handoff/2026-11-19-loop.md"
+    mkdir -p "$TMPDIR_TEST/repo/.git" "$TMPDIR_TEST/repo/docs/work"
+    STATEF="$TMPDIR_TEST/repo/docs/work/loop.md"
     echo s > "$STATEF"
     STATEF=$(realpath -e "$STATEF")
 }
@@ -65,7 +65,7 @@ handoff() { run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --
     [[ "${lines[3]}" == "agent start loop-"*" --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium --name CI の赤の修正" ]]
     [[ "${lines[4]}" == "agent prompt loop-"*" /loop CI を見て、赤なら直す" ]]
     grep -qF "$STATEF" "$CALLS"
-    grep -qF "「Claude の案」の欄の物はリーダーの答えが出るまで決定として扱わない" "$CALLS"
+    grep -qF "リーダーの答えが出るまで決定として扱わない" "$CALLS"
 }
 
 @test "pane current が使えなければ、HERDR_WORKSPACE_ID と今の cwd で作る" {
@@ -85,14 +85,14 @@ handoff() { run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --
     grep -q "^agent prompt loop-[0-9]* /loop CI を見る" "$CALLS"
 }
 
-@test "issue のコメントの URL や、保存先の外のファイルなら止まり、herdr を呼ばない" {
+@test "issue のコメントの URL や、作業記録でないファイルなら止まり、herdr を呼ばない" {
     run bash "$SCRIPT" --state "$URL" --title "CI の赤の修正" --model opus --effort medium -- "x"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"~/.cache/claude-handoff/ 下の引き継ぎのファイル"* ]]
+    [[ "$output" == *"--state は作業記録"* ]]
     echo s > "$TMPDIR_TEST/x.md"
     run bash "$SCRIPT" --state "$TMPDIR_TEST/x.md" --title "CI の赤の修正" --model opus --effort medium -- "x"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"~/.cache/claude-handoff/ 下に置く"* ]]
+    [[ "$output" == *"docs/work/ 直下に置く"* ]]
     [ ! -e "$CALLS" ]
 }
 

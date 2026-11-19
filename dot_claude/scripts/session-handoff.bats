@@ -40,8 +40,9 @@ EOF
     export HERDR_ENV=1 HERDR_WORKSPACE_ID=w1
     unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
-    mkdir -p "$HOME/.cache/claude-handoff"
-    STATEF="$HOME/.cache/claude-handoff/2026-11-19-sess.md"
+    REPO="$TMPDIR_TEST/repo"
+    mkdir -p "$REPO/.git" "$REPO/docs/work"
+    STATEF="$REPO/docs/work/sess.md"
     echo s > "$STATEF"
     STATEF=$(realpath -e "$STATEF")
 }
@@ -52,7 +53,7 @@ teardown() {
 
 handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --effort medium "$@"; }
 
-@test "引き継ぎのファイルで、指定の cwd に新しいタブを立てて渡す" {
+@test "作業記録で、指定の cwd に新しいタブを立てて渡す" {
     handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     grep -q -- "tab create --workspace w3 --cwd $FAKE_CWD --no-focus" "$CALLS"
@@ -62,29 +63,34 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ "$(jq -r .handed_off <<< "$output")" = true ]
     [ "$(jq -r .state <<< "$output")" = "$STATEF" ]
 }
-@test "状態のファイルは ~/.cache/claude-handoff/ の下だけを受け付ける" {
-    mkdir -p "$HOME/.cache/claude-handoff"; f="$HOME/.cache/claude-handoff/x.md"; echo s > "$f"
-    handoff --state "$f" --cwd "$FAKE_CWD"; [ "$status" -eq 0 ]
+@test "作業記録は git の作業コピーの docs/work/ 直下の .md だけを受け付ける" {
     echo s > "$TMPDIR_TEST/x.md"
     handoff --state "$TMPDIR_TEST/x.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
-    [[ "$output" == *"引き継ぎのファイルは ~/.cache/claude-handoff/ 下に置く"* ]]
+    [[ "$output" == *"作業記録はリポジトリの docs/work/ 直下に置く"* ]]
+    mkdir -p "$REPO/docs/work/sub"; echo s > "$REPO/docs/work/sub/y.md"
+    handoff --state "$REPO/docs/work/sub/y.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
+    echo s > "$REPO/docs/work/z.txt"
+    handoff --state "$REPO/docs/work/z.txt" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
+    mkdir -p "$TMPDIR_TEST/nogit/docs/work"; echo s > "$TMPDIR_TEST/nogit/docs/work/a.md"
+    handoff --state "$TMPDIR_TEST/nogit/docs/work/a.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
+    [[ "$output" == *"git の作業コピーの中に無い"* ]]
+    [ ! -e "$CALLS" ]
 }
 @test "issue のコメントの URL は受け付けず、herdr を呼ばない" {
     handoff --state "$URL" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"~/.cache/claude-handoff/ 下の引き継ぎのファイル"* ]]
+    [[ "$output" == *"--state は作業記録"* ]]
     [ ! -e "$CALLS" ]
 }
 @test "相対パスの state と cwd は解決済みの絶対パスで渡す" {
-    mkdir -p "$HOME/.cache/claude-handoff/sub" "$TMPDIR_TEST/work"
-    echo s > "$HOME/.cache/claude-handoff/x.md"
+    mkdir -p "$REPO/docs/work/sub" "$TMPDIR_TEST/work"
     cd "$TMPDIR_TEST"
-    handoff --state "home/.cache/claude-handoff/sub/../x.md" --cwd "work/../work"
+    handoff --state "repo/docs/work/sub/../sess.md" --cwd "work/../work"
     [ "$status" -eq 0 ]
-    state_path=$(realpath -e "$HOME/.cache/claude-handoff/x.md")
+    state_path=$(realpath -e "$REPO/docs/work/sess.md")
     cwd_path=$(realpath -e "$TMPDIR_TEST/work")
     [ "$(jq -r .state <<< "$output")" = "$state_path" ]
-    grep -Fq "最初に引き継ぎのファイル $state_path を読み" "$CALLS"
+    grep -Fq "最初に作業記録 $state_path を全部読み" "$CALLS"
     grep -Fx "tab create --workspace w3 --cwd $cwd_path --no-focus" "$CALLS"
 }
 @test "tab_id が無くても対話と loop の引き継ぎを続ける" {
@@ -99,10 +105,10 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     grep -q '^agent prompt loop-' "$CALLS"
 }
-@test "引き継ぎの文面は、ファイルを読んで次の一手から続け、案を決定として扱わないよう言い、/loop を付けない" {
+@test "引き継ぎの文面は、作業記録を読んで次の一手から続け、案を決定として扱わないよう言い、/loop を付けない" {
     handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
-    expected="前のセッションからの引き継ぎ。最初に引き継ぎのファイル $STATEF を読み、そこに書かれた作業フォルダ、ワークツリー、ブランチ、issue と PR を確かめてから「次の一手」から続ける。決めたこととして扱うのは「リーダーが決めたこと」の欄にリーダーの発言の引用とともに書かれた物だけで、「Claude の案」の欄の物はリーダーの答えが出るまで決定として扱わない。"
+    expected="前のセッションからの引き継ぎ。最初に作業記録 $STATEF を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。決めたこととして扱うのは「判断の経緯」で状態が有効の物だけで、「リーダーに決めてほしいこと」にある Claude の案は、リーダーの答えが出るまで決定として扱わない。記録の書き方はスキル work-record。"
     grep -Fx "agent prompt $(jq -r .agent <<< "$output") $expected" "$CALLS"
     prompt=$(grep "agent prompt" "$CALLS")
     run ! grep -q "/loop" <<< "$prompt"
@@ -136,13 +142,12 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ "$status" -eq 0 ]
     grep -Fx "tab create --workspace w3 --cwd $d --no-focus" "$CALLS"
 }
-@test "状態のファイルの親参照や外への symlink は受け付けない" {
-    mkdir -p "$HOME/.cache/claude-handoff"
-    echo s > "$HOME/.cache/outside.md"
-    ln -s "$HOME/.cache/outside.md" "$HOME/.cache/claude-handoff/link.md"
-    handoff --state "$HOME/.cache/claude-handoff/../outside.md" --cwd "$FAKE_CWD"
+@test "作業記録の親参照や外への symlink は受け付けない" {
+    echo s > "$REPO/docs/outside.md"
+    ln -s "$REPO/docs/outside.md" "$REPO/docs/work/link.md"
+    handoff --state "$REPO/docs/work/../outside.md" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
-    handoff --state "$HOME/.cache/claude-handoff/link.md" --cwd "$FAKE_CWD"
+    handoff --state "$REPO/docs/work/link.md" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
     [ ! -e "$CALLS" ]
 }

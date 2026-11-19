@@ -1,15 +1,15 @@
 #!/bin/bash
 # ループ（/loop）を、Herdr の新しいタブの新しいセッションへ引き継ぐ（haoblackj/dotfiles#69）。
 # loop-guard.sh がコンテキストの二段目で予約を deny したとき、その理由の文面でこれを呼ばせる。
-# Claude が決めるのは、引き継ぎのファイル、モデルとエフォート、ループの指示だけ。
+# Claude が決めるのは、作業記録、モデルとエフォート、ループの指示だけ。
 # タブの作成、agent の起動、引き継ぎの文面は、ここが決まった形で行う。
 #
 # 使い方:
-#   loop-handoff.sh --state <引き継ぎのファイル> --title <名前> --model <モデル> --effort <エフォート> [--dry-run] -- <ループの指示>
+#   loop-handoff.sh --state <作業記録> --title <名前> --model <モデル> --effort <エフォート> [--dry-run] -- <ループの指示>
 #
 # --title は引き継ぎ先のセッションの名前で、タブ名にもなる（herdr-start-claude.sh の check_title）。
 #
-# 引き継ぎのファイルは ~/.cache/claude-handoff/ 下のものだけを受け付ける（herdr-start-claude.sh の check_state_file）。
+# 作業記録はリポジトリの docs/work/ 直下のものだけを受け付ける（herdr-start-claude.sh の check_state_file）。
 # 新しいタブは、呼んだペインと同じワークスペースに、同じ cwd で作る（1 セッション 1 リポジトリ）。
 # ワークスペースと cwd は herdr pane current --current から取る。HERDR_WORKSPACE_ID は起動した時点の
 # 値で、ペインを別のワークスペースへ移したあとは古い。$PWD は Bash ツールが cd した先のことがある。
@@ -66,7 +66,7 @@ fi
 NAME="loop-$(date +%m%d%H%M%S)"
 PROMPT="/loop $INSTRUCTION
 
-（前のセッションからの引き継ぎ。毎回の最初に引き継ぎのファイル $STATE を読み、「次の一手」から続ける。$(state_reading_note)）"
+（前のセッションからの引き継ぎ。毎回の最初に作業記録 $STATE を読み、「次に Claude がすること」から続ける。$(state_reading_note)）"
 
 STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "$PROMPT") || exit 1
 (( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }

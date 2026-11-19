@@ -365,7 +365,7 @@ codex_error() {
     usage 90 10 0 10 10 0
     call
     [ "$(route_of)" = stop ]
-    [[ "$(context_of)" == *"引き継ぎのファイル"* ]]
+    [[ "$(context_of)" == *"作業記録"* ]]
     for _ in 1 2 3 4 5 6 7; do
         call
         [ -z "$output" ]

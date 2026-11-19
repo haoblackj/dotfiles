@@ -257,6 +257,20 @@ echo '{"prompt": "背が高い人に合う家具を探したい"}' | \
 
 1 件注入されれば動いている。空なら `memory-recall.log` を見る。
 
+### 作業記録（判断と進行状態の正本）
+
+判断と進行状態は、作業するリポジトリの `docs/work/<作業名>.md`（作業記録）に Claude が書き、git で管理して GitHub へ push する（決定は #86）。
+ChatGPT からも GitHub のリポジトリを通じて読める。
+issue と PR は議論とレビューに使い、状態は持たせない。auto memory は補助の教訓の置き場で、決定の正本にしない。
+
+- 書き方: [`skills/work-record/SKILL.md`](skills/work-record/SKILL.md)。目的、いまの方針、判明した事実、判断の経緯（採用、棄却、変更を一件ずつ、状態つき）、いまの作業となぜ、済んだこと、残っていること、次に Claude がすること、リーダーに決めてほしいこと、参照。
+- リーダーの言葉は、`prts quote "<文>"` で全部のセッションの記録から原文を確かめたときだけ引用する。
+- 読み戻し: `dot_claude/hooks/executable_work-record-context.py` が SessionStart（startup、resume、clear、compact）で、今のリポジトリとそのワークツリーの開いている記録の一覧（題、状態、次の一手、決めてほしいことの件数、場所）だけを差し込む。本文は Claude が要るときに読む。
+- 書き忘れの合図: 同じフックが UserPromptSubmit で、開いている記録が最後のコミットより 10 分以上古いときに一度だけ知らせる。
+- 引き継ぎ: `session-handoff.sh` と `loop-handoff.sh` は作業記録のパスを受け取り、引き継ぎ先に読ませる。
+- 状況の説明: prts の Stop フックが、前書きの `wish:` で記録を望みに結び、望みの画面に記録の中身を出す（prts のリポジトリの `docs/dashboard-contract.md`）。
+- テスト: `dot_claude/hooks/tests/test_work_record_context.py`
+
 ### Codex への退避（利用枠の見張りと委譲）
 
 平常は Claude が実装する。
@@ -341,15 +355,15 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 | 下の stop と二段目に当たらないとき | 繰り返しの `CronCreate`（固定間隔のループ）を deny し、自己ペースの `/loop` へ回させる。一度きりは通す |
 | 振り先が stop | 止める以外の予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書いてループを止めさせる |
 | コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書き、新しいタブへ引き継がせる |
-| コンテキストが一段目（1M の窓で 300K、使用率 50%） | 予約を一度だけ deny し、引き継ぎのファイルを書かせる |
+| コンテキストが一段目（1M の窓で 300K、使用率 50%） | 予約を一度だけ deny し、作業記録を今に合わせさせる |
 | 振り先が offload か lean | 間隔が 20 分より短い予約を deny |
 
 判定は上の表の順で、先に当たったものだけが効く。
 通した予約の prompt を覚えておき、同じ prompt の発火（UserPromptSubmit）には、コンテキストの二段目と一段目をその回の作業の前に知らせる（一段目は一度だけ）。
 固定間隔のループは発火をフックから止められないので、既定で作らせない。`LOOP_GUARD_ALLOW_RECURRING_CRON=1` で許したときだけ、発火に振り先（stop、逼迫）の知らせも入れる。振り先のファイルはツールを呼んだときにしか書き換わらず、発火の時点では古いことがあるため、自己ペースのループでは予約の時点の判定に任せる。
 二段目の引き継ぎは `dot_claude/scripts/executable_loop-handoff.sh`（配置先 `~/.claude/scripts/loop-handoff.sh`）が受け持つ。
-Claude が渡すのは引き継ぎのファイル（`~/.cache/claude-handoff/` 下）、引き継ぎ先のセッションの名前（`--title`、作業の中身を表す 20 文字以内。タブ名にもなる）、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
-`~/.cache/claude-handoff/` 下のファイルでなければ止まる。issue のコメントの URL は受け付けない（進行状態と決めたことを issue に持たせない、#86 の 2026-11-19 の決定）。
+Claude が渡すのは作業記録（リポジトリの `docs/work/<作業名>.md`）、引き継ぎ先のセッションの名前（`--title`、作業の中身を表す 20 文字以内。タブ名にもなる）、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
+git の作業コピーの `docs/work/` 直下の `.md` でなければ止まる。issue のコメントの URL は受け付けない（進行状態と決めたことを issue に持たせない、#86 の 2026-11-19 の決定）。
 
 コンテキストの閾値は `CONTEXT_GUARD_*`、逼迫の間隔と固定間隔の許可は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
 テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
@@ -374,10 +388,9 @@ Claude からは引き継がず、ターンも止めない。
 知らせは `~/.local/state/claude-chat-context-guard/decisions.log` に残る。
 
 手順の実体は [`skills/session-handoff/SKILL.md`](skills/session-handoff/SKILL.md)。
-状態は `~/.cache/claude-handoff/<日付>-<session_id>.md` に書き、issue には書かない。
-欄は、目的（リーダーの依頼の引用）、リーダーが決めたこと（発言の引用と日時）、断ったこと、Claude の案（答え待ち）、済んだこと、次の一手、作業フォルダ、ワークツリーのパスとブランチ、issue と PR、元の session_id、裏で走っている処理とその扱い。
-決めたことと Claude の案を欄で分けるのは、案が決めたこととして渡り、引き継いだ先が形にしてリーダーに断られたため（#86 の試し）。
-残りの仕事からモデルとエフォートと、作業の中身を表す 20 文字以内の名前を選び、`~/.claude/scripts/session-handoff.sh --state <引き継ぎのファイル> --cwd <作業フォルダかワークツリー> --title <名前> --model <モデル> --effort <エフォート>` で引き継ぐ。
+引き継ぐ状態は、作業記録（下の「作業記録」）を今に合わせてコミットしたもので、引き継ぎのための別のファイルや issue のコメントは書かない。
+引き継ぎ先は、作業記録の「判断の経緯」で状態が有効の物だけを決定として扱い、「リーダーに決めてほしいこと」の Claude の案は答えが出るまで決定として扱わない。案が決めたこととして渡り、引き継いだ先が形にしてリーダーに断られたことがあるため（#86 の試し）。
+残りの仕事からモデルとエフォートと、作業の中身を表す 20 文字以内の名前を選び、`~/.claude/scripts/session-handoff.sh --state <作業記録> --cwd <作業フォルダかワークツリー> --title <名前> --model <モデル> --effort <エフォート>` で引き継ぐ。
 名前は `claude --name` で渡り、セッションのタイトルとタブ名になる。渡さないと最初の発言（引き継ぎの定型文）から題が作られ、「〇〇の引き継ぎ」になる（#91）。
 失敗したら出力をリーダーに報告して止まり、掃除へ進まない。
 
