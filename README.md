@@ -264,10 +264,10 @@ ChatGPT からも GitHub のリポジトリを通じて読める。
 issue と PR は議論とレビューに使い、状態は持たせない。auto memory は補助の教訓の置き場で、決定の正本にしない。
 
 - 書き方: [`skills/work-record/SKILL.md`](skills/work-record/SKILL.md)。目的、いまの方針、判明した事実、判断の経緯（採用、棄却、変更を一件ずつ、状態つき）、いまの作業となぜ、済んだこと、残っていること、次に Claude がすること、リーダーに決めてほしいこと、参照。
-- リーダーの言葉は、`prts quote "<文>"` が全部のセッションの記録から見つけ、発言者をリーダーと判定した物だけを引用する。Herdr などで別の Claude が打ち込んだ文や、発言者を確定できない文は引かない（判定の仕方は prts の `docs/operations.md`）。
-- 優先の順: 安全と権限の決まり、いまの会話でのリーダーの指示、作業記録の有効な判断、そのほか（CLAUDE.md の一般の決まり、memory、issue、圧縮の要約）。記録はいまの指示を覆さない。
-- 読み戻し: `dot_claude/hooks/executable_work-record-context.py` が SessionStart（startup、resume、clear、compact）で、今のリポジトリとそのワークツリーの開いている記録の一覧（題、状態、次の一手、決めてほしいことの件数、場所）だけを差し込む。本文は Claude が要るときに読む。圧縮のあとには、記録の最後の更新より後の人の入力（最大 6 件、各 400 文字まで）を原文で添え、要約に溶けた新しい指示を古い記録が覆さないようにする。
-- 書き忘れの合図: 同じフックが UserPromptSubmit で、開いている記録が最後のコミットより 10 分以上古いときに一度だけ知らせる。
+- 引用（`>` の行）は、`prts quote "<文>"` が成功した端末からの入力の原文だけにし、出典（会話、時刻）と「端末からの入力」を添える。端末からの入力は、リーダーが打った文と Herdr などで別の Claude が打ち込んだ文が同じ形で残るので、発言者をリーダーと断定しない（分類の仕方は prts の `docs/operations.md`、経緯は `docs/superpowers/specs/2026-11-20-speaker-identification-design.md`）。
+- 優先の順: 安全と権限の決まり（指示範囲の厳守、本番データの保護、GitHub の名義と書き込みの制限、chezmoi の扱い、破壊的な操作）、いまの会話でのリーダーの指示、作業記録のうちリーダーが決めた有効な判断、CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）。記録はいまの指示を覆さない。
+- 読み戻し: `dot_claude/hooks/executable_work-record-context.py` が SessionStart（startup、resume、clear、compact）で、今のリポジトリとそのワークツリーの開いている記録の一覧（題、状態、次の一手、決めてほしいことの件数、場所）だけを差し込む。本文は Claude が要るときに読む。圧縮のあとには、一つ前の圧縮の境目（無ければ会話の始め）より後の端末からの入力（queued_command、Claude の候補を選んだ入力を含む。新しい 8 件、各 400 文字まで。省いたら件数と `prts candidates --session <id>` を示す）を「端末からの入力（発言者は記録から確定できない）」として原文で添え、要約に溶けた新しい指示を古い記録が覆さないようにする。
+- 書き忘れの合図: 同じフックが UserPromptSubmit で、開いている記録の最後のコミットが HEAD のコミットより古く、記録に未コミットの変更が無いときに一度だけ知らせる。
 - 引き継ぎ: `session-handoff.sh` と `loop-handoff.sh` は作業記録のパスを受け取り、引き継ぎ先に読ませる。
 - 状況の説明: prts の Stop フックが、前書きの `wish:` で記録を望みに結び、望みの画面に記録の中身を出す（prts のリポジトリの `docs/dashboard-contract.md`）。
 - テスト: `dot_claude/hooks/tests/test_work_record_context.py`
@@ -304,7 +304,7 @@ Claude の値は OAuth でしか取れないので、`~/.config/codexbar/config.
 | normal | Claude に余裕 | Claude が実装する（知らせない） |
 | offload | Claude が逼迫、Codex に余裕 | これから着手する実装の単位を `codex-delegate.sh` へ渡す |
 | lean | Claude が逼迫、Codex も逼迫か読めない | 退避せず、着手中の単位を仕上げる |
-| stop | Claude が尽きる手前 | issue に状態を書いてターンを終える |
+| stop | Claude が尽きる手前 | 作業記録を今に合わせてコミットしてターンを終える |
 
 しきい値と、入りと出を分ける判定は、スクリプト冒頭のコメントにある。
 知らせるだけで、ツールの呼び出しを打ち切りはしない。
