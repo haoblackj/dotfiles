@@ -41,7 +41,8 @@ EOF
     unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
     REPO="$TMPDIR_TEST/repo"
-    mkdir -p "$REPO/.git" "$REPO/docs/work"
+    git init -q "$REPO"
+    mkdir -p "$REPO/docs/work"
     STATEF="$REPO/docs/work/sess.md"
     echo s > "$STATEF"
     STATEF=$(realpath -e "$STATEF")
@@ -78,6 +79,15 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     handoff --state "$TMPDIR_TEST/nogit/docs/work/a.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
     [[ "$output" == *"git の作業コピーの中に無い"* ]]
     [ ! -e "$CALLS" ]
+}
+@test "作業記録は本物の git の作業コピーの中だけを受け付け、.git を作っただけのディレクトリは断る" {
+    mkdir -p "$TMPDIR_TEST/fake/.git" "$TMPDIR_TEST/fake/docs/work"; echo s > "$TMPDIR_TEST/fake/docs/work/a.md"
+    handoff --state "$TMPDIR_TEST/fake/docs/work/a.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
+    [[ "$output" == *"git の作業コピーの中に無い"* ]]
+    [ ! -e "$CALLS" ]
+    git init -q "$TMPDIR_TEST/real"
+    mkdir -p "$TMPDIR_TEST/real/docs/work"; echo s > "$TMPDIR_TEST/real/docs/work/a.md"
+    handoff --state "$TMPDIR_TEST/real/docs/work/a.md" --cwd "$FAKE_CWD"; [ "$status" -eq 0 ]
 }
 @test "issue のコメントの URL は受け付けず、herdr を呼ばない" {
     handoff --state "$URL" --cwd "$FAKE_CWD"

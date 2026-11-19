@@ -41,7 +41,8 @@ EOF
     unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
     export HOME="$TMPDIR_TEST/home"
-    mkdir -p "$TMPDIR_TEST/repo/.git" "$TMPDIR_TEST/repo/docs/work"
+    git init -q "$TMPDIR_TEST/repo"
+    mkdir -p "$TMPDIR_TEST/repo/docs/work"
     STATEF="$TMPDIR_TEST/repo/docs/work/loop.md"
     echo s > "$STATEF"
     STATEF=$(realpath -e "$STATEF")

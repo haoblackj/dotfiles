@@ -5,11 +5,16 @@ session（SessionStart の startup、resume、clear、compact）:
   セッションの cwd のリポジトリ（ワークツリーを含む）の、開いている作業記録の一覧を差し込む。
   本文は差し込まず、題、状態、次の一手の 1 行、リーダーに決めてほしいことの件数、場所だけを出す。
   毎回の会話の頭と圧縮の後に一覧が入り、本文は Claude が要るときに Read で読む（トークンを抑える）。
-  圧縮の後には、記録の最後の更新より後の人の入力を原文で添える。要約に溶けた新しい指示を、
-  古い記録が覆さないようにするため（優先の順はいまの指示、記録、そのほか。グローバルの CLAUDE.md の「作業記録」）。
+  圧縮の後には、一つ前の圧縮の境目（無ければ会話の始め）より後の、端末からの入力を原文で添える。
+  要約に溶けた新しい指示を、古い記録が覆さないようにするため（優先の順はグローバルの CLAUDE.md の「作業記録」）。
+  基準を記録の mtime にしないのは、mtime が判断を書いた時刻でなく（別のワークツリーの記録、git switch、
+  「済んだこと」だけの直しでも進む）、指示が一件も添えられなくなることがあるため。
+  端末からの入力は、リーダーが打った文と、Herdr などで別の Claude やスクリプトが打ち込んだ文が同じ形で
+  残るので、発言者を名乗らせない（設計書 docs/superpowers/specs/2026-11-20-speaker-identification-design.md）。
 prompt（UserPromptSubmit）:
-  今の作業コピーの開いている記録が、最後のコミットより古いときだけ、一度だけ一行で知らせる。
-  記録を直さずに作業が進んだ合図で、同じ（記録の時刻、コミット）の組では二度出さない。
+  今の作業コピーの開いている記録の最後のコミットが HEAD のコミットより古く、記録に未コミットの変更が
+  無いときだけ、一度だけ一行で知らせる。記録を直さずに作業が進んだ合図で、同じ（コミット、記録）の組では二度出さない。
+  mtime で比べないのは、記録を直してから時間をおいてコードと一緒にコミットした場合や amend、rebase でも出るため。
 
 どの場合も、作業中のセッションを止めない。失敗したら何も出さずに 0 で終わる。
 """
@@ -24,8 +29,6 @@ from datetime import datetime
 from pathlib import Path
 
 MAX_LIST = 8
-# 記録がコミットよりこれだけ古ければ知らせる
-STALE_SECONDS = 600
 OPEN_STATES = {"active", "waiting", ""}
 
 
@@ -38,6 +41,7 @@ def git(cwd: str, *args: str) -> str | None:
 
 
 def front(text: str) -> dict:
+    text = text.replace("\r\n", "\n")
     m = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
     out = {}
     if m:
@@ -132,22 +136,29 @@ def session(payload: dict) -> None:
     if len(found) > MAX_LIST:
         lines.append(f"- ほか {len(found) - MAX_LIST} 件")
     lines.append(
-        "この会話の作業に当たる記録があれば、作業の前に Read で全部読む。"
-        "記録は過去の判断の記録で、この会話でのリーダーの指示が記録と食い違えば、リーダーの指示に従い、記録に変更として書く。"
-        "CLAUDE.md の一般の決まり、memory、issue のコメント、圧縮の要約と食い違えば、記録の判断に従う。"
+        "この会話の作業に当たる記録があれば、作業の前に Read で全部読む（この会話の依頼が別にあれば、依頼を先にする）。"
+        "食い違ったときの優先の順は、安全と権限の決まり、いまの会話でのリーダーの指示、作業記録のうちリーダーが決めた有効な判断、"
+        "CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）"
+        "（グローバルの CLAUDE.md の「作業記録」）。記録はいまの指示を覆す根拠にせず、食い違えば指示に従い、記録に変更として書く。"
     )
     if payload.get("source") == "compact":
-        newest = max(r["mtime"] for r in found)
-        recent = inputs_after(payload.get("transcript_path"), newest)
+        lines.append(
+            "圧縮の前に決まったことや分かったことが記録に無ければ、いま記録に書いてコミットする。"
+            "圧縮の要約と記録が食い違えば、下の入力か会話の記録の原文で確かめる。"
+        )
+        recent, omitted = inputs_since_boundary(payload.get("transcript_path"))
         if recent:
+            sid = payload.get("session_id") or "<session_id>"
             lines.append(
-                "記録の最後の更新より後の、この会話の人の入力（会話の記録から原文で、古い順）。"
-                "いまの指示として、記録より先に読む。Herdr などで別の Claude が打ち込んだ文を含みうるので、"
-                "記録へ原文として引く前に prts quote で発言者を確かめる:"
+                "一つ前の圧縮の境目（無ければ会話の始め）より後の、端末からの入力（発言者は記録から確定できない。会話の記録から原文で、古い順）。"
+                "いまの会話の指示として、作業記録より先に読む。記録へ原文として引くのは prts quote が成功した物だけ:"
             )
+            if omitted:
+                lines.append(f"- ほか {omitted} 件（古いほう）")
             for at, text in recent:
                 lines.append(f"- {at} 「{text}」")
-        lines.append("圧縮の前に決まったことや分かったことが記録に無ければ、いま記録に書いてコミットする。")
+            if omitted or any(text.endswith(TRUNCATED) for _, text in recent):
+                lines.append(f"省いた入力と全文は prts candidates --session {sid} で読む。")
     emit("SessionStart", "\n".join(lines))
 
 
@@ -156,48 +167,89 @@ MACHINE_PREFIXES = (
     "<command-", "<system-reminder>", "<task-notification>", "<local-command-", "<bash-", "<agent-message",
     "前のセッションからの引き継ぎ", "別のセッション（",
 )
-MAX_INPUTS = 6
+MAX_INPUTS = 8
 MAX_INPUT_CHARS = 400
+TRUNCATED = "…（以下略）"
+HUMAN_SOURCES = ("typed", "queued", "suggestion_accepted")
 
 
-def inputs_after(transcript_path, since: float) -> list[tuple[str, str]]:
-    """会話の記録から、since（UNIX 時刻）より後の人の入力を古い順に返す。多ければ新しいほうから MAX_INPUTS 件。"""
+def user_text(content) -> str:
+    """user の content（文字列、または文や画像の塊の並び）から文を取り出す。画像は印に置き換える。"""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
+            parts.append(block["text"])
+        elif isinstance(block, dict) and block.get("type") == "image":
+            parts.append("［画像］")
+    return " ".join(parts)
+
+
+def terminal_input(o: dict) -> tuple[str, str] | None:
+    """会話の記録の一行が端末からの入力なら（時刻に出どころの注記を添えた文字列、原文）を、違えば None を返す。"""
+    if o.get("isMeta") or o.get("isSidechain") or o.get("isCompactSummary"):
+        return None
+    if o.get("type") == "attachment":
+        att = o.get("attachment") or {}
+        origin = att.get("origin")
+        if att.get("type") != "queued_command" or not isinstance(origin, dict) or origin.get("kind") != "human":
+            return None
+        text, note = user_text(att.get("prompt")), ""
+    elif o.get("type") == "user":
+        origin = o.get("origin")
+        if not isinstance(origin, dict) or origin.get("kind") != "human":
+            return None
+        source = o.get("promptSource")
+        if source not in HUMAN_SOURCES:
+            return None
+        text = user_text((o.get("message") or {}).get("content"))
+        note = "（Claude の出した候補を選んだ入力）" if source == "suggestion_accepted" else ""
+    else:
+        return None
+    if not text.strip() or text.lstrip().startswith(MACHINE_PREFIXES):
+        return None
+    at = o.get("timestamp", "")
+    try:
+        local = time.strftime("%m/%d %H:%M", time.localtime(datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp()))
+    except (AttributeError, ValueError):
+        local = "時刻不明"
+    body = text.strip()
+    if len(body) > MAX_INPUT_CHARS:
+        body = body[:MAX_INPUT_CHARS] + TRUNCATED
+    return (local + note, body)
+
+
+def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
+    """会話の記録から、二つ目に新しい compact_boundary（一つ以下なら会話の始め）より後の端末からの入力を古い順に返す。
+    SessionStart の compact の時点で一番新しい境目はいま済んだ圧縮のもので、その前の区間が要約に溶けた所に当たる。
+    いま済んだ圧縮の境目がまだ書かれていなくても、一つ前の区間まで含むだけで、入力を落とす側には倒れない。
+    多ければ新しいほうから MAX_INPUTS 件と、省いた件数を返す。"""
     if not transcript_path:
-        return []
-    out = []
+        return [], 0
+    spans: list[list[tuple[str, str]]] = [[]]
     try:
         with open(transcript_path, encoding="utf-8", errors="replace") as f:
             for raw in f:
-                if '"user"' not in raw:
-                    continue
-                try:
-                    o = json.loads(raw)
-                except ValueError:
-                    continue
-                if o.get("isMeta") or o.get("isSidechain") or o.get("isCompactSummary"):
-                    continue
-                origin = o.get("origin")
-                if not isinstance(origin, dict) or origin.get("kind") != "human":
-                    continue
-                if o.get("promptSource") not in ("typed", "queued"):
-                    continue
-                text = (o.get("message") or {}).get("content")
-                if not isinstance(text, str) or not text.strip() or text.lstrip().startswith(MACHINE_PREFIXES):
-                    continue
-                at = o.get("timestamp", "")
-                try:
-                    t = datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp()
-                except ValueError:
-                    continue
-                if t > since:
-                    local = time.strftime("%m/%d %H:%M", time.localtime(t))
-                    body = text.strip()
-                    if len(body) > MAX_INPUT_CHARS:
-                        body = body[:MAX_INPUT_CHARS] + "…（以下略）"
-                    out.append((local, body))
+                if "compact_boundary" in raw or '"user"' in raw or "queued_command" in raw:
+                    try:
+                        o = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if not isinstance(o, dict):
+                        continue
+                    if o.get("type") == "system" and o.get("subtype") == "compact_boundary":
+                        spans.append([])
+                        continue
+                    got = terminal_input(o)
+                    if got:
+                        spans[-1].append(got)
     except OSError:
-        return []
-    return out[-MAX_INPUTS:]
+        return [], 0
+    out = [x for span in spans[-2:] for x in span] if len(spans) >= 3 else [x for span in spans for x in span]
+    return out[-MAX_INPUTS:], max(0, len(out) - MAX_INPUTS)
 
 
 def state_file() -> Path:
@@ -215,10 +267,19 @@ def prompt(payload: dict) -> None:
     if not head:
         return
     sha, ct = head.split()
-    stale = [r for r in records(top) if r["status"] == "active" and int(ct) - r["mtime"] > STALE_SECONDS]
+    stale = []
+    for r in records(top):
+        if r["status"] != "active":
+            continue
+        rel = os.path.relpath(r["path"], top)
+        if git(top, "status", "--porcelain", "--", rel):
+            continue
+        last = git(top, "log", "-1", "--format=%ct", "--", rel)
+        if last and int(last) < int(ct):
+            stale.append(r)
     if not stale:
         return
-    key = f"{sha}:" + ",".join(f"{r['path']}@{int(r['mtime'])}" for r in stale)
+    key = f"{sha}:" + ",".join(r["path"] for r in stale)
     sf = state_file()
     try:
         seen = json.loads(sf.read_text(encoding="utf-8"))
@@ -235,7 +296,7 @@ def prompt(payload: dict) -> None:
     names = "、".join(r["title"] for r in stale)
     emit(
         "UserPromptSubmit",
-        f"作業記録（{names}）が最後のコミットより古い。この依頼の区切りで、記録を今に合わせてコミットする。",
+        f"作業記録（{names}）の最後のコミットが HEAD より古い。この依頼の区切りで、記録を今に合わせてコミットする。",
     )
 
 

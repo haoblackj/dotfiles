@@ -81,11 +81,13 @@ class SessionTest(Base):
         text = run("session", {"cwd": str(self.root), "source": "compact"})
         self.assertIn("圧縮の前に決まったこと", text)
 
-    def test_current_instruction_outranks_record(self):
+    def test_startup_states_priority_order(self):
         self.write()
         text = run("session", {"cwd": str(self.root), "source": "startup"})
-        self.assertIn("この会話でのリーダーの指示が記録と食い違えば、リーダーの指示に従い", text)
-        self.assertNotIn("記録の新しい判断に従う", text)
+        order = ["安全と権限の決まり", "いまの会話でのリーダーの指示", "作業記録のうちリーダーが決めた有効な判断"]
+        positions = [text.index(o) for o in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("記録の判断に従う", text)
 
     def transcript(self, entries):
         path = Path(self.tmp.name) / "t.jsonl"
@@ -95,39 +97,105 @@ class SessionTest(Base):
         return str(path)
 
     @staticmethod
-    def said(text, at, **extra):
+    def said(text, at="2026-11-20T01:00:00.000Z", **extra):
         base = {"type": "user", "timestamp": at, "message": {"role": "user", "content": text},
                 "origin": {"kind": "human"}, "promptSource": "typed"}
         return {**base, **extra}
 
-    def test_compact_quotes_inputs_after_the_record(self):
-        p = self.write()
-        mtime = 1_800_000_000
-        os.utime(p, (mtime, mtime))
-        iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(t))  # noqa: E731
-        path = self.transcript([
-            self.said("記録より前の指示", iso(mtime - 60)),
-            self.said("やっぱり公開はしない", iso(mtime + 60)),
-            self.said("前のセッションからの引き継ぎ。続ける", iso(mtime + 70)),
-            self.said("候補の文", iso(mtime + 80), promptSource="suggestion_accepted"),
-            self.said("The plugin sent a message", iso(mtime + 90), origin={"kind": "plugin"}),
-            self.said("x" * 500, iso(mtime + 100)),
+    @staticmethod
+    def queued(text, kind="human", at="2026-11-20T01:00:00.000Z"):
+        return {"type": "attachment", "timestamp": at,
+                "attachment": {"type": "queued_command", "prompt": text, "origin": {"kind": kind}, "humanTurn": True}}
+
+    @staticmethod
+    def boundary(at="2026-11-20T01:00:00.000Z"):
+        return {"type": "system", "subtype": "compact_boundary", "content": "Conversation compacted", "timestamp": at}
+
+    def compact(self, entries, session_id="sid-1"):
+        path = self.transcript(entries)
+        return run("session", {"cwd": str(self.root), "source": "compact", "transcript_path": path,
+                               "session_id": session_id})
+
+    @staticmethod
+    def inputs_block(text):
+        return text[text.index("端末からの入力"):]
+
+    def test_compact_quotes_inputs_after_the_previous_boundary(self):
+        self.write()
+        text = self.compact([
+            self.said("一つ前の圧縮より前の指示"),
+            self.boundary(),
+            self.said("やっぱり公開はしない"),
+            self.said("前のセッションからの引き継ぎ。続ける"),
+            self.said("いいよ", promptSource="suggestion_accepted"),
+            self.said("The plugin sent a message", origin={"kind": "plugin"}),
+            self.said("<system-reminder>x</system-reminder>"),
+            self.said([{"type": "text", "text": "この画像の通りに直して"}, {"type": "image", "source": {}}]),
+            self.queued("待ち行列の指示"),
+            self.queued("peer の連絡", kind="peer"),
+            self.boundary(),
         ])
-        text = run("session", {"cwd": str(self.root), "source": "compact", "transcript_path": path})
-        self.assertIn("「やっぱり公開はしない」", text)
-        self.assertIn("…（以下略）", text)
-        for absent in ("記録より前の指示", "前のセッションからの引き継ぎ", "候補の文", "The plugin"):
+        for present in ("「やっぱり公開はしない」", "「いいよ」", "この画像の通りに直して", "「待ち行列の指示」"):
+            self.assertIn(present, text)
+        for absent in ("一つ前の圧縮より前の指示", "前のセッションからの引き継ぎ", "The plugin", "system-reminder", "peer の連絡"):
             self.assertNotIn(absent, text)
 
-    def test_compact_keeps_only_the_latest_inputs(self):
+    def test_single_boundary_reads_from_the_start(self):
+        self.write()
+        text = self.compact([self.said("最初の指示"), self.boundary()])
+        self.assertIn("「最初の指示」", text)
+
+    def test_injected_inputs_are_labeled_terminal_not_leader(self):
+        self.write()
+        text = self.compact([self.said("公開はしない"), self.boundary()])
+        block = self.inputs_block(text)
+        self.assertIn("端末からの入力", block)
+        self.assertIn("発言者は記録から確定できない", block)
+        self.assertNotIn("リーダー", block)
+        self.assertNotIn("記録の判断に従う", text)
+
+    def test_compact_keeps_latest_eight_and_counts_the_rest(self):
+        self.write()
+        text = self.compact([self.said(f"指示{i}") for i in range(1, 11)] + [self.boundary()], session_id="abc-123")
+        self.assertNotIn("「指示2」", text)
+        self.assertIn("「指示3」", text)
+        self.assertIn("「指示10」", text)
+        self.assertIn("ほか 2 件", text)
+        self.assertIn("prts candidates --session abc-123", text)
+
+    def test_other_worktree_record_mtime_does_not_hide_inputs(self):
+        self.write()
+        wt = Path(self.tmp.name) / "wt"
+        git(self.root, "worktree", "add", "-q", "-b", "feat", str(wt))
+        (wt / "docs" / "work").mkdir(parents=True, exist_ok=True)
+        other = wt / "docs" / "work" / "w.md"
+        other.write_text(RECORD.format(status="active", ask="なし"), encoding="utf-8")
+        future = time.time() + 86400
+        os.utime(other, (future, future))
+        text = self.compact([self.said("公開はしない", at="2026-01-01T00:00:00.000Z"), self.boundary()])
+        self.assertIn("「公開はしない」", text)
+
+    def test_record_touched_after_input_does_not_hide_it(self):
         p = self.write()
-        os.utime(p, (1_800_000_000, 1_800_000_000))
-        iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(t))  # noqa: E731
-        path = self.transcript([self.said(f"指示{i}", iso(1_800_000_000 + i)) for i in range(1, 10)])
-        text = run("session", {"cwd": str(self.root), "source": "compact", "transcript_path": path})
-        self.assertNotIn("「指示3」", text)
-        self.assertIn("「指示4」", text)
-        self.assertIn("「指示9」", text)
+        future = time.time() + 86400
+        os.utime(p, (future, future))
+        text = self.compact([self.said("公開はしない", at="2026-01-01T00:00:00.000Z"), self.boundary()])
+        self.assertIn("「公開はしない」", text)
+
+    def test_reads_crlf_front_matter(self):
+        p = self.root / "docs" / "work" / "crlf.md"
+        p.write_bytes(RECORD.format(status="done", ask="なし").replace("\n", "\r\n").encode("utf-8"))
+        self.write("open.md", status="waiting")
+        text = run("session", {"cwd": str(self.root), "source": "startup"})
+        self.assertNotIn("crlf.md", text)
+        self.assertIn("open.md", text)
+        self.assertEqual(mod.front("---\r\ntitle: 題\r\nstatus: done\r\n---\r\n本文")["status"], "done")
+
+    def test_inputs_since_boundary_returns_omitted_count(self):
+        path = self.transcript([self.said(f"指示{i}") for i in range(12)])
+        got, omitted = mod.inputs_since_boundary(path)
+        self.assertEqual(len(got), 8)
+        self.assertEqual(omitted, 4)
 
     def test_startup_does_not_quote_inputs(self):
         self.write()
@@ -160,26 +228,48 @@ class SessionTest(Base):
 
 
 class PromptTest(Base):
-    def test_reminds_once_when_record_older_than_commit(self):
+    def commit(self, *paths, msg="work", when=None):
+        env = {}
+        if when is not None:
+            env = {"GIT_AUTHOR_DATE": f"@{when} +0000", "GIT_COMMITTER_DATE": f"@{when} +0000"}
+        with patch.dict(os.environ, env):
+            git(self.root, "add", *paths)
+            git(self.root, "commit", "-q", "-m", msg)
+
+    def test_reminds_once_when_record_commit_older_than_head(self):
+        self.write()
+        self.commit("docs/work/a.md", when=1_800_000_000)
+        (self.root / "x.txt").write_text("x")
+        self.commit("x.txt", when=1_800_000_100)
+        text = run("prompt", {"cwd": str(self.root)})
+        self.assertIn("作業記録（状態の持ち方）", text)
+        self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
+
+    def test_quiet_when_record_committed_with_code(self):
         p = self.write()
         old = time.time() - 3600
         os.utime(p, (old, old))
         (self.root / "x.txt").write_text("x")
-        git(self.root, "add", "x.txt")
-        git(self.root, "commit", "-q", "-m", "work")
-        text = run("prompt", {"cwd": str(self.root)})
-        self.assertIn("作業記録（状態の持ち方）が最後のコミットより古い", text)
+        self.commit("docs/work/a.md", "x.txt")
         self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
 
-    def test_quiet_when_record_is_fresh(self):
+    def test_quiet_when_record_has_uncommitted_changes(self):
+        p = self.write()
+        self.commit("docs/work/a.md", when=1_800_000_000)
+        (self.root / "x.txt").write_text("x")
+        self.commit("x.txt", when=1_800_000_100)
+        p.write_text(p.read_text(encoding="utf-8") + "\n- 追記\n", encoding="utf-8")
+        self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
+
+    def test_quiet_when_record_is_untracked(self):
         self.write()
         self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
 
     def test_waiting_record_is_not_nagged(self):
-        p = self.write(status="waiting")
-        old = time.time() - 3600
-        os.utime(p, (old, old))
-        git(self.root, "commit", "-q", "--allow-empty", "-m", "work")
+        self.write(status="waiting")
+        self.commit("docs/work/a.md", when=1_800_000_000)
+        (self.root / "x.txt").write_text("x")
+        self.commit("x.txt", when=1_800_000_100)
         self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
 
 

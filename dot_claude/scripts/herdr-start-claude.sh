@@ -35,12 +35,14 @@ check_title() {
 # issue のコメントの URL や、リポジトリの外のファイルは受け付けない（判断と進行状態の正本は git で管理する
 # 作業記録で、issue には持たせない。haoblackj/dotfiles#86）。symlink は解決してから確かめる。
 check_state_file() {
-  local path dir
+  local path dir top
   [[ -f "$1" ]] || { echo "--state は作業記録（リポジトリの docs/work/<作業名>.md）にする"; return 1; }
   path=$(realpath -e -- "$1" 2>/dev/null) || { echo "作業記録の場所が分からない"; return 1; }
   [[ "$path" == */docs/work/*.md && "${path#*/docs/work/}" != */* ]] || { echo "作業記録はリポジトリの docs/work/ 直下に置く"; return 1; }
   dir=${path%/docs/work/*}
-  [[ -e "$dir/.git" ]] || { echo "作業記録が git の作業コピーの中に無い"; return 1; }
+  # .git の有無だけでは、中身の無い .git ディレクトリでも通る。git が dir を作業コピーの頂点と答えるかで確かめる
+  top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
+  [[ -n "$top" && "$(realpath -e -- "$top" 2>/dev/null)" == "$dir" ]] || { echo "作業記録が git の作業コピーの中に無い"; return 1; }
   printf '%s' "$path"
 }
 
