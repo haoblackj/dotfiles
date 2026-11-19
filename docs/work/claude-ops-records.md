@@ -186,20 +186,20 @@ wish: state-context
 - 状態: 有効
 
 ## いまの作業
-2026-11-20 の完了報告への未達の指摘を受けた作り直しの途中（main への取り込みは保留のまま）。prts の出典の表示と札、dotfiles の CLAUDE.md とスキルとフックを直した。既存の記録から原文を外し、本番へ反映して、直した後の場面を動かす。
+2026-11-20 の完了報告への未達の指摘を受けた作り直しを終え、報告を出した。main への取り込みと、公開済みの原文の扱いについて、リーダーの答えを待っている。
 
 ## 済んだこと
 - 前回まで: prts（queued_command の読み取り、記録の項目による分類、作業記録の表示）、dotfiles（引き継ぎを SendMessage で送る、圧縮のあとの差し込み、優先の順、開発工程の三点）。PR https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9 。
-- 今回: 直す前の本番の設定で六つの場面を動かした（S1 と S5 が不合格）。設計書と計画（practical-trust）。prts の出典の出力と手元の覚えと `prts input`（757a88a）、望みの画面の出典の下の原文（41b9dea）、札と「いま」の材料と信頼の範囲の文書（d6c9bdc）。dotfiles の CLAUDE.md、スキル work-record、差し込みのフック（二重の差し込みを一つに）、引き継ぎの文面と `--dry-run`（1f809e5）。
+- 今回: 直す前の本番の設定で六つの場面を動かした（S1 と S5 が不合格）。設計書と計画（practical-trust）。prts の出典の出力と手元の覚えと `prts input`、望みの画面の出典の下の原文（折り畳み）、PRTS の指摘を出典にした行の下の指摘の文、札と「いま」の材料、信頼の範囲の文書（prts a7d0c05..99cd4ae）。dotfiles の CLAUDE.md、スキル work-record と session-handoff、差し込みのフック（二重の差し込みを一つに）、引き継ぎの文面と `--dry-run`、GitHub に載る文書の原文の書き換え（dotfiles 503d978..31dfc9e）。
+- 確かめ: prts 469 passed、dotfiles pytest 200 passed と bats 440 ok。本番へ反映（`chezmoi status ~/.claude` が空、prts を入れ直して画面 200）。直した後の場面 12 回すべて合格（S7b を含む）。requesting-code-review の審査（Important 5 件）を receiving-code-review で受けて直した。両方の PR の本文を差し替えた。
 
 ## 残っていること
-- 本番への反映（chezmoi apply、prts は入れ直し済み）と、直した後の場面の確かめ、PRTS の画面の確かめ。
-- 両リポジトリの変更の審査。
 - main への取り込みはリーダーの確認の後。取り込んだあとに、開いている issue に残る `status:` ラベルを外し、本番の dotfiles のチェックアウトを main へ戻す。
 - prts のほかの開いている望みには作業記録がまだ無い。それぞれのセッションが次に動くときに作る。
+- 後回しにした小さな点: `prts input` が両方の形で残った途中の入力を二度出す。CLAUDE.md がちょうど 200 行。
 
 ## 次に Claude がすること
-- 上の「残っていること」を順に進め、終わったらリーダーに報告する。
+- リーダーの答えを待つ。PR に指摘が付いたら、receiving-code-review で受けて同じブランチで直す。
 
 ## リーダーに決めてほしいこと
 - 二つの PR を main へ取り込むか。Claude の案: 報告を読んでから取り込む。答えで変わること: 取り込むまで、本番の dotfiles のチェックアウトは作業ブランチのまま。
