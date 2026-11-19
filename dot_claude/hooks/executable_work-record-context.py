@@ -234,8 +234,9 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
     if not transcript_path:
         return [], 0
     spans: list[list[tuple[str, str]]] = [[]]
-    # 途中で打った入力は、queued_command の添付と、promptSource が queued の user の行の両方に残ることがある
-    unpaired: dict[str, list[str]] = {"attachment": [], "queued": []}
+    # 途中で打った入力は、queued_command の添付と、promptSource が queued の user の行の両方に続けて残ることがある。
+    # 組にするのは直前に集めた入力だけにする。離れた同じ文（「続けて」の打ち直しなど）を消さないため
+    last: tuple[str, str] | None = None
     try:
         with open(transcript_path, encoding="utf-8", errors="replace") as f:
             for raw in f:
@@ -248,17 +249,17 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
                         continue
                     if o.get("type") == "system" and o.get("subtype") == "compact_boundary":
                         spans.append([])
+                        last = None
                         continue
                     got = terminal_input(o)
                     if not got:
                         continue
                     side = "attachment" if o.get("type") == "attachment" else o.get("promptSource")
                     other = {"attachment": "queued", "queued": "attachment"}.get(side)
-                    if other and got[1] in unpaired[other]:
-                        unpaired[other].remove(got[1])
+                    if other and last == (other, got[1]):
+                        last = None
                         continue
-                    if side in unpaired:
-                        unpaired[side].append(got[1])
+                    last = (side, got[1])
                     spans[-1].append(got)
     except OSError:
         return [], 0

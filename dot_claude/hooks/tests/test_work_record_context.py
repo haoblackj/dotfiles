@@ -184,6 +184,16 @@ class SessionTest(Base):
         self.assertEqual(text.count("「途中で打った指示」"), 1)
         self.assertEqual(text.count("「あとで同じ文をもう一度打った」"), 2)
 
+    def test_same_short_text_typed_later_is_not_paired_with_an_old_queued_attachment(self):
+        self.write()
+        text = self.compact([
+            self.queued("続けて", at="2026-11-20T01:00:00.000Z"),
+            self.said("別の指示", at="2026-11-20T01:01:00.000Z"),
+            self.said("続けて", promptSource="queued", at="2026-11-20T01:30:00.000Z"),
+            self.boundary(),
+        ])
+        self.assertEqual(text.count("「続けて」"), 2)
+
     def test_compact_keeps_latest_eight_and_counts_the_rest(self):
         self.write()
         text = self.compact([self.said(f"指示{i}") for i in range(1, 11)] + [self.boundary()], session_id="abc-123")

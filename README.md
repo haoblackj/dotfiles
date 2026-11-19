@@ -264,9 +264,9 @@ ChatGPT からも GitHub のリポジトリを通じて読める。
 issue と PR は議論とレビューに使い、状態は持たせない。auto memory は補助の教訓の置き場で、決定の正本にしない。
 
 - 書き方: [`skills/work-record/SKILL.md`](skills/work-record/SKILL.md)。目的、いまの方針、判明した事実、判断の経緯（採用、棄却、変更を一件ずつ、状態つき）、いまの作業となぜ、済んだこと、残っていること、次に Claude がすること、リーダーに決めてほしいこと、参照。
-- 引用（`>` の行）は、`prts quote "<文>"` が成功した端末からの入力の原文だけにし、出典（会話、時刻）と「端末からの入力」を添える。端末からの入力は、リーダーが打った文と Herdr などで別の Claude が打ち込んだ文が同じ形で残るので、発言者をリーダーと断定しない（分類の仕方は prts の `docs/operations.md`、経緯は `docs/superpowers/specs/2026-11-20-speaker-identification-design.md`）。
+- 作業記録は GitHub に載るので会話の原文を写さず、`prts quote` で確かめた出典（`端末からの入力（会話 <8 桁>、<日時>）`）か `PRTS の指摘（望み <id>、<指摘 id>）` と、要旨（Claude の要約）を書く。原文は手元の PRTS が出典の行の下に出す。端末からの入力と PRTS の指摘はリーダーの入力として扱い、記録には「リーダーが打った」とは書かない（信頼の範囲と残る危険は `docs/superpowers/specs/2026-11-20-practical-trust-design.md` の 3 節、分類の仕方は prts の `docs/operations.md`）。
 - 優先の順: 安全と権限の決まり（指示範囲の厳守、本番データの保護、GitHub を含む外への書き込みの制限、環境の境界（WSL/Windows）、chezmoi の扱い、破壊的な操作）、いまの会話でのリーダーの指示、作業記録の有効な判断（出どころが端末からの入力の物）、CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）。記録はいまの指示を覆さない。
-- 読み戻し: `dot_claude/hooks/executable_work-record-context.py` が SessionStart（startup、resume、clear、compact）で、今のリポジトリとそのワークツリーの開いている記録の一覧（題、状態、次の一手、決めてほしいことの件数、場所）だけを差し込む。本文は Claude が要るときに読む。圧縮のあとには、一つ前の圧縮の境目（無ければ会話の始め）より後の端末からの入力（queued_command、Claude の候補を選んだ入力を含む。新しい 8 件、各 400 文字まで。省いたら件数と `prts candidates --session <id>` を示す）を「端末からの入力（発言者は記録から確定できない）」として原文で添え、要約に溶けた新しい指示を古い記録が覆さないようにする。
+- 読み戻し: `dot_claude/hooks/executable_work-record-context.py` が SessionStart（startup、resume、clear、compact）で、今のリポジトリとそのワークツリーの開いている記録の一覧（題、状態、次の一手、決めてほしいことの件数、場所）だけを差し込む。本文は Claude が要るときに読む。圧縮のあとには、一つ前の圧縮の境目（無ければ会話の始め）より後の端末からの入力（queued_command、Claude の候補を選んだ入力を含む。新しい 8 件、各 400 文字まで。省いたら件数と `prts candidates --session <id>` を示す）を「端末からの入力（リーダーの入力として扱う）」として原文で添え（手元のコンテキストだけで、記録には写さない）、要約に溶けた新しい指示を古い記録が覆さないようにする。
 - 書き忘れの合図: 同じフックが UserPromptSubmit で、開いている記録の最後のコミットが HEAD のコミットより古く、記録に未コミットの変更が無いときに一度だけ知らせる。
 - 引き継ぎ: `session-handoff.sh` と `loop-handoff.sh` は作業記録のパスを受け取り、引き継ぎ先に読ませる。
 - 状況の説明: prts の Stop フックが、前書きの `wish:` で記録を望みに結び、望みの画面に記録の中身を出す（prts のリポジトリの `docs/dashboard-contract.md`）。
