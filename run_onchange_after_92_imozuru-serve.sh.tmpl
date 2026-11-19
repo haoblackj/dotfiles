@@ -1,0 +1,10 @@
+#!/bin/bash
+set -eu
+
+# imozuru の履歴のページを常駐で配る（2026-11-19）。unit は dot_config/systemd/user/ が配る。
+# after にして、unit が配られた後に走らせる。unit が変わったら再起動する。
+# 合言葉（claude-private）や ~/research が無いうちは、unit の Condition で起動が見送られるだけで失敗にはならない。
+# imozuru-serve.service hash: {{ include "dot_config/systemd/user/imozuru-serve.service" | sha256sum }}
+systemctl --user daemon-reload
+systemctl --user enable imozuru-serve
+systemctl --user restart imozuru-serve

@@ -108,6 +108,8 @@ wsl-drop-caches.timer
 .config/nvim
 zsh
 .codex
+# imozuru の履歴のページの常駐は WSL の systemd --user で動かす（2026-11-19）
+.config/systemd/user/imozuru-serve.service
 {{- end }}
 
 {{- if ne .chezmoi.os "windows" -}}

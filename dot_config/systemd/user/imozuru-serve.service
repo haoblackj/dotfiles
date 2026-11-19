@@ -1,0 +1,21 @@
+[Unit]
+Description=imozuru の調べものの履歴のページを 127.0.0.1:8765 で配る（dashboard.py --serve）
+# 2026-11-19 のリーダーの指示で常駐させる。この PC の中だけで開き、外へは中継しない
+# （この PC に Tailscale は無い。Windows のブラウザからは WSL の mirrored の網で届く）。
+# 合言葉は claude-private の secrets に置き、WSL を初期化しても clone で戻る。
+# 合言葉か ~/research が無いうち（初期化の直後で claude-private や復元が届く前）は、失敗にせず起動を見送る。
+ConditionPathExists=%h/.local/share/claude-private/secrets/imozuru-serve.env
+ConditionPathIsDirectory=%h/research
+
+[Service]
+Type=simple
+# IMOZURU_SERVE_TOKEN（16 文字以上）を固定し、ブックマークとアプリのアイコンを保つ
+EnvironmentFile=%h/.local/share/claude-private/secrets/imozuru-serve.env
+# スキルの置き場が claude-private から ~/.agents へ移っても（dotfiles#90）、~/.claude/skills/imozuru は残る
+# 開くたびに ~/research を読み直すので、調べものが増えても再起動は要らない
+ExecStart=/usr/bin/python3 %h/.claude/skills/imozuru/scripts/dashboard.py %h/research --serve 8765
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
