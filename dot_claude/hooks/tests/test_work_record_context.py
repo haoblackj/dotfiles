@@ -84,7 +84,7 @@ class SessionTest(Base):
     def test_startup_states_priority_order(self):
         self.write()
         text = run("session", {"cwd": str(self.root), "source": "startup"})
-        order = ["安全と権限の決まり", "いまの会話でのリーダーの指示", "作業記録の有効な判断（出どころが端末からの入力の物）",
+        order = ["安全と権限の決まり", "いまの会話でのリーダーの指示", "作業記録の有効な判断（出どころが端末からの入力か PRTS の指摘の物。リーダーの判断として扱う）",
                  "CLAUDE.md の一般の決まり", "作業記録のうち Claude の技術の判断"]
         positions = [text.index(o) for o in order]
         self.assertEqual(positions, sorted(positions))
@@ -158,14 +158,31 @@ class SessionTest(Base):
         text = self.compact([self.said("最初の指示"), self.boundary()])
         self.assertIn("「最初の指示」", text)
 
-    def test_injected_inputs_are_labeled_terminal_not_leader(self):
+    def test_injected_inputs_are_treated_as_leader_input_without_claiming_who_typed(self):
         self.write()
         text = self.compact([self.said("公開はしない"), self.boundary()])
         block = self.inputs_block(text)
-        self.assertIn("端末からの入力", block)
-        self.assertIn("発言者は記録から確定できない", block)
-        self.assertNotIn("リーダー", block)
+        self.assertIn("端末からの入力（リーダーの入力として扱う", block)
+        self.assertIn("記録には原文を写さず、要旨と出典（prts quote で確かめる）を書く", block)
+        self.assertNotIn("リーダーが打った", block)
         self.assertNotIn("記録の判断に従う", text)
+
+    def test_priority_names_terminal_and_prts_decisions_as_leader_decisions(self):
+        self.write()
+        text = run("session", {"cwd": str(self.root), "source": "startup"})
+        self.assertIn("作業記録の有効な判断（出どころが端末からの入力か PRTS の指摘の物。リーダーの判断として扱う）", text)
+
+    def test_input_recorded_both_as_queued_command_and_queued_user_is_injected_once(self):
+        self.write()
+        text = self.compact([
+            self.queued("途中で打った指示"),
+            self.said("途中で打った指示", promptSource="queued"),
+            self.said("あとで同じ文をもう一度打った", at="2026-11-20T01:05:00.000Z"),
+            self.said("あとで同じ文をもう一度打った", at="2026-11-20T01:09:00.000Z"),
+            self.boundary(),
+        ])
+        self.assertEqual(text.count("「途中で打った指示」"), 1)
+        self.assertEqual(text.count("「あとで同じ文をもう一度打った」"), 2)
 
     def test_compact_keeps_latest_eight_and_counts_the_rest(self):
         self.write()

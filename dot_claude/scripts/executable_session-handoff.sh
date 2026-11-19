@@ -58,7 +58,7 @@ fi
 NAME="chat-$(date +%m%d%H%M%S)"
 PROMPT="前のセッションからの引き継ぎ。最初に作業記録 $STATE を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。$(state_reading_note)"
 STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "") || exit 1
-(( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
+(( DRY == 1 )) && { printf '%s\nSendMessage で送る文: %s\n' "$STARTED" "$PROMPT"; exit 0; }
 note_wish_moved "$CUR" "$(jq -r .pane <<< "$STARTED")"
 
 jq -nc --arg name "$NAME" --arg state "$STATE" --arg title "$TITLE" --arg prompt "$PROMPT" --argjson started "$STARTED" \

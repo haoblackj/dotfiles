@@ -9,8 +9,9 @@ session（SessionStart の startup、resume、clear、compact）:
   要約に溶けた新しい指示を、古い記録が覆さないようにするため（優先の順はグローバルの CLAUDE.md の「作業記録」）。
   基準を記録の mtime にしないのは、mtime が判断を書いた時刻でなく（別のワークツリーの記録、git switch、
   「済んだこと」だけの直しでも進む）、指示が一件も添えられなくなることがあるため。
-  端末からの入力は、リーダーが打った文と、Herdr などで別の Claude やスクリプトが打ち込んだ文が同じ形で
-  残るので、発言者を名乗らせない（設計書 docs/superpowers/specs/2026-11-20-speaker-identification-design.md）。
+  端末からの入力はリーダーの入力として扱う（Claude の連絡は SendMessage と引き継ぎの定型文で届くため。
+  設計書 docs/superpowers/specs/2026-11-20-practical-trust-design.md の 3 節）。「リーダーが打った」とは書かない。
+  作業の途中で打った入力が queued_command の添付と promptSource が queued の user の行の両方に残ることがあり、一つにする。
 prompt（UserPromptSubmit）:
   今の作業コピーの開いている記録の最後のコミットが HEAD のコミットより古く、記録に未コミットの変更が
   無いときだけ、一度だけ一行で知らせる。記録を直さずに作業が進んだ合図で、同じ（コミット、記録）の組では二度出さない。
@@ -141,7 +142,7 @@ def session(payload: dict) -> None:
     lines.append(
         "この会話の作業に当たる記録があれば、作業の前に Read で全部読む（この会話の依頼が別にあれば、依頼を先にする）。"
         "食い違ったときの優先の順は、安全と権限の決まり、いまの会話でのリーダーの指示、"
-        "作業記録の有効な判断（出どころが端末からの入力の物）、CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）"
+        "作業記録の有効な判断（出どころが端末からの入力か PRTS の指摘の物。リーダーの判断として扱う）、CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）"
         "（グローバルの CLAUDE.md の「作業記録」）。記録はいまの指示を覆す根拠にせず、食い違えば指示に従い、記録に変更として書く。"
     )
     if payload.get("source") == "compact":
@@ -153,8 +154,8 @@ def session(payload: dict) -> None:
         if recent:
             sid = payload.get("session_id") or "<session_id>"
             lines.append(
-                "一つ前の圧縮の境目（無ければ会話の始め）より後の、端末からの入力（発言者は記録から確定できない。会話の記録から原文で、古い順）。"
-                "いまの会話の指示として、作業記録より先に読む。記録へ原文として引くのは prts quote が成功した物だけ:"
+                "一つ前の圧縮の境目（無ければ会話の始め）より後の、端末からの入力（リーダーの入力として扱う。会話の記録から原文で、古い順）。"
+                "いまの会話の指示として、作業記録より先に読む。記録には原文を写さず、要旨と出典（prts quote で確かめる）を書く:"
             )
             if omitted:
                 lines.append(f"- ほか {omitted} 件（古いほう）")
@@ -233,6 +234,8 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
     if not transcript_path:
         return [], 0
     spans: list[list[tuple[str, str]]] = [[]]
+    # 途中で打った入力は、queued_command の添付と、promptSource が queued の user の行の両方に残ることがある
+    unpaired: dict[str, list[str]] = {"attachment": [], "queued": []}
     try:
         with open(transcript_path, encoding="utf-8", errors="replace") as f:
             for raw in f:
@@ -247,8 +250,16 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
                         spans.append([])
                         continue
                     got = terminal_input(o)
-                    if got:
-                        spans[-1].append(got)
+                    if not got:
+                        continue
+                    side = "attachment" if o.get("type") == "attachment" else o.get("promptSource")
+                    other = {"attachment": "queued", "queued": "attachment"}.get(side)
+                    if other and got[1] in unpaired[other]:
+                        unpaired[other].remove(got[1])
+                        continue
+                    if side in unpaired:
+                        unpaired[side].append(got[1])
+                    spans[-1].append(got)
     except OSError:
         return [], 0
     out = [x for span in spans[-2:] for x in span] if len(spans) >= 3 else [x for span in spans for x in span]
