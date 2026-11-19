@@ -84,10 +84,23 @@ class SessionTest(Base):
     def test_startup_states_priority_order(self):
         self.write()
         text = run("session", {"cwd": str(self.root), "source": "startup"})
-        order = ["安全と権限の決まり", "いまの会話でのリーダーの指示", "作業記録のうちリーダーが決めた有効な判断"]
+        order = ["安全と権限の決まり", "いまの会話でのリーダーの指示", "作業記録の有効な判断（出どころが端末からの入力の物）",
+                 "CLAUDE.md の一般の決まり", "作業記録のうち Claude の技術の判断"]
         positions = [text.index(o) for o in order]
         self.assertEqual(positions, sorted(positions))
         self.assertNotIn("記録の判断に従う", text)
+        self.assertNotIn("リーダーが決めた", text)
+
+    def test_ignores_files_without_front_matter(self):
+        self.write()
+        (self.root / "docs" / "work" / "README.md").write_text("# 作業記録の置き場\n\n説明だけの文書\n", encoding="utf-8")
+        text = run("session", {"cwd": str(self.root), "source": "startup"})
+        self.assertIn("状態の持ち方", text)
+        self.assertNotIn("README", text)
+
+    def test_no_output_when_only_files_without_front_matter(self):
+        (self.root / "docs" / "work" / "README.md").write_text("# 作業記録の置き場\n", encoding="utf-8")
+        self.assertEqual(run("session", {"cwd": str(self.root), "source": "startup"}), "")
 
     def transcript(self, entries):
         path = Path(self.tmp.name) / "t.jsonl"
@@ -243,6 +256,13 @@ class PromptTest(Base):
         self.commit("x.txt", when=1_800_000_100)
         text = run("prompt", {"cwd": str(self.root)})
         self.assertIn("作業記録（状態の持ち方）", text)
+        self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
+
+    def test_file_without_front_matter_is_not_nagged(self):
+        (self.root / "docs" / "work" / "README.md").write_text("# 作業記録の置き場\n", encoding="utf-8")
+        self.commit("docs/work/README.md", when=1_800_000_000)
+        (self.root / "x.txt").write_text("x")
+        self.commit("x.txt", when=1_800_000_100)
         self.assertEqual(run("prompt", {"cwd": str(self.root)}), "")
 
     def test_quiet_when_record_committed_with_code(self):

@@ -118,11 +118,12 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     grep -q '^agent prompt loop-' "$CALLS"
 }
-@test "引き継ぎの文面は、作業記録を読んで次の一手から続け、案を決定として扱わないよう言い、/loop を付けない" {
+@test "引き継ぎの文面は、作業記録を読んで次の一手から続け、優先の順を CLAUDE.md に合わせ、案を決定として扱わないよう言い、/loop を付けない" {
     handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
-    expected="前のセッションからの引き継ぎ。最初に作業記録 $STATEF を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。決めたこととして扱うのは「判断の経緯」で状態が有効の物だけで、「リーダーに決めてほしいこと」にある Claude の案は、リーダーの答えが出るまで決定として扱わない。このあとリーダーが言ったことが記録と食い違えば、リーダーの言ったことに従い、記録に変更として書く。記録の書き方はスキル work-record。"
+    expected="前のセッションからの引き継ぎ。最初に作業記録 $STATEF を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。「判断の経緯」で状態が有効の物は過去の判断として読み、食い違ったときは、安全と権限の決まり、このあとのリーダーの指示、記録の有効な判断（出どころが端末からの入力の物）、CLAUDE.md の一般の決まり、記録のうち Claude の技術の判断の順に従う（グローバルの CLAUDE.md の「作業記録」）。「リーダーに決めてほしいこと」にある Claude の案は、リーダーの答えが出るまで決定として扱わない。このあとリーダーが言ったことが記録と食い違えば、リーダーの言ったことに従い、記録に変更として書く。記録の書き方はスキル work-record。"
     [ "$(jq -r .prompt <<< "$output")" = "$expected" ]
+    run ! grep -q "決めたこととして扱う" <<< "$(jq -r .prompt <<< "$output")"
     run ! grep -q "agent prompt" "$CALLS"
     run ! grep -q "/loop" <<< "$(jq -r .prompt <<< "$output")"
 }

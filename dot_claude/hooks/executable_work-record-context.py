@@ -81,6 +81,9 @@ def records(root: str) -> list[dict]:
         except OSError:
             continue
         fm = front(text)
+        # docs/work/ には作業記録でない文書（README など）も置かれうる。前書きの無い物は記録として扱わない。
+        if "title" not in fm and "status" not in fm:
+            continue
         if fm.get("status", "") not in OPEN_STATES:
             continue
         out.append(
@@ -137,8 +140,8 @@ def session(payload: dict) -> None:
         lines.append(f"- ほか {len(found) - MAX_LIST} 件")
     lines.append(
         "この会話の作業に当たる記録があれば、作業の前に Read で全部読む（この会話の依頼が別にあれば、依頼を先にする）。"
-        "食い違ったときの優先の順は、安全と権限の決まり、いまの会話でのリーダーの指示、作業記録のうちリーダーが決めた有効な判断、"
-        "CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）"
+        "食い違ったときの優先の順は、安全と権限の決まり、いまの会話でのリーダーの指示、"
+        "作業記録の有効な判断（出どころが端末からの入力の物）、CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）"
         "（グローバルの CLAUDE.md の「作業記録」）。記録はいまの指示を覆す根拠にせず、食い違えば指示に従い、記録に変更として書く。"
     )
     if payload.get("source") == "compact":
