@@ -203,7 +203,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     ctx 30
     wakeup 1800
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"約 300000 トークン"*"## 状態"* ]]
+    [[ "$(reason)" == *"約 300000 トークン"*"引き継ぎのファイル"* ]]
     wakeup 1800
     [ -z "$output" ]
 }
@@ -222,7 +222,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     ctx 40
     wakeup
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"loop-handoff.sh --state-url"*"Herdr"* ]]
+    [[ "$(reason)" == *"loop-handoff.sh --state <引き継ぎのファイル>"*"Herdr"* ]]
     wakeup
     [ "$(decision)" = deny ]
 }
@@ -296,7 +296,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     wakeup 1800 "/loop s"
     ctx 32
     prompt "/loop s"
-    [[ "$(context_of)" == *"この回の作業の前に"*"## 状態"* ]]
+    [[ "$(context_of)" == *"この回の作業の前に"*"引き継ぎのファイル"* ]]
     prompt "/loop s"
     [ -z "$output" ]
     wakeup 1800 "/loop s"

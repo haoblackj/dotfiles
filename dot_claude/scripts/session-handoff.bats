@@ -3,7 +3,7 @@
 bats_require_minimum_version 1.5.0
 set -u
 
-URL="https://github.com/haoblackj/dotfiles/issues/69#issuecomment-6406782062"
+URL="https://github.com/haoblackj/dotfiles/issues/69#issuecomment-6406782062"  # 受け付けないことを確かめる用
 
 setup() {
     SCRIPT="$BATS_TEST_DIRNAME/executable_session-handoff.sh"
@@ -40,6 +40,10 @@ EOF
     export HERDR_ENV=1 HERDR_WORKSPACE_ID=w1
     unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
+    mkdir -p "$HOME/.cache/claude-handoff"
+    STATEF="$HOME/.cache/claude-handoff/2026-11-19-sess.md"
+    echo s > "$STATEF"
+    STATEF=$(realpath -e "$STATEF")
 }
 
 teardown() {
@@ -48,22 +52,28 @@ teardown() {
 
 handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --effort medium "$@"; }
 
-@test "状態のコメントの URL で、指定の cwd に新しいタブを立てて渡す" {
-    handoff --state "$URL" --cwd "$FAKE_CWD"
+@test "引き継ぎのファイルで、指定の cwd に新しいタブを立てて渡す" {
+    handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     grep -q -- "tab create --workspace w3 --cwd $FAKE_CWD --no-focus" "$CALLS"
     grep -q -- "agent start chat-.* --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium --name タブ名の付け方" "$CALLS"
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     [ "$(jq -r .tab <<< "$output")" = "w1:t9" ]
     [ "$(jq -r .handed_off <<< "$output")" = true ]
-    [ "$(jq -r .state <<< "$output")" = "$URL" ]
+    [ "$(jq -r .state <<< "$output")" = "$STATEF" ]
 }
 @test "状態のファイルは ~/.cache/claude-handoff/ の下だけを受け付ける" {
     mkdir -p "$HOME/.cache/claude-handoff"; f="$HOME/.cache/claude-handoff/x.md"; echo s > "$f"
     handoff --state "$f" --cwd "$FAKE_CWD"; [ "$status" -eq 0 ]
     echo s > "$TMPDIR_TEST/x.md"
     handoff --state "$TMPDIR_TEST/x.md" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]
-    [[ "$output" == *"状態のファイルは ~/.cache/claude-handoff/ 下に置く"* ]]
+    [[ "$output" == *"引き継ぎのファイルは ~/.cache/claude-handoff/ 下に置く"* ]]
+}
+@test "issue のコメントの URL は受け付けず、herdr を呼ばない" {
+    handoff --state "$URL" --cwd "$FAKE_CWD"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"~/.cache/claude-handoff/ 下の引き継ぎのファイル"* ]]
+    [ ! -e "$CALLS" ]
 }
 @test "相対パスの state と cwd は解決済みの絶対パスで渡す" {
     mkdir -p "$HOME/.cache/claude-handoff/sub" "$TMPDIR_TEST/work"
@@ -74,56 +84,55 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     state_path=$(realpath -e "$HOME/.cache/claude-handoff/x.md")
     cwd_path=$(realpath -e "$TMPDIR_TEST/work")
     [ "$(jq -r .state <<< "$output")" = "$state_path" ]
-    grep -Fq "最初に状態 $state_path を読み" "$CALLS"
+    grep -Fq "最初に引き継ぎのファイル $state_path を読み" "$CALLS"
     grep -Fx "tab create --workspace w3 --cwd $cwd_path --no-focus" "$CALLS"
 }
 @test "tab_id が無くても対話と loop の引き継ぎを続ける" {
-    FAKE_NO_TAB_ID=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    FAKE_NO_TAB_ID=1 handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ "$(jq -r .tab <<< "$output")" = "" ]
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     grep -q '^agent prompt chat-' "$CALLS"
     FAKE_NO_TAB_ID=1 run bash "$BATS_TEST_DIRNAME/executable_loop-handoff.sh" \
-        --state-url "$URL" --title "CI の赤の修正" --model opus --effort medium -- "/loop CI を見る"
+        --state "$STATEF" --title "CI の赤の修正" --model opus --effort medium -- "/loop CI を見る"
     [ "$status" -eq 0 ]
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     grep -q '^agent prompt loop-' "$CALLS"
 }
-@test "引き継ぎの文面は、状態の在りかを読んで次の一手から続けるよう言い、/loop を付けない" {
-    handoff --state "$URL" --cwd "$FAKE_CWD"
+@test "引き継ぎの文面は、ファイルを読んで次の一手から続け、案を決定として扱わないよう言い、/loop を付けない" {
+    handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
-    grep "agent prompt" "$CALLS" | grep -q "$URL"
-    expected="前のセッションからの引き継ぎ。最初に状態 $URL を読み（issue のコメントなら、それより新しい \`## 状態\` も）、そこに書かれた作業フォルダ、ワークツリー、ブランチ、issue と PR を確かめてから「次の一手」から続ける。"
+    expected="前のセッションからの引き継ぎ。最初に引き継ぎのファイル $STATEF を読み、そこに書かれた作業フォルダ、ワークツリー、ブランチ、issue と PR を確かめてから「次の一手」から続ける。決めたこととして扱うのは「リーダーが決めたこと」の欄にリーダーの発言の引用とともに書かれた物だけで、「Claude の案」の欄の物はリーダーの答えが出るまで決定として扱わない。"
     grep -Fx "agent prompt $(jq -r .agent <<< "$output") $expected" "$CALLS"
     prompt=$(grep "agent prompt" "$CALLS")
     run ! grep -q "/loop" <<< "$prompt"
 }
 @test "名前は 1 つの引数のまま claude の --name へ渡る" {
-    handoff --state "$URL" --cwd "$FAKE_CWD" --title '-x "引用" と 空白' --dry-run
+    handoff --state "$STATEF" --cwd "$FAKE_CWD" --title '-x "引用" と 空白' --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" == *"--name -x\\ \\\"引用\\\"\\ と\\ 空白"* ]]
 }
 @test "名前が無いか、引き継ぎの語を含むか、20 文字を超えるか、改行を含めば止まり、herdr を呼ばない" {
-    run bash "$SCRIPT" --model opus --effort medium --state "$URL" --cwd "$FAKE_CWD"
+    run bash "$SCRIPT" --model opus --effort medium --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
     [[ "$output" == *"--title"* ]]
     for bad in "prts issue #7 の引き継ぎ" "あいうえおかきくけこさしすせそたちつてとな" $'一行目\n二行目' "   "; do
-        handoff --state "$URL" --cwd "$FAKE_CWD" --title "$bad"
+        handoff --state "$STATEF" --cwd "$FAKE_CWD" --title "$bad"
         [ "$status" -eq 1 ]
     done
     [ ! -e "$CALLS" ]
 }
 @test "20 文字ちょうどの名前は通す" {
-    handoff --state "$URL" --cwd "$FAKE_CWD" --title "あいうえおかきくけこさしすせそたちつてと"
+    handoff --state "$STATEF" --cwd "$FAKE_CWD" --title "あいうえおかきくけこさしすせそたちつてと"
     [ "$status" -eq 0 ]
 }
-@test "cwd にスペースがあっても渡る" { d="$TMPDIR_TEST/a b"; mkdir -p "$d"; handoff --state "$URL" --cwd "$d" --dry-run; [[ "$output" == *"a\\ b"* ]]; }
-@test "cwd が無いディレクトリなら止まる" { handoff --state "$URL" --cwd /nonexistent; [ "$status" -eq 1 ]; }
-@test "Herdr の外なら止まる" { unset HERDR_ENV; handoff --state "$URL" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]; }
+@test "cwd にスペースがあっても渡る" { d="$TMPDIR_TEST/a b"; mkdir -p "$d"; handoff --state "$STATEF" --cwd "$d" --dry-run; [[ "$output" == *"a\\ b"* ]]; }
+@test "cwd が無いディレクトリなら止まる" { handoff --state "$STATEF" --cwd /nonexistent; [ "$status" -eq 1 ]; }
+@test "Herdr の外なら止まる" { unset HERDR_ENV; handoff --state "$STATEF" --cwd "$FAKE_CWD"; [ "$status" -eq 1 ]; }
 
 @test "cwd は pane current の値ではなく指定した場所を使う" {
     d="$TMPDIR_TEST/selected"; mkdir -p "$d"
-    handoff --state "$URL" --cwd "$d"
+    handoff --state "$STATEF" --cwd "$d"
     [ "$status" -eq 0 ]
     grep -Fx "tab create --workspace w3 --cwd $d --no-focus" "$CALLS"
 }
@@ -138,11 +147,11 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ ! -e "$CALLS" ]
 }
 @test "tab create と agent start の失敗では次の手順へ進まない" {
-    FAKE_TAB_FAIL=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    FAKE_TAB_FAIL=1 handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
     [[ "$output" == *"tab create"* ]]
     run ! grep -q '^agent' "$CALLS"
-    FAKE_START_FAIL=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    FAKE_START_FAIL=1 handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
     [[ "$output" == *"agent start"* ]]
     run ! grep -q '^agent prompt' "$CALLS"
@@ -157,13 +166,13 @@ printf '%s\n' "$*" >> "$TIMEOUT_CALLS"
 exit 124
 EOF
     chmod +x "$BIN/timeout"
-    handoff --state "$URL" --cwd "$FAKE_CWD"
+    handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     grep -qx '5 herdr pane current --current' "$TIMEOUT_CALLS"
     grep -Fx "tab create --workspace w1 --cwd $FAKE_CWD --no-focus" "$CALLS"
     run ! grep -q '^pane current' "$CALLS"
     unset HERDR_WORKSPACE_ID
-    handoff --state "$URL" --cwd "$FAKE_CWD"
+    handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 1 ]
     [[ "$output" == *"ワークスペースが分からない"* ]]
 }
@@ -177,7 +186,7 @@ EOF
             echo 'return 1' > "$isolated/herdr-start-claude.sh"
         fi
         run --separate-stderr bash "$isolated/handoff.sh" \
-            --state "$URL" --cwd "$FAKE_CWD" --title "タブ名の付け方" --model opus --effort medium --dry-run
+            --state "$STATEF" --cwd "$FAKE_CWD" --title "タブ名の付け方" --model opus --effort medium --dry-run
         [ "$status" -eq 1 ]
         [ -z "$output" ]
         [[ "$stderr" == *"session-handoff: 共通部分 herdr-start-claude.sh を読み込めない"* ]]
@@ -186,26 +195,26 @@ EOF
 }
 
 @test "引き継ぎ先の枠を prts に書き、応答の JSON は崩さない" {
-    handoff --state "$URL" --cwd "$FAKE_CWD"
+    handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ "$(cat "$PRTS_CALLS")" = "wish moved --from-session from-pane --pane w1:p42" ]
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
 }
 
 @test "pane current が使えなければ、CLAUDE_CODE_SESSION_ID を元のセッションにする" {
-    FAKE_NO_CURRENT=1 CLAUDE_CODE_SESSION_ID=from-env handoff --state "$URL" --cwd "$FAKE_CWD"
+    FAKE_NO_CURRENT=1 CLAUDE_CODE_SESSION_ID=from-env handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ "$(cat "$PRTS_CALLS")" = "wish moved --from-session from-env --pane w1:p42" ]
 }
 
 @test "元のセッションが分からなければ prts を呼ばない" {
-    FAKE_NO_CURRENT=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    FAKE_NO_CURRENT=1 handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ ! -e "$PRTS_CALLS" ]
 }
 
 @test "prts が失敗しても引き継ぎは成功にする" {
-    FAKE_PRTS_FAIL=1 handoff --state "$URL" --cwd "$FAKE_CWD"
+    FAKE_PRTS_FAIL=1 handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ -e "$PRTS_CALLS" ]
     [ "$(jq -r .handed_off <<< "$output")" = true ]
@@ -214,7 +223,7 @@ EOF
 @test "prts が無くても引き継ぎは成功にする" {
     mv "$BIN/prts" "$TMPDIR_TEST/prts-moved-away"
     ln -s "$(command -v jq)" "$BIN/jq"
-    PATH="$BIN:/usr/bin:/bin" handoff --state "$URL" --cwd "$FAKE_CWD"
+    PATH="$BIN:/usr/bin:/bin" handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ "$(jq -r .handed_off <<< "$output")" = true ]
 }

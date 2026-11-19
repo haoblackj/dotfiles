@@ -28,6 +28,24 @@ check_title() {
   (( len <= 20 )) || { echo "--title は 20 文字までにする（いま $len 文字）"; return 1; }
 }
 
+# 引き継ぎのファイルを確かめ、解決済みの絶対パスを標準出力に出す。合わなければ理由を出して 1 を返す。
+# 受け付けるのは ~/.cache/claude-handoff/ 下のファイルだけ。issue のコメントの URL は受け付けない
+# （進行状態と決めたことを issue に持たせない、と 2026-11-19 にリーダーが決めた。haoblackj/dotfiles#86）。
+# 親参照や symlink を解決して、保存先の外にあるファイルを受け付けない。
+check_state_file() {
+  local root path
+  [[ -f "$1" ]] || { echo "--state は ~/.cache/claude-handoff/ 下の引き継ぎのファイルにする"; return 1; }
+  path=$(realpath -e -- "$1" 2>/dev/null) || { echo "引き継ぎのファイルの場所が分からない"; return 1; }
+  root=$(realpath -e -- "$HOME/.cache/claude-handoff" 2>/dev/null) || { echo "引き継ぎの保存先が無い"; return 1; }
+  [[ "$path" == "$root/"* ]] || { echo "引き継ぎのファイルは ~/.cache/claude-handoff/ 下に置く"; return 1; }
+  printf '%s' "$path"
+}
+
+# 引き継ぎ先へ渡す、ファイルの読み方の一文。どちらのスクリプトも同じ文を渡す。
+state_reading_note() {
+  printf '%s' "決めたこととして扱うのは「リーダーが決めたこと」の欄にリーダーの発言の引用とともに書かれた物だけで、「Claude の案」の欄の物はリーダーの答えが出るまで決定として扱わない。"
+}
+
 start_claude_in_new_tab() {
   local ws="$1" dir="$2" model="$3" effort="$4" title="$5" name="$6" prompt="$7"
   local created pane tab out
