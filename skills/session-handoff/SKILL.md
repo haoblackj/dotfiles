@@ -37,8 +37,12 @@ Herdr の同じワークスペースの新しいタブへ、対話セッショ�
    ~/.claude/scripts/session-handoff.sh --state <作業記録> --cwd <作業フォルダかワークツリー> --title <名前> --model <モデル> --effort <エフォート>
    ```
 
+   スクリプトはセッションを立てるだけで、引き継ぎの文面は打ち込まない。
+   打ち込んだ文は受けた側の記録でリーダーの入力と見分けがつかないため、文面は `SendMessage` で送る（受けた側の記録に送り手が残る）。
    失敗したら出力をリーダーに出して止まり、掃除へ進まない。
-   成功の JSON（`handed_off: true`、`agent`、`tab`、`pane`、`state`）から、引き継いだタブとペインを控える。
+   成功の JSON（`handed_off: false`、`started: true`、`agent`、`tab`、`pane`、`state`、`title`、`prompt`）から、引き継いだタブとペインを控える。
+   `ListAgents` に `title` の名前が出たことを確かめ、`prompt` を `SendMessage` でその名前へ送る（立ててから数秒で出る）。
+   名前が出ない、または届けた結果に承認待ちや拒否の知らせがあれば、出力をリーダーに報告して止まる。
 
 4. 引き継ぎで立てたペインを除いて、掃除の候補を出す。
 

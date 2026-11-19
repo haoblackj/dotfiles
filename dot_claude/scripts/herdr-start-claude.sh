@@ -8,6 +8,8 @@
 #   （SessionStart のフックで起動が遅れることがある）。再試行はしない。一度目が claude を打ち込んで
 #   いれば、二度目は起動中の claude に打ち込むことになるため。
 #   agent prompt は --wait を付けない（相手の応答が落ち着くまでブロックするため。グローバルの CLAUDE.md）。
+#   prompt が空なら agent prompt を呼ばない。打ち込むのはスラッシュコマンド（loop-handoff.sh）だけにし、
+#   引き継ぎの指示は呼ぶ側が SendMessage で送る。
 # 失敗した手順を標準エラーに出して 1 を返す。作ったタブは閉じない。
 
 run() {
@@ -75,11 +77,15 @@ start_claude_in_new_tab() {
   }
   (( ${DRY:-0} == 1 )) && printf '%s' "$out"
 
-  out=$(run herdr agent prompt "$name" "$prompt") || {
-    printf 'herdr-start-claude: agent prompt で失敗（agent %s は起動済み）: %s\n' "$name" "$out" >&2
-    return 1
-  }
-  (( ${DRY:-0} == 1 )) && { printf '%s' "$out"; return 0; }
+  # prompt が空なら打ち込まない。呼ぶ側が SendMessage で送る（受けた側の記録に送り手が残る）。
+  if [[ -n "$prompt" ]]; then
+    out=$(run herdr agent prompt "$name" "$prompt") || {
+      printf 'herdr-start-claude: agent prompt で失敗（agent %s は起動済み）: %s\n' "$name" "$out" >&2
+      return 1
+    }
+    (( ${DRY:-0} == 1 )) && { printf '%s' "$out"; return 0; }
+  fi
+  (( ${DRY:-0} == 1 )) && return 0
 
   jq -nc --arg tab "$tab" --arg pane "$pane" '{tab: $tab, pane: $pane}'
 }

@@ -2,6 +2,9 @@
 # 対話の状態を、Herdr の新しいタブの新しいセッションへ引き継ぐ。
 # 作業記録（リポジトリの docs/work/<作業名>.md）と、作業する cwd を指定する。
 # ワークスペースは pane current から取り、cwd は --cwd の値を使う。
+# セッションを立てるだけで、引き継ぎの文面は打ち込まない。文面は成功の JSON の prompt で返すので、
+# 呼んだ Claude が ListAgents に title の名前が出たことを確かめ、SendMessage で送る
+# （打ち込んだ文は受けた側の記録でリーダーの入力と見分けがつかないため）。
 # 失敗した手順を標準エラーに出して exit 1。作ったタブは閉じない。
 # --dry-run は herdr を呼ばず、呼ぶはずのコマンドを出す。
 #
@@ -54,9 +57,9 @@ fi
 
 NAME="chat-$(date +%m%d%H%M%S)"
 PROMPT="前のセッションからの引き継ぎ。最初に作業記録 $STATE を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。$(state_reading_note)"
-STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "$PROMPT") || exit 1
+STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "") || exit 1
 (( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
 note_wish_moved "$CUR" "$(jq -r .pane <<< "$STARTED")"
 
-jq -nc --arg name "$NAME" --arg state "$STATE" --argjson started "$STARTED" \
-  '{handed_off: true, agent: $name, tab: $started.tab, pane: $started.pane, state: $state}'
+jq -nc --arg name "$NAME" --arg state "$STATE" --arg title "$TITLE" --arg prompt "$PROMPT" --argjson started "$STARTED" \
+  '{handed_off: false, started: true, agent: $name, tab: $started.tab, pane: $started.pane, state: $state, title: $title, prompt: $prompt}'

@@ -60,8 +60,11 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     grep -q -- "agent start chat-.* --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium --name タブ名の付け方" "$CALLS"
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
     [ "$(jq -r .tab <<< "$output")" = "w1:t9" ]
-    [ "$(jq -r .handed_off <<< "$output")" = true ]
+    [ "$(jq -r .handed_off <<< "$output")" = false ]
+    [ "$(jq -r .started <<< "$output")" = true ]
+    [ "$(jq -r .title <<< "$output")" = "タブ名の付け方" ]
     [ "$(jq -r .state <<< "$output")" = "$STATEF" ]
+    run ! grep -q '^agent prompt' "$CALLS"
 }
 @test "作業記録は git の作業コピーの docs/work/ 直下の .md だけを受け付ける" {
     echo s > "$TMPDIR_TEST/x.md"
@@ -90,7 +93,7 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     state_path=$(realpath -e "$REPO/docs/work/sess.md")
     cwd_path=$(realpath -e "$TMPDIR_TEST/work")
     [ "$(jq -r .state <<< "$output")" = "$state_path" ]
-    grep -Fq "最初に作業記録 $state_path を全部読み" "$CALLS"
+    [[ "$(jq -r .prompt <<< "$output")" == *"最初に作業記録 $state_path を全部読み"* ]]
     grep -Fx "tab create --workspace w3 --cwd $cwd_path --no-focus" "$CALLS"
 }
 @test "tab_id が無くても対話と loop の引き継ぎを続ける" {
@@ -98,7 +101,7 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     [ "$status" -eq 0 ]
     [ "$(jq -r .tab <<< "$output")" = "" ]
     [ "$(jq -r .pane <<< "$output")" = "w1:p42" ]
-    grep -q '^agent prompt chat-' "$CALLS"
+    run ! grep -q '^agent prompt' "$CALLS"
     FAKE_NO_TAB_ID=1 run bash "$BATS_TEST_DIRNAME/executable_loop-handoff.sh" \
         --state "$STATEF" --title "CI の赤の修正" --model opus --effort medium -- "/loop CI を見る"
     [ "$status" -eq 0 ]
@@ -109,9 +112,9 @@ handoff() { run bash "$SCRIPT" --title "タブ名の付け方" --model opus --ef
     handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     expected="前のセッションからの引き継ぎ。最初に作業記録 $STATEF を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。決めたこととして扱うのは「判断の経緯」で状態が有効の物だけで、「リーダーに決めてほしいこと」にある Claude の案は、リーダーの答えが出るまで決定として扱わない。このあとリーダーが言ったことが記録と食い違えば、リーダーの言ったことに従い、記録に変更として書く。記録の書き方はスキル work-record。"
-    grep -Fx "agent prompt $(jq -r .agent <<< "$output") $expected" "$CALLS"
-    prompt=$(grep "agent prompt" "$CALLS")
-    run ! grep -q "/loop" <<< "$prompt"
+    [ "$(jq -r .prompt <<< "$output")" = "$expected" ]
+    run ! grep -q "agent prompt" "$CALLS"
+    run ! grep -q "/loop" <<< "$(jq -r .prompt <<< "$output")"
 }
 @test "名前は 1 つの引数のまま claude の --name へ渡る" {
     handoff --state "$STATEF" --cwd "$FAKE_CWD" --title '-x "引用" と 空白' --dry-run
@@ -222,7 +225,7 @@ EOF
     FAKE_PRTS_FAIL=1 handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
     [ -e "$PRTS_CALLS" ]
-    [ "$(jq -r .handed_off <<< "$output")" = true ]
+    [ "$(jq -r .started <<< "$output")" = true ]
 }
 
 @test "prts が無くても引き継ぎは成功にする" {
@@ -230,5 +233,5 @@ EOF
     ln -s "$(command -v jq)" "$BIN/jq"
     PATH="$BIN:/usr/bin:/bin" handoff --state "$STATEF" --cwd "$FAKE_CWD"
     [ "$status" -eq 0 ]
-    [ "$(jq -r .handed_off <<< "$output")" = true ]
+    [ "$(jq -r .started <<< "$output")" = true ]
 }
