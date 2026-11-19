@@ -169,24 +169,22 @@ wish: state-context
 - 状態: 有効
 
 ## いまの作業
-実装は終わり（下の「済んだこと」）、本番への反映と、本番での動作確認を進めている。次に両リポジトリの PR を作る。リーダーに頼まれた「最初の依頼の完遂」（2026-11-20 の判断）に当たる。
+実装、試験、審査、本番での動作確認を終え、両リポジトリの PR を作った（dotfiles #98、prts #9）。main への取り込みについて、リーダーの答えを待っている。リーダーに頼まれた「最初の依頼の完遂」（2026-11-20 の判断）に当たる。
 
 ## 済んだこと
-- prts: queued_command を人の入力として読む（2052c91）、入力を記録の項目だけで分類し発言者を名乗らない（ed53515）、help の文言（9dc9ef2）、作業記録の引用を端末からの入力の原文として出す（72ef8b9）。ブランチ `feat/work-record`。
-- dotfiles: 引き継ぎの指示を SendMessage で送る（054dee3）、圧縮のあとの差し込みと書き忘れの知らせ（21ba286）、優先の順と安全の範囲と引用の決まり（bbc55fe）、端末からの入力の判断をリーダーの決定と同じに扱わない（859424a）、欠陥の直しとレビューの指摘の場面で superpowers の工程に入る（5545090）、最後の全体の審査の指摘の直し（優先の順を出どころで書く、Claude が緩めない決まりの列挙、前書きの無い文書を記録として扱わない、`-- --name`、e0888b2）。ブランチ `ops/work-records`。
+- prts: queued_command を人の入力として読む（2052c91）、入力を記録の項目だけで分類し発言者を名乗らない（ed53515）、help の文言（9dc9ef2）、作業記録の引用を端末からの入力の原文として出す（72ef8b9）、最後の全体の審査の指摘の直し（要約の材料の見出し、原文の札を確かめた「」だけにかける、a7d0c05）。ブランチ `feat/work-record`、PR https://github.com/haoblackj/prts/pull/9 。
+- dotfiles: 引き継ぎの指示を SendMessage で送る（054dee3）、圧縮のあとの差し込みと書き忘れの知らせ（21ba286）、優先の順と安全の範囲と引用の決まり（bbc55fe）、端末からの入力の判断をリーダーの決定と同じに扱わない（859424a）、欠陥の直しとレビューの指摘の場面で superpowers の工程に入る（5545090）、最後の全体の審査の指摘の直し（優先の順を出どころで書く、Claude が緩めない決まりの列挙、前書きの無い文書を記録として扱わない、`-- --name`、e0888b2）、設計書と作業記録の引用の表記（1458c8c）。ブランチ `ops/work-records`、PR https://github.com/haoblackj/dotfiles/pull/98 。
 - 各作業は審査で指摘がなくなるまで直した。開発工程の直しは、直す前と後の決まりで場面を比べて確かめた（上の判断）。
 - 以前の本番反映（PRTS の作業記録の表示、読み戻しのフック、memory の誤った引用 2 件の修正）と、変更前の状態の保管（`~/.cache/claude-ops-backup/20261120/`）。
 
 ## 残っていること
-- 本番への反映と、本番での動作確認（進行中）。
-- 両リポジトリの PR の作成。
 - main への取り込みはリーダーの確認の後。取り込んだあとに、開いている issue に残る `status:` ラベルを外し、本番の dotfiles のチェックアウトを main へ戻す。
 - prts のほかの開いている望みには作業記録がまだ無い。それぞれのセッションが次に動くときに作る。
 - 原文が見つからなかった memory の引用 190 件は、使う場面で確かめる。
 - 審査で出た小さな未対応が残る（`session-handoff.sh --dry-run` が文を出さない、bats 1.5 以上が要る、queued_command が二重に差し込まれうる、設計書の付録が追跡外の素材を指す、長い箇条）。
 
 ## 次に Claude がすること
-- 本番の動作確認（prts の分類、引き継ぎの SendMessage、フック）を終え、結果を確かめてから、prts と dotfiles の PR を作り、リーダーへ修正内容と結果を報告する。
+- リーダーの答えを待つ。PR に指摘が付いたら、receiving-code-review で受けて同じブランチで直す。
 - リーダーの答えが出るまで main へ取り込まない。取り込まない場合は、下の「参照」の戻し方で本番を元へ戻す。
 
 ## リーダーに決めてほしいこと
@@ -196,7 +194,8 @@ wish: state-context
 ## 参照
 - 議論: https://github.com/haoblackj/dotfiles/issues/86
 - 設計: [docs/superpowers/specs/2026-11-20-speaker-identification-design.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-speaker-identification-design.md)
-- コミット: dotfiles 3511b9c..e0888b2、prts 1e2ea5d..72ef8b9
+- コミット: dotfiles 3511b9c..1458c8c、prts 1e2ea5d..a7d0c05
+- PR: https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9
 - 書き方: [skills/work-record/SKILL.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/skills/work-record/SKILL.md)
 - PRTS の変更: https://github.com/haoblackj/prts/tree/feat/work-record
 - 本番の変更前の状態: `~/.cache/claude-ops-backup/20261120/`
