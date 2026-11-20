@@ -133,12 +133,12 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 - 案 1 を実機で確かめる。
 - Mod を本番へ配る（`chezmoi apply` で `~/.claude/skills/settings-symlink-guard` の symlink を張る）。
 - symlink を戻し、Orca のフックと `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行をソースにコミットする。
-- 既定ブランチへ取り込む前の審査（requesting-code-review）と PR。
+- PR #100 の取り込み（審査は済んだ）。
 - 上の三つの本番の操作は、ソースの作業コピーが別の作業の承認待ちのブランチにあるあいだはできない。
 
 ## 次に Claude がすること
 
-- PR を作る（Mod の版の審査は済み、指摘は直した）。
+- PR #100 の取り込みはリーダーの判断を待つ（Mod の版の審査は済み、指摘は直した）。
 - 別の作業のブランチが片付いたら、リーダーの答えの手順で、symlink を戻す、Mod を配る、Orca の環境変数を設定して再起動する、を一続きで行い、再起動の後に帯が出ていないこと、`~/.claude/settings.json` の inode が変わらないこと、Orca の画面で WSL の Claude Code の状態が出ることを確かめる。
 
 ## リーダーに決めてほしいこと
@@ -154,3 +154,4 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 - 書き置き: ブランチ `feat/orca-from-herdr` の `ideas/bugs/2026-11-21-settings-json-not-symlink.md`
 - symlink を作ったコミット: `f4aa14a`（2026-09-20、`dot_claude/symlink_settings.json.tmpl`）
 - PR #99（`CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行）
+- PR #100（symlink が外れたら帯で知らせる Mod）
