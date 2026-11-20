@@ -184,6 +184,14 @@
       {
         "hooks": [
           {
+            "command": "bash \"$HOME/.claude/hooks/settings-symlink-guard.sh\"",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
             "command": "~/.claude/hooks/claude-private-sync.sh pull",
             "type": "command"
           }

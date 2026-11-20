@@ -154,3 +154,15 @@ for ev, hs in h.items():
 print("PASS")
 PY
 }
+
+# ~/.claude/settings.json の symlink が通常のファイルに置き換わったら知らせる（docs/work/settings-symlink.md）
+# bats test_tags=production-asset
+@test "SessionStart に settings-symlink-guard.sh が配線されている" {
+    python3 - "$S" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
+cmds=[x.get("command","") for g in h.get("SessionStart",[]) for x in g.get("hooks",[])]
+assert any("settings-symlink-guard.sh" in c for c in cmds), cmds
+print("PASS")
+PY
+}
