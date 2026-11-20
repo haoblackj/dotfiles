@@ -10,7 +10,7 @@
 #   1. 振り先が stop        → 予約を deny。状態を書いてループを止めさせる。新しい CronCreate も deny。
 #   2. コンテキストが二段目  → 予約を deny。状態を書いてループを止め、新しいセッションへ引き継がせる。
 #                             新しい CronCreate も deny（大きな会話のまま新しいループを始めない）。
-#   3. コンテキストが一段目  → ScheduleWakeup を一度だけ deny し、状態コメントを書かせる。
+#   3. コンテキストが一段目  → ScheduleWakeup を一度だけ deny し、作業記録を今に合わせさせる。
 #                             一段目を下回ったら（圧縮のあとなど）、次に越えたときにまた一度 deny する。
 #   4. 振り先が offload か lean → 間隔が 20 分より短い予約を deny（ScheduleWakeup の delaySeconds、
 #                             繰り返しの CronCreate の cron の分の欄から求めた最短の間隔）。
@@ -143,15 +143,15 @@ cron_min_gap() {
     }'
 }
 
-STOP_MSG="利用枠が尽きる手前（stop）。ループを終える。issue に \`## 状態\`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete（ID は CronList）で止めてから、ターンを終える。再開はリーダーが /loop を打ち直す。"
+STOP_MSG="利用枠が尽きる手前（stop）。ループを終える。作業記録（リポジトリの \`docs/work/<作業名>.md\`。書き方はスキル work-record）を今に合わせてコミットし、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete（ID は CronList）で止めてから、ターンを終える。再開はリーダーが /loop を打ち直す。"
 handoff_msg() {
-  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `orca-cli` スキルの手順で、同じワークスペースに新しい Claude Code のターミナルを立て、状態コメントの URL と同じ /loop の指示を渡して Orca の新しいターミナルへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。立てられなかったら、ループを止めたことと失敗の出力をリーダーに報告して、ターンを終える。' "$(ctx_desc)"
+  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。作業記録（リポジトリの `docs/work/<作業名>.md`。書き方はスキル work-record）を今に合わせてコミットし、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `orca-cli` スキルの手順で、同じワークスペースに新しい Claude Code のターミナルを立て、作業記録と同じ /loop の指示を渡して Orca の新しいターミナルへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。立てられなかったら、ループを止めたことと失敗の出力をリーダーに報告して、ターンを終える。' "$(ctx_desc)"
 }
 state_msg() {
-  printf '%s が一段目の閾値を越えた。次の予約の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。書いたら、同じ予約をもう一度呼んでよい（この止め方は一度だけ）。' "$(ctx_desc)"
+  printf '%s が一段目の閾値を越えた。次の予約の前に、作業記録（リポジトリの `docs/work/<作業名>.md`。書き方はスキル work-record）を今に合わせてコミットする。書いたら、同じ予約をもう一度呼んでよい（この止め方は一度だけ）。' "$(ctx_desc)"
 }
 state_notice() {
-  printf '%s が一段目の閾値を越えている。この回の作業の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。' "$(ctx_desc)"
+  printf '%s が一段目の閾値を越えている。この回の作業の前に、作業記録（リポジトリの `docs/work/<作業名>.md`。書き方はスキル work-record）を今に合わせてコミットする。' "$(ctx_desc)"
 }
 
 case "$EVENT" in

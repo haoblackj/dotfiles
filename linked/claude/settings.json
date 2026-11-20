@@ -207,6 +207,16 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "python3 \"$HOME/.claude/hooks/work-record-context.py\" session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "^(startup|resume|clear|compact)$"
       }
     ],
     "Stop": [
@@ -242,6 +252,15 @@
           {
             "command": "python3 ~/.claude/hooks/memory_recall.py",
             "statusMessage": "関連メモリを検索中...",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "python3 \"$HOME/.claude/hooks/work-record-context.py\" prompt",
             "timeout": 10,
             "type": "command"
           }

@@ -203,7 +203,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     ctx 30
     wakeup 1800
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"約 300000 トークン"*"## 状態"* ]]
+    [[ "$(reason)" == *"約 300000 トークン"*"作業記録"* ]]
     wakeup 1800
     [ -z "$output" ]
 }
@@ -296,7 +296,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     wakeup 1800 "/loop s"
     ctx 32
     prompt "/loop s"
-    [[ "$(context_of)" == *"この回の作業の前に"*"## 状態"* ]]
+    [[ "$(context_of)" == *"この回の作業の前に"*"作業記録"* ]]
     prompt "/loop s"
     [ -z "$output" ]
     wakeup 1800 "/loop s"

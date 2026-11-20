@@ -10,7 +10,7 @@
 #   normal   Claude に余裕。Claude が実装する（平常。初回は知らせない）
 #   offload  Claude が逼迫し、Codex に余裕。実装の単位を Codex へ退避する
 #   lean     Claude が逼迫し、Codex も逼迫か読めない。退避せず Claude が消費を絞って続ける
-#   stop     Claude が尽きる手前。issue に状態を書いてターンを終える（知らせるだけで打ち切らない）
+#   stop     Claude が尽きる手前。作業記録を今に合わせてコミットしてターンを終える（知らせるだけで打ち切らない）
 #
 # しきい値（#34 の初期値。遷移ログを見て見直す）。逼迫と stop は、直前の状態で入りと出を分ける
 # （ヒステリシス）。出る側の値は、直前が逼迫の側（offload、lean、stop）のときに使う。
@@ -166,6 +166,6 @@ case "$ROUTE" in
   lean)
     notify "利用枠: Claude の枠が逼迫しているが、Codex も逼迫しているか読めない（$SUMMARY）。Codex へは退避しない。Claude が実装を続け、着手中の単位を仕上げることを優先する。新しい並列のサブエージェントやレビューの往復は増やさない。Codex の無料リセットの権利は、リーダーの許可なく使わない。実装でない作業（調べる、数える、設計する、レビューする）は縮めずに続ける。作業を止めるのは、枠が尽きる手前と知らせたときだけ。ループ（/loop）の間隔は 20 分以上にする。" ;;
   stop)
-    notify "利用枠: Claude の枠が尽きる手前（$SUMMARY）。issue に状態（どこまで進んだか、次の一手）を書いてから、ターンを終える。ループ（/loop）を回しているなら、ターンを終える前に ScheduleWakeup の stop: true か CronDelete で止める。" ;;
+    notify "利用枠: Claude の枠が尽きる手前（$SUMMARY）。作業記録（リポジトリの \`docs/work/<作業名>.md\`。書き方はスキル work-record）を今に合わせてコミットしてから、ターンを終える。ループ（/loop）を回しているなら、ターンを終える前に ScheduleWakeup の stop: true か CronDelete で止める。" ;;
 esac
 exit 0
