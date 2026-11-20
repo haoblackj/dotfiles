@@ -94,7 +94,7 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 
 ## いまの作業
 
-記事と同じ運用は手元で動いている。PR #99 の取り込みの判断と、別のセッションに渡した二つの仕事を待っている。
+PR #99 を新しい main に載せ直した。差分の審査をやり直している。
 
 ## 済んだこと
 
@@ -102,6 +102,8 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 - orca-milestone の WSL 向けの直し（手元の複製の 3d40e8c から 86ab9f8。テスト 97 件が通る）。リーダーの承認で Windows の Orca に読み込まれ、`running` になった。
 - 実機で確かめたこと: フォーカス中のワークスペースの表示、ほかのワークスペースのタスクの進捗、エラーの無いログ、次の作業のカードを押すと依頼文がそのまま WSL の Claude に届くこと（2026-11-21、リーダーが押した）。試しのターミナルは閉じた。
 - 断捨離の PR #99。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。審査（With fixes）の指摘を直した。
+- PR #98 が main に入った（275dd27）ので、origin/main をこのブランチへマージし（14ffd55）、衝突は main の版にこの PR の直しを当て直して解いた。CLAUDE.md は 199 行。
+- Orca が手元に書いたフックの設定（`~/.claude/settings.json` の agent-hooks の 16 か所）とキーの割り当て（`ctrl+alt+g`）をソースへ取り込んだ（d51515c）。設定のつながりの試験は、Orca の PostCompact のフックを許すように直した。フックの試験 294 件、pytest 203 件が通る。
 - 全体の設定の `CLAUDE_CODE_ENABLE_TODO_TOOLS` を手元の `~/.claude/settings.json` に効かせた。
 - 全体の設定に `CLAUDE_CODE_ENABLE_TODO_TOOLS`、CLAUDE.md に記事の指示（タスクの記録と `next` のブロック）を足した（PR #99）。CLAUDE.md は 199 行。
 - prts を Orca へ移す仕事を、別のセッションに渡した。
@@ -117,7 +119,7 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 
 ## 次に Claude がすること
 
-- リーダーが PR #99 を取り込んだら、本番の作業コピーが `main` に移るのを待って `chezmoi apply` の結果（消えたスクリプトとスキル、CLAUDE.md の追加）を確かめる。
+- 載せ直した差分の審査の指摘を受けて直し、リーダーに PR #99 の取り込みを頼む。取り込まれたら、本番の作業コピーで試しの未コミットの変更（`dot_claude/CLAUDE.md`、`dot_claude/output-styles/exusiai.md`）を持ち越したまま main の先端へ移し、`chezmoi apply` の結果を確かめる。
 
 ## リーダーに決めてほしいこと
 
