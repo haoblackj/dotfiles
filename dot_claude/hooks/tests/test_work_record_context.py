@@ -198,6 +198,23 @@ class SessionTest(Base):
         self.assertEqual(text.count("「添付の指示」"), 1)
         self.assertEqual(text.count("「同じ行の指示」"), 2)
 
+    def test_same_text_without_uuid_is_injected_each_time(self):
+        # 項目の無い行は、同じ入力の二重の行か別々の入力かを区別できないので、まとめない
+        self.write()
+        text = self.compact([
+            self.said("あとで同じ文をもう一度打った", at="2026-11-20T01:05:00.000Z"),
+            self.said("あとで同じ文をもう一度打った", at="2026-11-20T01:09:00.000Z"),
+            self.boundary(),
+        ])
+        self.assertEqual(text.count("「あとで同じ文をもう一度打った」"), 2)
+
+    def test_a_line_seen_before_the_previous_boundary_is_still_injected_after_it(self):
+        # 一つにするのは区間の中だけ。境目より前に同じ項目の行があっても、差し込む区間の行は落とさない
+        self.write()
+        line = self.said("境目をまたいだ指示", uuid="u-1")
+        text = self.compact([line, self.boundary(), line, self.boundary()])
+        self.assertEqual(text.count("「境目をまたいだ指示」"), 1)
+
     def test_same_short_text_typed_later_is_not_paired_with_an_old_queued_attachment(self):
         self.write()
         text = self.compact([

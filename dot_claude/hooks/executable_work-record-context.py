@@ -250,6 +250,8 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
                         continue
                     if o.get("type") == "system" and o.get("subtype") == "compact_boundary":
                         spans.append([])
+                        # 一つにするのは区間の中だけ。前の区間で見た行を理由に、差し込む区間の行を落とさない
+                        seen = set()
                         continue
                     got = terminal_input(o)
                     if not got:
