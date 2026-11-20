@@ -35,9 +35,18 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 - Windows の Node で `\\wsl.localhost` のフォルダに `fs.watch` を掛けると、`EISDIR` が同期で投げられる（2026-11-21 に実測）。元のプラグインのままだと、ワーカーの起動が失敗したまま固まり、サイドバーに何も出ない。
 - Windows の Node で、直したワーカーを偽の Orca の口と偽のホームにつないで起動すると、同梱の CLI に `resources\bin\orca.exe` が選ばれ、フォーカスの補いと本物の CLI の状態で、ゴールとタスク（1 / 3）が描かれた。1 回の更新は CLI 込みで 460 ミリ秒（2026-11-21 に実測）。
 - 本物のホームでは、ファイルだけの更新が 1 回 550 ミリ秒かかる。`~/.claude/sessions` の 162 個のファイルを読み、それぞれの pid を `/proc` で確かめるため。タスクの一覧のフォルダ（28 個）の名前と更新時刻を見るだけなら 11 ミリ秒で、rename で書き換えたタスクにも 0.1 秒ほどで気づく（2026-11-21 に実測）。
+- 本物の Windows の Orca では、ワーカーに `APPDATA` が渡らず、同梱の CLI が `runtime_unavailable`（Orca のランタイムの置き場を引けない）で失敗する。補って渡すと通る（2026-11-21 に実測）。
+- 本物の Orca では、プラグイン API の `workspace.list` が WSL のワークスペースを一件も返さない。`workspace.readContext` の `workspaceId` は `orca worktree ps` の `worktreeId` と同じ形（`<リポジトリの id>::<パス>`）で返る。`workspace.open` は WSL のワークスペースを開けず、`orca worktree activate --environment` も Windows の画面のフォーカスを動かさない。パネルの行を押して WSL のワークスペースへ移る機能は、いまの Orca では作れない（2026-11-21 に実測）。
+- デスクトップの起動フック（`agent.launch.before`）は、CLI から `--environment` で WSL のランタイムへ頼んだ起動には効かない。起動した Claude の引数に指示が無く、`CLAUDE_CODE_ENABLE_TODO_TOOLS` も無かった（2026-11-21 に実測）。Orca の画面から起動したときに効くかは未確認。
+- 指示を付けて起動した Sonnet（エフォート low）は、道具を 10 回使う作業でもタスクを作らず、`next` のブロックだけを書いた。「タスクに分けて進めて」と頼むとタスクを作り、パネルの「ほかのワークスペース」に進捗（1 / 3 から 3 / 3）が出た（2026-11-21 に実測）。
 - Herdr に依存する物: 本体（`run_once_80` の Brewfile）、systemd の override、`dot_config/herdr/`（設定とローカルのプラグイン 2 つ）、`run_once_83`（agent skill）、`run_once_84`（プラグイン 7 つ）、`run_once_86`（Claude Code の組み込みフック `herdr-agent-state.sh`）、`run_onchange_after_90`、タブ名の同期のフック、引き継ぎのスクリプト 3 本（`session-handoff.sh`、`loop-handoff.sh`、`herdr-closable.sh`）と `herdr-start-claude.sh`、スキル `session-handoff`、`loop-guard.sh` と `chat-context-guard.sh` の文面、`statusline-context-window.sh` からのタブ名の同期の呼び出し、CLAUDE.md の「Herdr でのセッションの立て方」の節と関連の行、README の節、`docs/herdr-cheatsheet.html`、earlyoom の除外の一覧。Herdr の常駐（`homebrew.herdr.service`）はいま動いていない。
 
 ## 判断の経緯
+
+### 2026-11-21 採用: 記事と同じく、全体の設定と CLAUDE.md にもタスクの道具と指示を入れる
+- 出どころ: Claude の判断
+- 理由: 起動フックは CLI からの起動に効かず、画面からの起動に効くかも未確認。記事の筆者も `~/.claude/CLAUDE.md` と `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` で入れている。全体に入れれば起動のしかたによらず効く。フックと二重になっても害は無い。
+- 状態: 有効
 
 ### 2026-11-21 採用: WSL ではタスクの一覧を 3 秒おきに見て、変わったときだけ更新する
 - 出どころ: Claude の判断（審査の指摘を受けて）
@@ -78,26 +87,27 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 ## 済んだこと
 
 - 記事の原文の取得と、Orca のプラグインと WSL の関係の調査。
-- orca-milestone の WSL 向けの直し（手元の複製の 3d40e8c、8f95d9c、3e0ff80。テスト 97 件が通る）。8f95d9c は `fs.watch` の例外の直し、3e0ff80 は許可のカードの場所の表示の直し。
-- 断捨離の PR #99。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。
-- 審査（With fixes）を受け、指摘を直した。取り下げた指摘: `main.mjs` の WSL の配線のテスト（Windows の Node で実際に組み上げて確かめたため）、`\\wsl` で始まるのに一致しないときのログ（起こる場面が無い）、`~/.claude/projects` の読み出しの速さ（実測で、見張りを軽くした後は問題にならない）。
+- orca-milestone の WSL 向けの直し（手元の複製の 3d40e8c から 86ab9f8。テスト 97 件が通る）。リーダーの承認で Windows の Orca に読み込まれ、`running` になった。
+- 実機で確かめたこと: フォーカス中のワークスペースの表示、ほかのワークスペースのタスクの進捗、エラーの無いログ、次の作業の候補（`next` のブロック）が `orca worktree ps` で読めること。
+- 断捨離の PR #99。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。審査（With fixes）の指摘を直した。
+- 全体の設定に `CLAUDE_CODE_ENABLE_TODO_TOOLS`、CLAUDE.md に記事の指示（タスクの記録と `next` のブロック）を足した（PR #99）。CLAUDE.md は 199 行。
 - prts を Orca へ移す仕事を、別のセッションに渡した。
 
 ## 残っていること
 
-- プラグインの読み込みの承認（リーダー）と、実機での確かめ（サイドバーにタスクの進捗、質問のカード、次の作業のカードが出て、押すと送られるか。`orca plugin logs` にエラーが無いか）。
-- 断捨離の PR の取り込み（リーダー）。本番の作業コピーが載っている別の作業のブランチも、CLAUDE.md の同じ行（ループの引き継ぎ、対話セッションの引き継ぎ、Herdr の節）を書き換えている。後から取り込む側で衝突を解き、取り込んだあとに `git grep -E "loop-handoff|session-handoff|herdr-closable|herdr-start-claude"` が昔の計画書と作業記録の外で 0 件になることを確かめる。
-- 本番の作業コピーが `main` に移ったあとの `chezmoi apply`（`.chezmoiremove` が配布先のスクリプトとスキルを消す）。
-- Orca のチャット画面で起動したセッションにも起動フックが効くかの確かめ。効かなければ、`CLAUDE_CODE_ENABLE_TODO_TOOLS` と記事の指示を設定と CLAUDE.md に足す。
+- 次の作業のカードを押して送られるかの確かめ。カードはフォーカス中のワークスペースにだけ出て、プラグインから画面を移せないため、リーダーに試しのワークスペースを開いてもらう。
+- Orca の画面から起動した Claude に起動フックが効くかの確かめ。
+- 断捨離の PR の取り込み（リーダー）。本番の作業コピーが載っている別の作業のブランチも、CLAUDE.md の同じ行（ループの引き継ぎ、対話セッションの引き継ぎ、Herdr の節、決定論的処理の節）を書き換えている。後から取り込む側で衝突を解き、取り込んだあとに `git grep -E "loop-handoff|session-handoff|herdr-closable|herdr-start-claude"` が昔の計画書と作業記録の外で 0 件になることを確かめる。
+- 本番の作業コピーが `main` に移ったあとの `chezmoi apply`（`.chezmoiremove` が配布先のスクリプトとスキルを消し、全体の設定と CLAUDE.md の追加が効く）。
+- 試しに使ったワークスペース `chezmoi/emperor` のターミナルを閉じる。
 - prts が Orca へ移ったあと、Herdr の残り（本体、常駐の設定、組み込みフック、設定とプラグイン、タブ名の同期）を外す。
 
 ## 次に Claude がすること
 
-- リーダーが承認したら、Windows の `orca.exe plugin list` で Milestone が有効なことを確かめ、新しい Claude Code のターミナルを立てて、サイドバーの表示と次の作業のカードの送信を試す。
+- リーダーが試しのワークスペースを開いてカードを押したら、`orca worktree ps` で依頼文が届いたかを確かめ、試しのターミナルを閉じる。
 
 ## リーダーに決めてほしいこと
 
-- プラグインの読み込みの承認。Claude の案: 承認する。権限は記事のプラグインの README と同じ範囲（ワーカーの実行、ワークスペースとエージェントの読み取り、ワークスペースを開く操作、起動直前のフック）。答えで何が変わるか: 承認まで、プラグインは読み込まれたまま何も動かない。
 - 直したプラグインを GitHub に上げるか。Claude の案: 上げない（手元の git だけ）。上げると別のマシンでも使えるが、自分のアカウントに他人のコードの改変を公開することになる。答えで何が変わるか: 上げるなら、フォークを作って `wsl-host` を push する。
 
 ## 参照
