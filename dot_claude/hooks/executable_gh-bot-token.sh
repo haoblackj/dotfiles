@@ -11,7 +11,7 @@
 # 鍵か age の identity が無い環境（クラウドセッションなど）と、token を作れないときは
 # GH_TOKEN を入れず、本人（haoblackj）の名義のまま動く。
 # Claude Code の中でリーダーが ! で打つ gh と git にも GH_TOKEN が入る（グローバル CLAUDE.md に注意書き）。
-# 設計と決定: haoblackj/dotfiles#38、アプリと鍵の保管: haoblackj/penguinEx#67
+# 設計と決定: haoblackj/dotfiles#38、アプリと鍵の保管: 別の非公開リポジトリの issue
 set -u
 
 APP_ID="${CLAUDE_GH_BOT_APP_ID:-4917610}"

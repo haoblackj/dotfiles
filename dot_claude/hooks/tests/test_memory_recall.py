@@ -66,7 +66,7 @@ class TestResolveMemoryDir(unittest.TestCase):
 
     def test_resolves_existing_memory_dir(self):
         # 実在するこのプロジェクトのメモリディレクトリで検証する
-        proj = PROJECTS_BASE + "/-home-yagu001-repo-github-com-haoblackj-penguinEx"
+        proj = PROJECTS_BASE + "/-home-yagu001--local-share-chezmoi"
         got = mod.resolve_memory_dir(proj + "/fake-session.jsonl")
         self.assertEqual(got, proj + "/memory")
 

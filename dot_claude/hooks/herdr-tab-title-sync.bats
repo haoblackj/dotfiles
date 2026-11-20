@@ -171,11 +171,11 @@ hand_rename() { printf '%s' "$1" > "$LABEL_FILE"; }
 }
 
 @test "前回値が無く（導入直後）、ラベルが番号でもsession_nameでもない -> 手の名前とみなして触らない" {
-    hand_rename "コイカツ読込高速化"
-    sync "penguinEx #98 からの引き継ぎ"
+    hand_rename "画像読込の高速化"
+    sync "別の作業 #12 からの引き継ぎ"
     [ "$status" -eq 0 ]
     ! renamed || false
-    [ "$(label)" = "コイカツ読込高速化" ]
+    [ "$(label)" = "画像読込の高速化" ]
 }
 
 @test "前回値が無く、ラベルがsession_nameと同じ -> 自分の名前とみなし、以後のsession_nameに追従する" {
