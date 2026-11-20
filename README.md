@@ -340,25 +340,23 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 |---|---|
 | 下の stop と二段目に当たらないとき | 繰り返しの `CronCreate`（固定間隔のループ）を deny し、自己ペースの `/loop` へ回させる。一度きりは通す |
 | 振り先が stop | 止める以外の予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書いてループを止めさせる |
-| コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書き、新しいタブへ引き継がせる |
+| コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書き、Orca の新しいターミナルへ引き継がせる |
 | コンテキストが一段目（1M の窓で 300K、使用率 50%） | 予約を一度だけ deny し、状態コメントを書かせる |
 | 振り先が offload か lean | 間隔が 20 分より短い予約を deny |
 
 判定は上の表の順で、先に当たったものだけが効く。
 通した予約の prompt を覚えておき、同じ prompt の発火（UserPromptSubmit）には、コンテキストの二段目と一段目をその回の作業の前に知らせる（一段目は一度だけ）。
 固定間隔のループは発火をフックから止められないので、既定で作らせない。`LOOP_GUARD_ALLOW_RECURRING_CRON=1` で許したときだけ、発火に振り先（stop、逼迫）の知らせも入れる。振り先のファイルはツールを呼んだときにしか書き換わらず、発火の時点では古いことがあるため、自己ペースのループでは予約の時点の判定に任せる。
-二段目の引き継ぎは `dot_claude/scripts/executable_loop-handoff.sh`（配置先 `~/.claude/scripts/loop-handoff.sh`）が受け持つ。
-Claude が渡すのは状態コメントの URL、引き継ぎ先のセッションの名前（`--title`、作業の中身を表す 20 文字以内。タブ名にもなる）、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
-状態コメントへのリンク（`#issuecomment-<数字>`）でなければ止まる。
+二段目の引き継ぎは、Orca の公式スキル `orca-cli` の手順で、同じワークスペースに新しい Claude Code のターミナルを立てて行わせる。
 
 コンテキストの閾値は `CONTEXT_GUARD_*`、逼迫の間隔と固定間隔の許可は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
-テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
+テストは `dot_claude/hooks/loop-guard.bats`。
 
 #### ループ以外の対話セッションの見張り
 
 `dot_claude/hooks/executable_chat-context-guard.sh`（UserPromptSubmit）が、コンテキストが大きくなったことを、応答の最後にリーダーへ一言知らせるよう指示する。
 Claude からは引き継がず、ターンも止めない。
-移る時機はリーダーが決め、「移って」「新しいセッションへ移って」と言われたときだけ、スキル `session-handoff` の手順で同じワークスペースの新しいタブへ移る（決定は haoblackj/dotfiles#87。#73 の「40% で自分から引き継ぐ」を置き換えた）。
+移る時機はリーダーが決め、「移って」「新しいセッションへ移って」と言われたときだけ、`orca-cli` スキルの引き継ぎ（handoff）の手順で新しいセッションへ移る（決定は haoblackj/dotfiles#87。#73 の「40% で自分から引き継ぐ」を置き換えた）。
 
 | コンテキスト | 知らせ |
 |---|---|
@@ -367,31 +365,15 @@ Claude からは引き継がず、ターンも止めない。
 
 窓の大きさによらず使用率で判定する。
 どちらも一度だけ出し、40% を下回ったら次に越えたときにまた出す。
-Herdr の中では「移って」と言えば移れること、外では状態を書き出して `/clear` できることを知らせに添える。
+状態を書き出して `/clear` できることを知らせに添える。
 フックからは `/clear` を打てないので、打つのはリーダー。
 ループの予約を通したことのあるセッションと、`/loop` で始まる prompt では何もしない（ループは上の `loop-guard.sh` が受け持つ）。
 閾値の計算とループのセッションの判定は、両方のフックが `source` する `dot_claude/hooks/context-level.sh` にある。
 対話の閾値は `CONTEXT_GUARD_CHAT_HANDOFF_PCT` と `CONTEXT_GUARD_CHAT_URGENT_PCT` で差し替えられ、ループの 50% / 75% と 300K / 400K は変えない。
 知らせは `~/.local/state/claude-chat-context-guard/decisions.log` に残る。
 
-手順の実体は [`skills/session-handoff/SKILL.md`](skills/session-handoff/SKILL.md)。
-状態は issue の `## 状態` コメントに書き、一つ前をたたむ。
-issue が無ければ、まず作ることをリーダーに提案して返答を待ち、却下されたら `~/.cache/claude-handoff/<日付>-<session_id>.md` に書く。
-済んだこと、決定、次の一手に加えて、作業フォルダ、ワークツリーのパスとブランチ、issue と PR、元の session_id、裏で走っている処理とその扱いを残す。
-残りの仕事からモデルとエフォートと、作業の中身を表す 20 文字以内の名前を選び、`~/.claude/scripts/session-handoff.sh --state <URLかファイル> --cwd <作業フォルダかワークツリー> --title <名前> --model <モデル> --effort <エフォート>` で引き継ぐ。
-名前は `claude --name` で渡り、セッションのタイトルとタブ名になる。渡さないと最初の発言（引き継ぎの定型文）から題が作られ、「〇〇の引き継ぎ」になる（#91）。
-失敗したら出力をリーダーに報告して止まり、掃除へ進まない。
-
-成功したら `~/.claude/scripts/herdr-closable.sh list --exclude-pane <立てたペイン>` で候補を出す。
-元のセッションが各候補の `last_reply` を読み、そのセッションが自分の仕事について「閉じていい」とはっきり書いているものだけを、一覧の `pane` と `session_id` を組にして `~/.claude/scripts/herdr-closable.sh close <ペイン>=<session_id>...` に渡す。
-迷えば残し、セッションに宣言を求めない。
-スクリプトは自分自身、新しく立てたペイン、ループ中のセッション、応答後にユーザーの入力があるものなどを候補から外し、閉じる直前にも idle かを確かめる。
-他のペインがあるタブとワークスペースの最後のタブは閉じない。
-元のセッションで引き継いだ先、閉じたタブ、残した候補とその理由を報告し、最後に「このセッションは閉じていい」と書いて止まる。
-掃除の結果は引き継ぎ先へ渡す文面には入れない。
-
-テストは `dot_claude/hooks/chat-context-guard.bats`、`dot_claude/hooks/settings-wiring.bats`、`dot_claude/scripts/session-handoff.bats`、`dot_claude/scripts/herdr-closable.bats`。
-`bats dot_claude/hooks/ dot_claude/scripts/` で、ループ側を含めて確かめる。
+テストは `dot_claude/hooks/chat-context-guard.bats` と `dot_claude/hooks/settings-wiring.bats`。
+`bats dot_claude/hooks/` で、ループ側を含めて確かめる。
 
 ### クラウドセッション（Claude Code on the web）
 

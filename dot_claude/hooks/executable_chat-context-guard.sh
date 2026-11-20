@@ -1,13 +1,13 @@
 #!/bin/bash
 # UserPromptSubmit: ループ以外の対話セッションで、コンテキストが大きくなったことを、応答の最後に
 # リーダーへ一言知らせるよう additionalContext で入れる。Claude からは引き継がない。
-# 移る時機はリーダーが決め、「移って」と言われたときだけ session-handoff で移る（haoblackj/dotfiles#87 の決定。
+# 移る時機はリーダーが決め、「移って」と言われたときだけ orca-cli スキルの引き継ぎで移る（haoblackj/dotfiles#87 の決定。
 # #73 の「40% で自分から引き継ぐ」を置き換えた）。Claude が時機を決めると引き継ぎの多くが作業の途中で起き、
 # 途中で切ったあとはリーダーの言い直しと訂正が増えていたため（#87 の Q9、Q16）。
 #
 # 対話の段は context-level.sh の CHAT_CTX が statusline-context-window.sh のマーカーから決める。
 #   40% と 60%: 依頼はいつもどおり進め、応答の最後に一言知らせる。
-#   Herdr の中では「移って」と言えば移れること、外では状態を書き出して /clear できることを添える。
+#   状態を書き出して /clear できることを添える。
 #   閾値は CONTEXT_GUARD_CHAT_HANDOFF_PCT と CONTEXT_GUARD_CHAT_URGENT_PCT で差し替えられる。
 #   どちらも一度だけ出す。40% を下回ったら（compact のあとなど）、次に越えたときにまた出す。
 # ループのセッション（context-level.sh の in_loop_session）では何もしない。ループの知らせと
@@ -59,11 +59,7 @@ notify() {
 notice_text() {
   local head
   head="$(printf '%s が%sを越えた。自分からは引き継がず、ターンも止めない。この依頼はいつもどおり進め、応答の最後に、コンテキストが大きくなったことを一言知らせる。' "$(ctx_desc)" "$1")"
-  if [[ "${HERDR_ENV:-}" == 1 ]]; then
-    printf '%s区切りで移るなら、リーダーが「移って」と言えばスキル `session-handoff` で新しいセッションへ移れる、と添える。' "$head"
-  else
-    printf '%s区切りで、状態（済んだこと、決定、次の一手）を書き出して /clear できる、と添える。' "$head"
-  fi
+  printf '%s区切りで、状態（済んだこと、決定、次の一手）を書き出して /clear できる、と添える。' "$head"
 }
 
 if [[ "$CHAT_CTX" == urgent ]] && take_once "$URGENT_MARK"; then

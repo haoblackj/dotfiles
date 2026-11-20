@@ -44,7 +44,6 @@ TIGHT_MIN="${LOOP_GUARD_TIGHT_MIN_SECONDS:-1200}"
 ALLOW_CRON="${LOOP_GUARD_ALLOW_RECURRING_CRON:-0}"
 # 理由の文面に載せるだけなので、~ は展開しない
 # shellcheck disable=SC2088
-HANDOFF_CMD="~/.claude/scripts/loop-handoff.sh"
 [[ "$TIGHT_MIN" =~ ^[0-9]+$ ]] || exit 0
 
 INPUT=$(cat)
@@ -148,7 +147,7 @@ cron_min_gap() {
 
 STOP_MSG="利用枠が尽きる手前（stop）。ループを終える。issue に \`## 状態\`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete（ID は CronList）で止めてから、ターンを終える。再開はリーダーが /loop を打ち直す。"
 handoff_msg() {
-  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `%s --state-url <状態コメントの URL> --title <作業の中身を表す 20 文字以内の名前> --model <モデル> --effort <エフォート> -- <同じ /loop の指示>` を呼んで、Herdr の新しいタブへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。スクリプトが失敗したら、ループを止めたことと失敗の出力をリーダーに報告して、ターンを終える。' "$(ctx_desc)" "$HANDOFF_CMD"
+  printf '%s が二段目の閾値を越えた。このセッションでループを続けない。issue に `## 状態`（済んだこと、決定、次の一手）を書き、自己ペースのループは ScheduleWakeup の stop: true、固定間隔のループは CronDelete で止める。そのうえで `orca-cli` スキルの手順で、同じワークスペースに新しい Claude Code のターミナルを立て、状態コメントの URL と同じ /loop の指示を渡して Orca の新しいターミナルへ引き継ぐ。モデルとエフォートは、ループの中身から選ぶ。立てられなかったら、ループを止めたことと失敗の出力をリーダーに報告して、ターンを終える。' "$(ctx_desc)"
 }
 state_msg() {
   printf '%s が一段目の閾値を越えた。次の予約の前に、issue に `## 状態`（済んだこと、決定、次の一手）を書く。書いたら、同じ予約をもう一度呼んでよい（この止め方は一度だけ）。' "$(ctx_desc)"
