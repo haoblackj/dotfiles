@@ -20,10 +20,18 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 言い換えは決まりの文に多数ある（2026-11-21 に数えた。グローバルの CLAUDE.md に「正本」3、「知らせ」11、「持ち物」3、「担い手」2。`~/.claude/skills/*/SKILL.md` に「書き手」18、「見張り」5、「写し」5）。報告の言い換えも数え切れない（スクリプトを「台本」など。出典: 端末からの入力（会話 811156f3、2026-11-21 02:02、発言 7ee953e5））。言い換えの一覧で止める形は新しい言い換えを取りこぼす。
 - 巷の解き方（2026-11-21 にサブエージェントが調べた。結論の要旨）: 禁止語の一覧だけで未知の言い換えを止める方式は見つからなかった。見つかったのは三つ。(a) プロンプトの文体を望む出力に寄せる（Anthropic の prompting best practices に、プロンプトの書式が応答の書式に移るという記述がある。語彙への効きは公式に書かれていない）。(b) 翻訳の分野で、用語集（使う語の表）を入力に渡し、出力の後に用語集と照らして LLM に直させる（WMT 2023 の用語タスクの論文ほか）。(c) Claude Code の Stop フックの `type: "prompt"` で `last_assistant_message` を判定させ、`ok: false` と `reason` で差し戻す（公式の hooks の文書。連続の差し戻しは 8 回が上限、`stop_hook_active` あり）。prh や Vale は誤→正の辞書型で、未知の言い換えを見つける機能の記述は無い。LLM の判定は人の評価に完全には一致しないという研究がある。
   - 出典: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices 、https://code.claude.com/docs/en/hooks 、https://aclanthology.org/2023.wmt-1.80 、https://docs.vale.sh/checks/substitution
+- 評価の実践で知られる人たちと Anthropic 公式の直し方（2026-11-21 にサブエージェントが調べた。要旨）: 公式は「しないことでなく、することを書く」「理由を添える」「望む応答の例を一つ入れる」「プロンプトの文体を出力に合わせる」を勧め、気取った文体の癖は、癖の型と直し方を散文で定義して渡す例を出している。否定の指示が漏れを増やす公式の実例もある。Hamel Husain と Shreya Shankar は、記録を読んで失敗を分類して数え（error analysis）、プロンプトを直し、評価で効きを測る循環を勧める。実行時のガードは客観的な失敗に限り、主観的な基準は事後の評価器に置くと書いている。「do not mention X」の直後に X の確率が上がる測定（arXiv 2511.12381）もあるが、Claude の日本語では未測定。
+  - 出典: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 、https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1 、https://hamel.dev/blog/posts/evals-faq/ 、https://arxiv.org/abs/2511.12381
+- 会話の記録の assistant の本文（コード、鉤括弧の中を除く）で、言い換えの候補 12 語を週ごとに数えた。1000 本あたり 9 月中旬は 31〜58、9 月 28 日の週に 470、以後 170〜300。11 月 11 日に CLAUDE.md へ「写しと書かない」を足した後も「写し」は減っていない（11 月 9 日の週 174、16 日の週 98）。候補の語は話題で正しく使われる場合（「書き手」など）も数えるので、目安の値。（根拠: scratchpad の `count_coinages.py`）
+- 英語の報告を止めるフックが働いた最初は 11 月 2 日ごろの記録で、9 月 28 日の週の跳ね上がりの原因ではない。
 - dotfiles には、応答の本文を Stop フックで機械的に調べる前例がある（`dot_claude/hooks/executable_stop-fabricated-turn-guard.py`。`last_assistant_message` を読み、見つけたら `decision: block` で書き直させる）。
 
 ## 判断の経緯
-（まだ無し）
+### 2026-11-21 採用: この現象を「Claude語」と呼ぶ
+- 出どころ: 端末からの入力（会話 811156f3、2026-11-21 02:14、発言 0d5413bb）
+- 要旨（Claude の要約）: Claude がリーダーの言葉（トッププロフェッショナル）まで別の語に言い換えたのを受けて、この種の言い換えを Claude語と呼ぶ。
+- 理由: 理由の提示なし
+- 状態: 有効
 
 ## いまの作業
 仕組みの形を選ぶ問いに、リーダーは巷での解き方を知りたい、諦めたくないと返した（出どころ: 未確認（選択肢の問いへの答え。`prts quote` で見つからない））。外部の一次情報（用語集の照合、日本語の文章の検査道具、LLM の出力の検査、プロンプトの文体が出力に移る話）をサブエージェントで調べている。
@@ -38,7 +46,7 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - リーダーの選んだ形で設計書を書く。
 
 ## リーダーに決めてほしいこと
-- 巷の定番の三段（決まりの文を決まった用語で書き直す、使う語の表を作る、Stop フックの LLM 判定で差し戻す）で進めてよいか。Claude の案: 三段とも。表はフックの判定の文の側に置き、CLAUDE.md には足さない。答えで何が変わるか: 毎ターンの遅れと費用、CLAUDE.md とスキルの書き直しの範囲。
+- 評価の実践者の循環（記録から Claude語を集めて分類し数える、決まりの文を標準の用語と肯定形で書き直す、同じ集計で効きを測る。実行時のフックは残った分にだけ考える）で進めてよいか。Claude の案: この順。答えで何が変わるか: 毎ターンのフックを置くか、CLAUDE.md とスキルとエクシアの文体の書き直しの範囲、測る仕組みを定期で回すか。
 
 ## 参照
 - `dot_claude/hooks/executable_stop-fabricated-turn-guard.py`
