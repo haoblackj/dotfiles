@@ -1,6 +1,6 @@
 ---
 title: 判断と進行状態の持ち方を作り直す
-status: waiting
+status: active
 wish: state-context
 ---
 
@@ -27,6 +27,10 @@ wish: state-context
 - 本番の作業の会話で、Claude が端末へ打ち込んだ文は 11-09 と 11-17 に 1 件ずつあった（どちらも SendMessage の決まりの前）。試しのセッションへの打ち込みは scratchpad の下の別の作業ディレクトリに残り、望みの会話に混ざらない。ループの引き継ぎの文は定型文として分かれる。
 - 開発工程の三点を本番へ入れた後も、この会話で最後の全体の審査の指摘を receiving-code-review で受けず、直しを頼んだサブエージェント 38 体はスキルを一度も呼ばなかった。入れる前の一日（端末からの入力 256 件）では systematic-debugging、receiving-code-review、requesting-code-review は 0 回だった。
 - 直す前の本番の設定で新しいセッションを動かすと、作業記録の端末からの入力の判断を「リーダーが決めたと確かめた扱いではない」と答え、リーダーに本人の言葉かを確かめるよう求めた（設計書 practical-trust の 6 節の S1）。
+- 同じ会話の同じ分に別の端末からの入力がある分は多い。全部の記録の 10,588 件のうち 25% が別の入力と同じ分にあり、途中の入力はまとめて届くので秒（35 の鍵）やミリ秒（1）でも重なる。会話の記録の行の `uuid` はすべての入力の行にある（2026-11-20、設計書 source-identity-and-public-scope の 2.1）。
+- 分だけの出典では、PRTS の画面がその分に確かめた文を全部、その分を引く判断のすべての下に並べていた（PR の審査が指摘、試験で再現）。dotfiles の文書の分だけの出典 12 個のうち 10 個はその分の入力が 1 件、2 個は 2 件だった。
+- 公開の記録に非公開の作業の名前を書く失敗は、直す前の本番の設定で 12 回中 9 回起きた（読むだけの文面 6 回中 3 回、公開の issue へのコメントの文面 3 回とも、実際の作業記録の書き換え 3 回とも）。スキル work-record の決まりは置き場の節にだけあり、挙げた物にリポジトリでない作業の名前や PRTS の指摘の返事から来た出来事が入っていなかった。名前は PRTS の指摘の一覧から入り、同じ名前は公開の main に前から 3 か所ある。
+- 前回の報告で「直した後の場面 12 回すべて合格」と書いたのは誤りで、公開の承認の無い名前を書いた 1 回を合格にしていた（11 回合格、1 回不合格）。
 - dotfiles は公開、prts は非公開。会話の原文は、未取り込みの作業ブランチの 17 コミット（作業記録、設計書、計画）にあった。main と PR #98 の本文には無い（本文の鉤括弧は札と用語）。issue のコメントは、10 月以降の 246 件のうち 43 件がリーダーやユーザーの発言として原文を引いている（#86 だけで 19 件）。端末からの入力の中に、会話の原文の公開を承認した物は見つからなかった。
 
 ## 判断の経緯
@@ -185,29 +189,55 @@ wish: state-context
 - 理由: 新しい隔離環境を作らず、本番の CLAUDE.md、フック、スキルのままの行動を見られる。会話の記録を残さないので、試しの入力が端末からの入力として記録に混ざらない。
 - 状態: 有効
 
+### 2026-11-20 採用: PR の審査の二つの指摘を、調べから記録まで Claude が直す
+- 出どころ: 端末からの入力（会話 3f8034b1、2026-11-20 10:31、発言 4873e628）
+- 要旨（Claude の要約）: 両方の PR の新しい審査に応える。同じ分の複数の発言が別の判断の根拠に結び付く問題と、非公開の作業の名前を公開向けの文面に書いた試しを合格にした問題を、根拠の調べ、設計、実装、試験、審査、記録まで Claude が進める。古い出典は保ち、一意に戻せない物は確定して見せない。公開してよいかは Claude が決めない。main には取り込まない。
+- 状態: 有効
+
+### 2026-11-20 変更: 作業記録の出典を発言の単位にする
+- 出どころ: Claude の判断（技術の選択。上の依頼に基づく）
+- 置き換えたもの: 出典の書式 `端末からの入力（会話 <8 桁>、<日時>）`（「2026-11-20 変更: GitHub に載る記録に会話の原文を写さない」の書式の部分）
+- 内容: 出典に会話の記録の行の `uuid` の先頭 8 桁を「発言」として足す。画面と `prts input` は同じ `quotes.resolve` で発言を引き、出典ごとに別の折り畳みにする。分だけの古い出典は、その分の入力が 1 件なら特定し、2 件以上なら候補として区別できないと出す。dotfiles の文書の分だけの出典は全部、発言まで書き直した（2 個は `prts quote` で要旨を裏付ける文を確かめて決めた）。
+- 理由: 秒やミリ秒でも入力が重なり、記録の行だけが一つに決まる（設計書 source-identity-and-public-scope の 2 節）。
+- 状態: 有効
+
+### 2026-11-20 採用: 公開リポジトリに非公開の物を書かない決まりを、書く場面に置く
+- 出どころ: Claude の判断（技術の選択。上の依頼に基づく）
+- 内容: グローバルの CLAUDE.md の「指示範囲の厳守」に一般の段落を置き（公開の場にもう出ている名前でも承認の記録が無ければ非公開と同じに扱い、要るときは推奨と影響を添えて承認を求める）、教訓の行の狭い一文を消した。スキル work-record の置き場の決まりを同じ範囲に広げ、コミットの前に読み直す手順を足した。公開に向けた出力に非公開の名前や原文があれば、試しを不合格にする。
+- 理由: 決まりが書く場面になく、挙げた物も狭かった（判明した事実）。直す前 12 回中 9 回、直した後 10 回中 0 回の不合格（設計書の 3 節）。
+- 状態: 有効
+
+### 2026-11-20 棄却: 非公開の名前の一覧で書き込みを止める仕組み
+- 出どころ: Claude の判断（技術の選択）
+- 理由: 承認された名前（仕組みの部品として公開の文書に載る物）と承認の無い名前を一覧で分けるには、リーダーが一覧を持ち続ける必要があり、日々の整理をリーダーに求めない条件に反する。止める側に倒すと承認済みの名前でも止まる。
+- 状態: 有効
+
 ## いまの作業
-2026-11-20 の完了報告への未達の指摘を受けた作り直しを終え、報告を出した。main への取り込みと、公開済みの原文の扱いについて、リーダーの答えを待っている。
+両方の PR の審査の指摘（同じ分の発言の結び付き、公開向けの文面の非公開の名前）を直し、試しで直す前と後を比べた。審査役の結果を受けて直し、PR の本文と報告をまとめているところ。
 
 ## 済んだこと
 - 前回まで: prts（queued_command の読み取り、記録の項目による分類、作業記録の表示）、dotfiles（引き継ぎを SendMessage で送る、圧縮のあとの差し込み、優先の順、開発工程の三点）。PR https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9 。
 - 今回: 直す前の本番の設定で六つの場面を動かした（S1 と S5 が不合格）。設計書と計画（practical-trust）。prts の出典の出力と手元の覚えと `prts input`、望みの画面の出典の下の原文（折り畳み）、PRTS の指摘を出典にした行の下の指摘の文、札と「いま」の材料、信頼の範囲の文書（prts a7d0c05..99cd4ae）。dotfiles の CLAUDE.md、スキル work-record と session-handoff、差し込みのフック（二重の差し込みを一つに）、引き継ぎの文面と `--dry-run`、GitHub に載る文書の原文の書き換え（dotfiles 503d978..31dfc9e）。
-- 確かめ: prts 469 passed、dotfiles pytest 200 passed と bats 440 ok。本番へ反映（`chezmoi status ~/.claude` が空、prts を入れ直して画面 200）。直した後の場面 12 回すべて合格（S7b を含む）。requesting-code-review の審査（Important 5 件）を receiving-code-review で受けて直した。両方の PR の本文を差し替えた。
+- 2 回目の審査への対応: prts の出典を発言の単位にした（prts fb46ebe、40daee8）。dotfiles の公開の決まりを書く場面に置き、文書の出典を発言まで書き直した（dotfiles a221990 と、この記録のコミット）。設計書 source-identity-and-public-scope。試しの基準に公開向けの文面の非公開の物を足し、直す前 12 回中 9 回不合格、直した後 10 回中 0 回不合格。本番の望みの画面で、19 の出典がすべて発言に決まり、未確認は 0、同じ分の別の発言は出ないことを確かめた。
+- 確かめ（前回）: prts 469 passed、dotfiles pytest 200 passed と bats 440 ok。本番へ反映（`chezmoi status ~/.claude` が空、prts を入れ直して画面 200）。直した後の場面は 12 回中 11 回合格（S7b の 1 回が公開の記録の文面に非公開の作業の名前を書いた。当時は合格としたが誤り）。requesting-code-review の審査（Important 5 件）を receiving-code-review で受けて直した。両方の PR の本文を差し替えた。
 
 ## 残っていること
 - main への取り込みはリーダーの確認の後。取り込んだあとに、開いている issue に残る `status:` ラベルを外し、本番の dotfiles のチェックアウトを main へ戻す。
 - prts のほかの開いている望みには作業記録がまだ無い。それぞれのセッションが次に動くときに作る。
-- 後回しにした小さな点: `prts input` が両方の形で残った途中の入力を二度出す。CLAUDE.md がちょうど 200 行。
+- 後回しにした小さな点: CLAUDE.md がちょうど 200 行。（`prts input` が途中の入力を二度出す点は、出典の解決で同じ文を一つにしたので解消）
+- main に前からある非公開の作業の名前（フックの例文、試験の例、設定の注釈の 3 か所）は、この PR では触っていない（リーダーに決めてほしいこと）。
 
 ## 次に Claude がすること
 - リーダーの答えを待つ。PR に指摘が付いたら、receiving-code-review で受けて同じブランチで直す。
 
 ## リーダーに決めてほしいこと
 - 二つの PR を main へ取り込むか。Claude の案: 報告を読んでから取り込む。答えで変わること: 取り込むまで、本番の dotfiles のチェックアウトは作業ブランチのまま。
+- main に前からある非公開の作業の名前（フックの例文、試験の例、設定の注釈の 3 か所。この PR より前のコミットで入った）を残すか。Claude の案: 別の小さな PR で一般の言葉に置き換える（履歴は書き換えない）。答えで変わること: 置き換えればファイルの先端から消える（履歴には残る）。残すなら、その名前を公開を承認した物として記録に書き、今後の公開の文書でも使ってよい物として扱う。
 - すでに公開した原文の扱い（作業ブランチの 17 コミットと、それを表示する PR #98 の差分、issue のコメント 43 件）。Claude の案: PR #98 は squash で取り込み、main の履歴に原文の入ったコミットを入れない。履歴の書き換えと issue のコメントの削除はしない。費用: 閉じた PR の差分とコメントは公開のまま残る。消すなら、issue のコメントは削除（編集は編集の履歴が公開で残る）、PR の差分は GitHub への削除の依頼が要る。
 
 ## 参照
 - 議論: https://github.com/haoblackj/dotfiles/issues/86
-- 設計: [docs/superpowers/specs/2026-11-20-practical-trust-design.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-practical-trust-design.md)、[前の設計](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-speaker-identification-design.md)
+- 設計: [docs/superpowers/specs/2026-11-20-source-identity-and-public-scope-design.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-source-identity-and-public-scope-design.md)、[docs/superpowers/specs/2026-11-20-practical-trust-design.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-practical-trust-design.md)、[前の設計](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-speaker-identification-design.md)
 - 計画: [docs/superpowers/plans/2026-11-20-practical-trust.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/plans/2026-11-20-practical-trust.md)
 - PR: https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9
 - 書き方: [skills/work-record/SKILL.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/skills/work-record/SKILL.md)

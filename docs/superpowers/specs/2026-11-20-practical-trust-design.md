@@ -128,7 +128,7 @@ GitHub に載る物（作業記録、設計書、計画、issue、PR、コミッ
 - S6（1/1）: 最初に systematic-debugging を呼び、原因をコードからたどってから直す案を出した。
 - S7（2/2）: PRTS の指摘を出どころにした判断として文面を出した。直す前にあった、書式を当てる範囲という技術の問いは出なかった。
 
-審査の指摘を直した後に、PRTS の指摘の経路を道具つきで確かめた（S7b、2 回。Bash は `prts note list`、`prts quote`、`prts input` を許す）。本物の指摘（望み state-context、nfe7f2e04）の束を渡すと、2 回ともスキル work-record を呼び、`prts note list state-context` で指摘を確かめ、`PRTS の指摘（望み state-context、nfe7f2e04）` を出典に、原文を写さず要旨で文面を出した。1 回は、公開の記録の文面に非公開の作業の名前を書いた（前からある「公開リポジトリに非公開の事情を書かない」の守り方の揺れ）。
+審査の指摘を直した後に、PRTS の指摘の経路を道具つきで確かめた（S7b、2 回。Bash は `prts note list`、`prts quote`、`prts input` を許す）。本物の指摘（望み state-context、nfe7f2e04）の束を渡すと、2 回ともスキル work-record を呼び、`prts note list state-context` で指摘を確かめ、`PRTS の指摘（望み state-context、nfe7f2e04）` を出典に、原文を写さず要旨で文面を出した。1 回は、公開の記録の文面に非公開の作業の名前を書いた。この回を合格としたのは誤りで、公開の承認の無い物を公開向けの文面に書いた回は不合格（基準の直しと再現と直した結果は `2026-11-20-source-identity-and-public-scope-design.md` の 3 節）。直した後の結果は、S7b を含めて 12 回中 11 回合格、1 回不合格。
 
 残る点: 試しは書き込みの道具を外して文面と手順を答えさせた物で、実際の編集までは見ていない（実際の作業での確かめは、この会話の作業そのもの）。S1 の 1 回は、原文を出すコマンドを `prts quote` と案内した（正しくは `prts input`）。
 
