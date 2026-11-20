@@ -52,6 +52,14 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 出どころ: 未確認（選択肢の問いへの返事。`prts quote` で見つからない）
 - 要旨（Claude の要約）: 二つの変更を `ops/work-records` へ cherry-pick する案を選んだ。
 - 理由: 理由の提示なし（Claude の案の理由は、今日から試せて、戻すのも revert 一つで済むこと）
+- 状態: 置き換え済み（2026-11-21 変更: 試しを ops/work-records のコミットから外し、本番の作業コピーの未コミットの変更として続ける）
+
+### 2026-11-21 変更: 試しを ops/work-records のコミットから外し、本番の作業コピーの未コミットの変更として続ける
+- 置き換えたもの: 2026-11-21 採用: 本番の作業コピーの ops/work-records へ載せて、今日から効かせる
+- 出どころ: 端末からの入力（会話 3c33ee18、2026-11-21 03:22、発言 406c4255）。Orca へ移す作業のセッションから SendMessage で伝えられ、`prts quote` で原文を確かめた。
+- 要旨（Claude の要約）: 可逆的な物は承認してよい。二つのコミットの扱いは、この作業のセッションにやらせる。
+- 理由: `ops/work-records` を push して PR #98 を squash で取り込むと、試しの二つのコミットが #98 に混ざる。
+- Claude の判断で決めたこと: 二つのコミットは `ops/work-records` の先頭にあったので、`git reset --soft d47a60b` でブランチだけを戻し、二つのファイルの index を戻して、変更は作業コピーに未コミットのまま残した。試しは本番で効き続ける。同じ変更はこのブランチの `c908928` と `35b5b6d` にある。
 - 状態: 有効
 
 ## いまの作業
@@ -61,15 +69,14 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 巷の解き方、評価の実践者のやり方、日本語圏の実践者のやり方を調べた（判明した事実）。
 - 会話の記録で言い換えの候補の頻度を週ごとに数えた（試しの前の値。判明した事実）。
 - このブランチ: エクシアの文体から禁止の節を外した（`c908928`）。CLAUDE.md の言い換えの行を置き換えた（`35b5b6d`）。
-- 本番: 本番の作業コピー（`~/.local/share/chezmoi`、ブランチ `ops/work-records`）に同じ変更を一つずつコミットした（文体 `ca4ead7`、CLAUDE.md `9d528be`。CLAUDE.md は前後の行が違うのでパッチが当たらず、同じ一行を差し替えた）。`chezmoi apply` でこの二つのファイルだけを配り、`~/.claude/` の中身が変わったことを確かめた（2026-11-21）。
-- 本番を戻すときは、本番の作業コピーで `git revert ca4ead7` と `git revert 9d528be` を打ち、`chezmoi apply ~/.claude/CLAUDE.md ~/.claude/output-styles/exusiai.md` を打つ。
-- `ops/work-records` は push していない。別の作業の未 push のコミットが 4 つあり、その作業の記録が統合の承認まで push を待つと書いているため。
+- 本番: 本番の作業コピー（`~/.local/share/chezmoi`）の `dot_claude/CLAUDE.md` と `dot_claude/output-styles/exusiai.md` に、このブランチの二つのコミットと同じ変更を未コミットで置き、`chezmoi apply` でこの二つのファイルだけを配った（2026-11-21）。一度 `ops/work-records` にコミットした（`ca4ead7`、`9d528be`）が、#98 に混ざらないよう `git reset --soft` で外した。
+- 本番を戻すときは、本番の作業コピーで `git restore -- dot_claude/CLAUDE.md dot_claude/output-styles/exusiai.md` を打ち、`chezmoi apply ~/.claude/CLAUDE.md ~/.claude/output-styles/exusiai.md` を打つ。
 
 ## 残っていること
 - 2026-12-05 ごろ（1〜2 週ののち）に同じ集計を回して前後を比べ、リーダーに報告する。
 - 試しの結果を見て、Stop フックや pre-commit の判定を足すかを決める（リーダーの判断）。
 - 指示文（CLAUDE.md、スキル）の中の言い換えを標準の用語へ書き直すか（まだ決まっていない）。
-- このブランチを main へ取り込む（`ops/work-records` の統合の後。CLAUDE.md は前後の行の違いで食い違いを直す必要がありうる）。
+- このブランチを main へ取り込む（`ops/work-records` の統合の後。CLAUDE.md は前後の行の違いで食い違いを直す必要がありうる）。本番の作業コピーを main へ移すときは、この二つのファイルの未コミットの変更を消さずに持ち越し、このブランチが main に入ったら本番の未コミットの変更が消えることを確かめる。
 
 ## 次に Claude がすること
 - 2026-12-05 ごろ、scratchpad の集計（会話の記録の assistant の本文から候補の語を週ごとに数える）を回し、2026-11-21 の前と後の 1000 本あたりの値を比べてリーダーに報告する。scratchpad が消えていたら、判明した事実の方法で作り直す。
