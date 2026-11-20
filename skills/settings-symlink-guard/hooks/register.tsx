@@ -15,12 +15,10 @@ const CHECK_MS = 60_000
 
 const WORK_RECORD = 'docs/work/settings-symlink.md'
 
-// 読み込み直しで消える。session.start が張り直す
-let timer: Timer | undefined
-
 const check = async ($: EngineInterface): Promise<Broken> => {
   if ((await $.env.get('CLAUDE_CODE_REMOTE')) === 'true') return null
-  const home = (await $.env.get('HOME')) ?? ''
+  const home = await $.env.get('HOME')
+  if (!home) return 'HOME が読めず、~/.claude/settings.json が symlink かを確かめられない'
   const sourceDir = (await $.env.get('CHEZMOI_SOURCE_DIR')) ?? `${home}/.local/share/chezmoi`
   const target = `${home}/.claude/settings.json`
   const source = `${sourceDir}/linked/claude/settings.json`
@@ -47,17 +45,37 @@ const contextFor = (state: string) =>
   `リーダーに伝え、dotfiles の作業記録 ${WORK_RECORD} を読んで、ソースとの差（diff）を確かめてから直し方をリーダーに仰ぐこと。` +
   '~/.claude/settings.json も、ソースも、この知らせだけを理由に書き換えない。'
 
+// 読み込み直しでは新しい環境でモジュールが読まれ直し（この変数も初めから）、前の $.clock.every は
+// 止まるが、session.start は来ない（plugin-authoring の reference.md）。どの hook の入口からでも張る。
+let timer: Timer | undefined
+
+let inFlight: Promise<void> | undefined
+
+// 同時に二つ走ると、どちらも前の状態を正常と読んでトーストを二度出す。走っていればそれを待つ。
+// 一回の確かめの失敗で止めず、次の回でまた確かめる。
+const safeRefresh = ($: EngineInterface): Promise<void> =>
+  (inFlight ??= refresh($)
+    .catch(() => undefined)
+    .finally(() => {
+      inFlight = undefined
+    }))
+
+const ensureTimer = ($: EngineInterface) => {
+  if (timer !== undefined) return
+  timer = $.clock.every(CHECK_MS, () => void safeRefresh($))
+  void safeRefresh($)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    await refresh($)
-    timer?.cancel()
-    // 一回の確かめの失敗で止めず、次の回でまた確かめる
-    timer = $.clock.every(CHECK_MS, () => void refresh($).catch(() => undefined))
+    ensureTimer($)
+    await safeRefresh($)
     return result
   })
 
   on('prompt.compose', async ($, e, next) => {
+    ensureTimer($)
     const composed = await next(e)
     const state = await read($, broken)
     if (state === null) return composed
@@ -67,7 +85,9 @@ export const register: Register = on => {
     }
   })
 
+  // アンケートの表示中も出し続ける（直すまで放置させないための帯）
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    ensureTimer($)
     const state = await read($, broken)
     if (state === null) return next(e)
     const { Box, Text } = $.ui.resolve(e)

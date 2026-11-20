@@ -22,7 +22,7 @@ let written: Broken = null
 type Files = Record<string, FsStat | undefined>
 
 // テストの hook はエンジンの代わりに立つ。fs.stat はパスごとに files の値を返し、無ければ ENOENT
-const engine = (on: On, files: Files, env: Record<string, string> = {}) => {
+const engine = (on: On, files: Files, env: Record<string, string | undefined> = {}) => {
   const toasts: string[] = []
   written = null
   const clock = mock.clock(on, { now: 0 })
@@ -31,11 +31,20 @@ const engine = (on: On, files: Files, env: Record<string, string> = {}) => {
     return next(e)
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('env.get', (_, e) => ({ value: { HOME, ...env }[e.name] }))
+  on('env.get', (_, e) => {
+    if (env.FAIL_ONCE === e.name) {
+      delete env.FAIL_ONCE
+      throw new Error('env.get failed')
+    }
+    return { value: { HOME, ...env }[e.name] }
+  })
+  // resolve を頼まれなければ realPath を返さない（本物の $.fs.stat と同じ）
   on('fs.stat', (_, e) => {
     const s = files[e.path]
     if (s === undefined) throw Object.assign(new Error(`ENOENT: ${e.path}`), { code: 'ENOENT' })
-    return { value: s }
+    if (e.resolve) return { value: s }
+    const { realPath: _r, ...rest } = s
+    return { value: rest }
   })
   on('ui.toast', (_, e) => {
     toasts.push(e.text)
@@ -178,4 +187,44 @@ test('直れば帯を消す', async ($, on) => {
   files[TARGET] = file({ isLink: true, realPath: SOURCE })
   await clock.advance(60_000)
   expect(written).toBe(null)
+})
+
+// 読み込み直しでは session.start が来ず、前の $.clock.every は止まる（plugin-authoring の reference.md）
+test('session.start を経ずに帯が描かれても、一分ごとの確かめを始める', async ($, on) => {
+  const { clock } = engine(on, { [TARGET]: file({ realPath: TARGET }), [SOURCE]: file({ realPath: SOURCE }) })
+  const ui = await $.ui.mount(band as never)
+  await clock.advance(60_000)
+  expect(written).toContain('通常のファイル')
+  await ui.unmount()
+})
+
+test('session.start が二度来ても、トーストは一度', async ($, on) => {
+  const { toasts, clock } = engine(on, { [TARGET]: file({ realPath: TARGET }), [SOURCE]: file({ realPath: SOURCE }) })
+  await start($)
+  await start($)
+  await clock.advance(60_000)
+  expect(toasts.length).toBe(1)
+})
+
+test('外れ方が変わったら文だけ直し、トーストは重ねない', async ($, on) => {
+  const files: Files = { [TARGET]: file({ realPath: TARGET }), [SOURCE]: file({ realPath: SOURCE }) }
+  const { toasts, clock } = engine(on, files)
+  await start($)
+  delete files[TARGET]
+  await clock.advance(60_000)
+  expect(written).toContain('ファイルが無い')
+  expect(toasts.length).toBe(1)
+})
+
+test('開始時の確かめが失敗しても、一分ごとの確かめは続ける', async ($, on) => {
+  const { clock } = engine(on, { [TARGET]: file({ realPath: TARGET }), [SOURCE]: file({ realPath: SOURCE }) }, { FAIL_ONCE: 'CLAUDE_CODE_REMOTE' })
+  await start($)
+  await clock.advance(60_000)
+  expect(written).toContain('通常のファイル')
+})
+
+test('HOME が読めなければ、正しいとは言わずにそう知らせる', async ($, on) => {
+  engine(on, linked, { HOME: undefined })
+  await start($)
+  expect(written).toContain('HOME')
 })
