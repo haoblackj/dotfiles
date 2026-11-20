@@ -23,6 +23,8 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 評価の実践で知られる人たちと Anthropic 公式の直し方（2026-11-21 にサブエージェントが調べた。要旨）: 公式は「しないことでなく、することを書く」「理由を添える」「望む応答の例を一つ入れる」「プロンプトの文体を出力に合わせる」を勧め、気取った文体の癖は、癖の型と直し方を散文で定義して渡す例を出している。否定の指示が漏れを増やす公式の実例もある。Hamel Husain と Shreya Shankar は、記録を読んで失敗を分類して数え（error analysis）、プロンプトを直し、評価で効きを測る循環を勧める。実行時のガードは客観的な失敗に限り、主観的な基準は事後の評価器に置くと書いている。「do not mention X」の直後に X の確率が上がる測定（arXiv 2511.12381）もあるが、Claude の日本語では未測定。
   - 出典: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 、https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1 、https://hamel.dev/blog/posts/evals-faq/ 、https://arxiv.org/abs/2511.12381
 - 会話の記録の assistant の本文（コード、鉤括弧の中を除く）で、言い換えの候補 12 語を週ごとに数えた。1000 本あたり 9 月中旬は 31〜58、9 月 28 日の週に 470、以後 170〜300。11 月 11 日に CLAUDE.md へ「写しと書かない」を足した後も「写し」は減っていない（11 月 9 日の週 174、16 日の週 98）。候補の語は話題で正しく使われる場合（「書き手」など）も数えるので、目安の値。（根拠: scratchpad の `count_coinages.py`）
+- 日本語圏の実践者の直し方（2026-11-21 にサブエージェントが調べた。多くは記事の要約で読んだ物。要旨）: 技術用語の自作の言い換えをそのまま論じた記事と「Claude語」に当たる呼び名は見つからなかった。近い現象は「AI-Slop な日本語」「AI臭」「翻訳調」と呼ばれる。yomiyasu の作者（Zenn、2026-10-01）と溝口コージ氏（Zenn、2026-07-13）は、禁止語の一覧は別の語への置き換えに移るだけで効きにくいと書いている。yomiyasu は自分の SKILL.md もリンターで検査し、指示文の文体が出力に移るのを防いでいる。NCDC のいばらき氏（Zenn、2026-09-01）は、gh で投稿する日本語を Stop フックで Claude Haiku に判定させて差し戻している（それでも半分以上は手で直したと書いている）。textlint-rule-preset-ai-writing（azu 氏）は「表現でなく構造を縛る」方針で、自作の言い換えを見つける規則は無い。日本語で起きやすい理由を根拠付きで示した研究は見つからなかった。
+  - 出典: https://zenn.dev/algoartis/articles/0b1c731881b25c 、https://zenn.dev/coji/articles/natural-japanese-ai-smell-lint 、https://zenn.dev/ncdc/articles/6ea029ba5ecf65 、https://github.com/textlint-ja/textlint-rule-preset-ai-writing
 - 英語の報告を止めるフックが働いた最初は 11 月 2 日ごろの記録で、9 月 28 日の週の跳ね上がりの原因ではない。
 - dotfiles には、応答の本文を Stop フックで機械的に調べる前例がある（`dot_claude/hooks/executable_stop-fabricated-turn-guard.py`。`last_assistant_message` を読み、見つけたら `decision: block` で書き直させる）。
 
@@ -34,7 +36,7 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 状態: 有効
 
 ## いまの作業
-仕組みの形を選ぶ問いに、リーダーは巷での解き方を知りたい、諦めたくないと返した（出どころ: 未確認（選択肢の問いへの答え。`prts quote` で見つからない））。外部の一次情報（用語集の照合、日本語の文章の検査道具、LLM の出力の検査、プロンプトの文体が出力に移る話）をサブエージェントで調べている。
+巷の解き方、評価の実践者のやり方、日本語圏の実践者のやり方を順に調べた（リーダーの問いを受けて。問いへの答えは選択肢の問いへの返事で、`prts quote` では見つからないので出どころは未確認）。合わせた形をリーダーに示し、答えを待っている。
 
 ## 済んだこと
 - 既存の決まりとフックを読んだ。
@@ -46,7 +48,7 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - リーダーの選んだ形で設計書を書く。
 
 ## リーダーに決めてほしいこと
-- 評価の実践者の循環（記録から Claude語を集めて分類し数える、決まりの文を標準の用語と肯定形で書き直す、同じ集計で効きを測る。実行時のフックは残った分にだけ考える）で進めてよいか。Claude の案: この順。答えで何が変わるか: 毎ターンのフックを置くか、CLAUDE.md とスキルとエクシアの文体の書き直しの範囲、測る仕組みを定期で回すか。
+- 英語圏と日本語圏の両方の実践を合わせた形（記録から Claude語を集めて表にする、指示文を標準の用語で書き直し、指示文を pre-commit で検査する、Stop フックで Haiku に判定させて差し戻す、同じ集計で前後を測る）で進めてよいか。Claude の案: この形。答えで何が変わるか: 常設の仕組み（pre-commit の検査と Stop フック）を足すか、毎ターンの遅れと費用。
 
 ## 参照
 - `dot_claude/hooks/executable_stop-fabricated-turn-guard.py`
