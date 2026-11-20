@@ -40,13 +40,19 @@ EOF
     export HERDR_ENV=1 HERDR_WORKSPACE_ID=w1
     unset CLAUDE_CODE_SESSION_ID
     export FAKE_CWD="$TMPDIR_TEST"
+    export HOME="$TMPDIR_TEST/home"
+    git init -q "$TMPDIR_TEST/repo"
+    mkdir -p "$TMPDIR_TEST/repo/docs/work"
+    STATEF="$TMPDIR_TEST/repo/docs/work/loop.md"
+    echo s > "$STATEF"
+    STATEF=$(realpath -e "$STATEF")
 }
 
 teardown() {
     rm -rf -- "$TMPDIR_TEST"
 }
 
-handoff() { run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" --model opus --effort medium "$@" -- "/loop CI を見て、赤なら直す"; }
+handoff() { run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --model opus --effort medium "$@" -- "/loop CI を見て、赤なら直す"; }
 
 @test "今のペインのワークスペースと cwd にタブを作り、シェルを待ってから claude を起動し、引き継ぎを渡す" {
     handoff
@@ -59,7 +65,8 @@ handoff() { run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" -
     [[ "${lines[2]}" == "pane wait-output w1:p42 --regex "* ]]
     [[ "${lines[3]}" == "agent start loop-"*" --kind claude --pane w1:p42 --timeout 120000 -- --model opus --effort medium --name CI の赤の修正" ]]
     [[ "${lines[4]}" == "agent prompt loop-"*" /loop CI を見て、赤なら直す" ]]
-    grep -qF "$URL" "$CALLS"
+    grep -qF "$STATEF" "$CALLS"
+    grep -qF "リーダーの答えが出るまで決定として扱わない" "$CALLS"
 }
 
 @test "pane current が使えなければ、HERDR_WORKSPACE_ID と今の cwd で作る" {
@@ -74,39 +81,43 @@ handoff() { run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" -
 }
 
 @test "/loop を付け忘れても、付けて渡す" {
-    run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" --model opus --effort medium -- "CI を見る"
+    run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --model opus --effort medium -- "CI を見る"
     [ "$status" -eq 0 ]
     grep -q "^agent prompt loop-[0-9]* /loop CI を見る" "$CALLS"
 }
 
-@test "状態コメントへのリンクでなければ止まり、herdr を呼ばない" {
-    run bash "$SCRIPT" --state-url "https://github.com/haoblackj/dotfiles/issues/69" --title "CI の赤の修正" --model opus --effort medium -- "x"
+@test "issue のコメントの URL や、作業記録でないファイルなら止まり、herdr を呼ばない" {
+    run bash "$SCRIPT" --state "$URL" --title "CI の赤の修正" --model opus --effort medium -- "x"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"## 状態"* ]]
+    [[ "$output" == *"--state は作業記録"* ]]
+    echo s > "$TMPDIR_TEST/x.md"
+    run bash "$SCRIPT" --state "$TMPDIR_TEST/x.md" --title "CI の赤の修正" --model opus --effort medium -- "x"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"docs/work/ 直下に置く"* ]]
     [ ! -e "$CALLS" ]
 }
 
 @test "モデルかエフォートが無ければ止まる" {
-    run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" --effort medium -- "x"
+    run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --effort medium -- "x"
     [ "$status" -eq 1 ]
-    run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" --model opus --effort huge -- "x"
+    run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --model opus --effort huge -- "x"
     [ "$status" -eq 1 ]
     [ ! -e "$CALLS" ]
 }
 
 @test "名前が無いか、引き継ぎの語を含むか、長すぎれば止まり、herdr を呼ばない" {
-    run bash "$SCRIPT" --state-url "$URL" --model opus --effort medium -- "x"
+    run bash "$SCRIPT" --state "$STATEF" --model opus --effort medium -- "x"
     [ "$status" -eq 1 ]
     [[ "$output" == *"--title"* ]]
-    run bash "$SCRIPT" --state-url "$URL" --title "dotfiles #69 の引き継ぎ" --model opus --effort medium -- "x"
+    run bash "$SCRIPT" --state "$STATEF" --title "dotfiles #69 の引き継ぎ" --model opus --effort medium -- "x"
     [ "$status" -eq 1 ]
-    run bash "$SCRIPT" --state-url "$URL" --title "あいうえおかきくけこさしすせそたちつてとな" --model opus --effort medium -- "x"
+    run bash "$SCRIPT" --state "$STATEF" --title "あいうえおかきくけこさしすせそたちつてとな" --model opus --effort medium -- "x"
     [ "$status" -eq 1 ]
     [ ! -e "$CALLS" ]
 }
 
 @test "ループの指示が空なら止まる" {
-    run bash "$SCRIPT" --state-url "$URL" --title "CI の赤の修正" --model opus --effort medium -- "/loop "
+    run bash "$SCRIPT" --state "$STATEF" --title "CI の赤の修正" --model opus --effort medium -- "/loop "
     [ "$status" -eq 1 ]
     [ ! -e "$CALLS" ]
 }
@@ -171,7 +182,7 @@ EOF
             echo 'return 1' > "$isolated/herdr-start-claude.sh"
         fi
         run --separate-stderr bash "$isolated/handoff.sh" \
-            --state-url "$URL" --title "CI の赤の修正" --model opus --effort medium --dry-run -- "CI を見る"
+            --state "$STATEF" --title "CI の赤の修正" --model opus --effort medium --dry-run -- "CI を見る"
         [ "$status" -eq 1 ]
         [ -z "$output" ]
         [[ "$stderr" == *"loop-handoff: 共通部分 herdr-start-claude.sh を読み込めない"* ]]

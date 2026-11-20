@@ -1,12 +1,15 @@
 #!/bin/bash
 # 対話の状態を、Herdr の新しいタブの新しいセッションへ引き継ぐ。
-# 状態の URL か ~/.cache/claude-handoff/ 下のファイルと、作業する cwd を指定する。
+# 作業記録（リポジトリの docs/work/<作業名>.md）と、作業する cwd を指定する。
 # ワークスペースは pane current から取り、cwd は --cwd の値を使う。
+# セッションを立てるだけで、引き継ぎの文面は打ち込まない。文面は成功の JSON の prompt で返すので、
+# 呼んだ Claude が ListAgents に title の名前が出たことを確かめ、SendMessage で送る
+# （打ち込んだ文は受けた側の記録でリーダーの入力と見分けがつかないため）。
 # 失敗した手順を標準エラーに出して exit 1。作ったタブは閉じない。
 # --dry-run は herdr を呼ばず、呼ぶはずのコマンドを出す。
 #
 # 使い方:
-#   session-handoff.sh --state <状態の場所> --cwd <dir> --title <名前> --model <モデル> --effort <エフォート> [--dry-run]
+#   session-handoff.sh --state <作業記録> --cwd <dir> --title <名前> --model <モデル> --effort <エフォート> [--dry-run]
 #
 # --title は引き継ぎ先のセッションの名前で、タブ名にもなる（herdr-start-claude.sh の check_title）。
 
@@ -30,14 +33,7 @@ while (( $# > 0 )); do
   esac
 done
 
-if [[ ! "$STATE" =~ ^https?://[^[:space:]]+$ ]]; then
-  # 親参照や symlink を解決して、保存先の外にあるファイルを受け付けない。
-  [[ -f "$STATE" ]] || die "--state は URL か ~/.cache/claude-handoff/ 下のファイルにする"
-  STATE_PATH=$(realpath -e -- "$STATE" 2>/dev/null) || die "状態のファイルの場所が分からない"
-  STATE_ROOT=$(realpath -e -- "$HOME/.cache/claude-handoff" 2>/dev/null) || die "状態の保存先が無い"
-  [[ "$STATE_PATH" == "$STATE_ROOT/"* ]] || die "状態のファイルは ~/.cache/claude-handoff/ 下に置く"
-  STATE="$STATE_PATH"
-fi
+STATE=$(check_state_file "$STATE") || die "$STATE"
 [[ -n "$DIR" && -d "$DIR" ]] || die "--cwd は存在するディレクトリにする"
 DIR=$(realpath -e -- "$DIR" 2>/dev/null) || die "作業ディレクトリの場所が分からない"
 MODEL_RE='^[][A-Za-z0-9._-]+$'
@@ -60,10 +56,10 @@ fi
 [[ -n "$WS" ]] || die "ワークスペースが分からない（pane current も HERDR_WORKSPACE_ID も無い）"
 
 NAME="chat-$(date +%m%d%H%M%S)"
-PROMPT="前のセッションからの引き継ぎ。最初に状態 $STATE を読み（issue のコメントなら、それより新しい \`## 状態\` も）、そこに書かれた作業フォルダ、ワークツリー、ブランチ、issue と PR を確かめてから「次の一手」から続ける。"
-STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "$PROMPT") || exit 1
-(( DRY == 1 )) && { printf '%s' "$STARTED"; exit 0; }
+PROMPT="前のセッションからの引き継ぎ。最初に作業記録 $STATE を全部読み、そこに書かれたブランチ、issue と PR を確かめてから「次に Claude がすること」から続ける。$(state_reading_note)"
+STARTED=$(start_claude_in_new_tab "$WS" "$DIR" "$MODEL" "$EFFORT" "$TITLE" "$NAME" "") || exit 1
+(( DRY == 1 )) && { printf '%s\nSendMessage で送る文: %s\n' "$STARTED" "$PROMPT"; exit 0; }
 note_wish_moved "$CUR" "$(jq -r .pane <<< "$STARTED")"
 
-jq -nc --arg name "$NAME" --arg state "$STATE" --argjson started "$STARTED" \
-  '{handed_off: true, agent: $name, tab: $started.tab, pane: $started.pane, state: $state}'
+jq -nc --arg name "$NAME" --arg state "$STATE" --arg title "$TITLE" --arg prompt "$PROMPT" --argjson started "$STARTED" \
+  '{handed_off: false, started: true, agent: $name, tab: $started.tab, pane: $started.pane, state: $state, title: $title, prompt: $prompt}'
