@@ -30,11 +30,12 @@ prompt() {
 
 context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$output"; }
 
-@test "40% -> 自分からは引き継がず、応答の最後に一言知らせる。移り方として「移って」と session-handoff を添える。一度だけ" {
+@test "40% -> 自分からは引き継がず、応答の最後に大きさを一文で知らせる。移る勧めは足させない。一度だけ" {
     ctx 40
     prompt "ふつうの依頼"
-    [[ "$(context_of)" == "[chat-context-guard] "*"自分からは引き継がず"*"応答の最後"*"「移って」"*"session-handoff"* ]]
-    [[ "$(context_of)" != *"キリの良いところ"* ]]
+    [[ "$(context_of)" == "[chat-context-guard] "*"自分からは引き継がず"*"応答の最後"*"一文で知らせる"*"勧める文は足さない"* ]]
+    [[ "$(context_of)" != *"「移って」"* ]]
+    [[ "$(context_of)" != *"と添える"* ]]
     prompt "次"
     [ -z "$output" ]
     grep -q "notice:handoff" "$LOG"
@@ -42,7 +43,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 @test "60% -> 予備の閾値として、もう一度知らせるだけ。依頼に入る前に移らせない。一度だけ" {
     ctx 60
     prompt "a"
-    [[ "$(context_of)" == *"予備の閾値"*"自分からは引き継がず"*"session-handoff"* ]]
+    [[ "$(context_of)" == *"予備の閾値"*"自分からは引き継がず"*"勧める文は足さない"* ]]
     [[ "$(context_of)" != *"入る前に"* ]]
     prompt "b"
     [ -z "$output" ]
@@ -50,28 +51,24 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 }
 @test "40% の知らせのあとに 60% を越えたら、60% も一度出す" { ctx 40; prompt a; ctx 60; prompt b; [[ "$(context_of)" == *"予備の閾値"* ]]; }
 @test "1M の窓で 30% は対話では何も出さない" { ctx 30 1000000; prompt a; [ -z "$output" ]; }
-@test "40% を下回ったら、次に越えたときにまた知らせる" { ctx 40; prompt a; ctx 10; prompt b; ctx 41; prompt c; [[ "$(context_of)" == *"session-handoff"* ]]; }
-@test "Herdr の外では 40% で、自分からは止まらず /clear できることを添えて知らせる" {
-    unset HERDR_ENV
+@test "40% を下回ったら、次に越えたときにまた知らせる" { ctx 40; prompt a; ctx 10; prompt b; ctx 41; prompt c; [[ "$(context_of)" == *"一文で知らせる"* ]]; }
+@test "Herdr の内と外で同じ文面を出し、どちらでも移る勧めや /clear の台本を足させない" {
     ctx 40
     prompt a
-    [[ "$(context_of)" == *"ターンも止めない"*"/clear"* ]]
-    [[ "$(context_of)" != *"session-handoff"* ]]
-}
-@test "Herdr の外では 60% でも依頼の前で止まらず、/clear できることを添えて知らせる" {
+    local inside; inside="$(context_of)"
     unset HERDR_ENV
-    ctx 60
-    prompt a
-    [[ "$(context_of)" == *"予備の閾値"*"ターンも止めない"*"/clear"* ]]
-    [[ "$(context_of)" != *"入る前に"* ]]
-    [[ "$(context_of)" != *"session-handoff"* ]]
+    ctx 10; prompt reset; ctx 40
+    prompt b
+    [ "$(context_of)" = "$inside" ]
+    [[ "$inside" != *"session-handoff"* ]]
+    [[ "$inside" != *"できる、と添える"* ]]
 }
-@test "閾値は環境変数で差し替えられる" { export CONTEXT_GUARD_CHAT_HANDOFF_PCT=20; ctx 21; prompt a; [[ "$(context_of)" == *"session-handoff"* ]]; }
+@test "閾値は環境変数で差し替えられる" { export CONTEXT_GUARD_CHAT_HANDOFF_PCT=20; ctx 21; prompt a; [[ "$(context_of)" == *"一文で知らせる"* ]]; }
 
 @test "200K の窓では使用率で判定する" {
     ctx 50 200000
     prompt "a"
-    [[ "$(context_of)" == *"自分からは引き継がず"*"session-handoff"* ]]
+    [[ "$(context_of)" == *"自分からは引き継がず"*"一文で知らせる"* ]]
 }
 
 @test "閾値の下か、使用率が測れない -> 黙る" {
@@ -90,7 +87,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     prompt "  /loop"
     [ -z "$output" ]
     prompt "/loopy は別のコマンド"
-    [[ "$(context_of)" == *"session-handoff"* ]]
+    [[ "$(context_of)" == *"一文で知らせる"* ]]
 }
 
 @test "loop-guard.sh が予約を通したセッションでは、手打ちの prompt にも知らせを出さない" {
