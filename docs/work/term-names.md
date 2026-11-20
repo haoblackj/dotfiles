@@ -70,6 +70,8 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 会話の記録で言い換えの候補の頻度を週ごとに数えた（試しの前の値。判明した事実）。
 - このブランチ: エクシアの文体から禁止の節を外した（`c908928`）。CLAUDE.md の言い換えの行を置き換えた（`35b5b6d`）。
 - 本番: 本番の作業コピー（`~/.local/share/chezmoi`）の `dot_claude/CLAUDE.md` と `dot_claude/output-styles/exusiai.md` に、このブランチの二つのコミットと同じ変更を未コミットで置き、`chezmoi apply` でこの二つのファイルだけを配った（2026-11-21）。一度 `ops/work-records` にコミットした（`ca4ead7`、`9d528be`）が、#98 に混ざらないよう `git reset --soft` で外した。
+- PR #98 が main に入り、本番の作業コピーは main の先端（`c2e6cfe`、detached HEAD）へ移った（2026-11-21、Orca へ移す作業のセッションからの知らせ）。その後、本番の作業コピーから試しの未コミットの変更が消えていた（配った `~/.claude/` には残っていた）。原因は別の作業の中なので調べず、同じ変更を本番の作業コピーへ未コミットで置き直し、配った中身との差が無いことを確かめた（2026-11-21）。
+- このブランチに新しい main を merge した（`2f03f3b`）。main との差は、作業記録と試しの二つのファイルだけで、試しの差は本番の作業コピーの未コミットの差と同じ。
 - 本番を戻すときは、本番の作業コピーで `git restore -- dot_claude/CLAUDE.md dot_claude/output-styles/exusiai.md` を打ち、`chezmoi apply ~/.claude/CLAUDE.md ~/.claude/output-styles/exusiai.md` を打つ。
 
 ## 残っていること
