@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13（prts、uv、pytest）、bash（bats）、Python のフック（unittest を pytest で回す）、Markdown の文書。
 
-**Spec:** `/home/yagu001/.local/share/chezmoi/docs/superpowers/specs/2026-11-20-speaker-identification-design.md`
+**Spec:** `docs/superpowers/specs/2026-11-20-speaker-identification-design.md`
 
 ## Global Constraints
 
