@@ -172,17 +172,31 @@ class SessionTest(Base):
         text = run("session", {"cwd": str(self.root), "source": "startup"})
         self.assertIn("作業記録の有効な判断（出どころが端末からの入力か PRTS の指摘の物。リーダーの判断として扱う）", text)
 
-    def test_input_recorded_both_as_queued_command_and_queued_user_is_injected_once(self):
+    def test_queued_attachment_and_a_queued_user_line_with_the_same_text_are_both_injected(self):
+        # 途中で取り込まれた入力は待ち行列から外れ（queue-operation の remove、absorbed_mid_turn）、user の行にならない。
+        # 同じ文の user の行は別々に送った入力なので、本文が同じでも両方を差し込む
         self.write()
+        queued = self.queued("途中で打った指示")
+        queued["uuid"], queued["attachment"]["source_uuid"] = "q-1", "c-1"
         text = self.compact([
-            self.queued("途中で打った指示"),
-            self.said("途中で打った指示", promptSource="queued"),
-            self.said("あとで同じ文をもう一度打った", at="2026-11-20T01:05:00.000Z"),
-            self.said("あとで同じ文をもう一度打った", at="2026-11-20T01:09:00.000Z"),
+            queued,
+            self.said("途中で打った指示", promptSource="queued", uuid="u-1"),
             self.boundary(),
         ])
-        self.assertEqual(text.count("「途中で打った指示」"), 1)
-        self.assertEqual(text.count("「あとで同じ文をもう一度打った」"), 2)
+        self.assertEqual(text.count("「途中で打った指示」"), 2)
+
+    def test_the_same_input_line_written_twice_is_injected_once(self):
+        # 一つにするのは、記録の項目（user の行は uuid、添付は source_uuid）が同じ行だけ
+        self.write()
+        a = self.queued("添付の指示")
+        a["uuid"], a["attachment"]["source_uuid"] = "q-1", "c-1"
+        b = self.queued("添付の指示")
+        b["uuid"], b["attachment"]["source_uuid"] = "q-2", "c-1"
+        line = self.said("同じ行の指示", uuid="u-1")
+        text = self.compact([a, b, line, line, self.said("同じ行の指示", uuid="u-2", at="2026-11-20T01:05:00.000Z"),
+                             self.boundary()])
+        self.assertEqual(text.count("「添付の指示」"), 1)
+        self.assertEqual(text.count("「同じ行の指示」"), 2)
 
     def test_same_short_text_typed_later_is_not_paired_with_an_old_queued_attachment(self):
         self.write()

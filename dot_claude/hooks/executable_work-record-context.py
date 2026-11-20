@@ -11,7 +11,9 @@ session（SessionStart の startup、resume、clear、compact）:
   「済んだこと」だけの直しでも進む）、指示が一件も添えられなくなることがあるため。
   端末からの入力はリーダーの入力として扱う（Claude の連絡は SendMessage と引き継ぎの定型文で届くため。
   設計書 docs/superpowers/specs/2026-11-20-practical-trust-design.md の 3 節）。「リーダーが打った」とは書かない。
-  作業の途中で打った入力が queued_command の添付と promptSource が queued の user の行の両方に残ることがあり、一つにする。
+  本文が同じでも、別々に送った入力は別々に差し込む。一つにするのは同じ入力の行が二度書かれた物だけで、
+  記録の項目（user の行は uuid、途中で取り込まれた入力の添付は source_uuid、無ければ行の uuid）で決める。
+  途中で取り込まれた入力は待ち行列から外れ（queue-operation の remove、absorbed_mid_turn）、user の行にはならない。
 prompt（UserPromptSubmit）:
   今の作業コピーの開いている記録の最後のコミットが HEAD のコミットより古く、記録に未コミットの変更が
   無いときだけ、一度だけ一行で知らせる。記録を直さずに作業が進んだ合図で、同じ（コミット、記録）の組では二度出さない。
@@ -234,9 +236,8 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
     if not transcript_path:
         return [], 0
     spans: list[list[tuple[str, str]]] = [[]]
-    # 途中で打った入力は、queued_command の添付と、promptSource が queued の user の行の両方に続けて残ることがある。
-    # 組にするのは直前に集めた入力だけにする。離れた同じ文（「続けて」の打ち直しなど）を消さないため
-    last: tuple[str, str] | None = None
+    # 同じ入力の行が二度書かれた物だけを一つにする。本文では比べない（「続けて」の打ち直しを消さないため）
+    seen: set[str] = set()
     try:
         with open(transcript_path, encoding="utf-8", errors="replace") as f:
             for raw in f:
@@ -249,17 +250,16 @@ def inputs_since_boundary(transcript_path) -> tuple[list[tuple[str, str]], int]:
                         continue
                     if o.get("type") == "system" and o.get("subtype") == "compact_boundary":
                         spans.append([])
-                        last = None
                         continue
                     got = terminal_input(o)
                     if not got:
                         continue
-                    side = "attachment" if o.get("type") == "attachment" else o.get("promptSource")
-                    other = {"attachment": "queued", "queued": "attachment"}.get(side)
-                    if other and last == (other, got[1]):
-                        last = None
-                        continue
-                    last = (side, got[1])
+                    att = o.get("attachment") if o.get("type") == "attachment" else None
+                    key = (isinstance(att, dict) and att.get("source_uuid")) or o.get("uuid") or ""
+                    if key:
+                        if key in seen:
+                            continue
+                        seen.add(key)
                     spans[-1].append(got)
     except OSError:
         return [], 0
