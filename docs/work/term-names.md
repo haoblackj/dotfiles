@@ -18,6 +18,8 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 別の作業で、Claude がサブエージェントを報告の中で「担い手」と書いた。グローバルの CLAUDE.md の「コミュニケーション」の節には造語と和語の言い換えを禁じる行が既にあった（根拠: `~/.claude/CLAUDE.md` 192〜193 行）。
 - グローバルの CLAUDE.md 自体が「実装の担い手」（144 行）、「自前の見張り」（117 行）と書いている。決まりの文が、禁じている言い換えを Claude に見せている。
 - 言い換えは決まりの文に多数ある（2026-11-21 に数えた。グローバルの CLAUDE.md に「正本」3、「知らせ」11、「持ち物」3、「担い手」2。`~/.claude/skills/*/SKILL.md` に「書き手」18、「見張り」5、「写し」5）。報告の言い換えも数え切れない（スクリプトを「台本」など。出典: 端末からの入力（会話 811156f3、2026-11-21 02:02、発言 7ee953e5））。言い換えの一覧で止める形は新しい言い換えを取りこぼす。
+- 巷の解き方（2026-11-21 にサブエージェントが調べた。結論の要旨）: 禁止語の一覧だけで未知の言い換えを止める方式は見つからなかった。見つかったのは三つ。(a) プロンプトの文体を望む出力に寄せる（Anthropic の prompting best practices に、プロンプトの書式が応答の書式に移るという記述がある。語彙への効きは公式に書かれていない）。(b) 翻訳の分野で、用語集（使う語の表）を入力に渡し、出力の後に用語集と照らして LLM に直させる（WMT 2023 の用語タスクの論文ほか）。(c) Claude Code の Stop フックの `type: "prompt"` で `last_assistant_message` を判定させ、`ok: false` と `reason` で差し戻す（公式の hooks の文書。連続の差し戻しは 8 回が上限、`stop_hook_active` あり）。prh や Vale は誤→正の辞書型で、未知の言い換えを見つける機能の記述は無い。LLM の判定は人の評価に完全には一致しないという研究がある。
+  - 出典: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices 、https://code.claude.com/docs/en/hooks 、https://aclanthology.org/2023.wmt-1.80 、https://docs.vale.sh/checks/substitution
 - dotfiles には、応答の本文を Stop フックで機械的に調べる前例がある（`dot_claude/hooks/executable_stop-fabricated-turn-guard.py`。`last_assistant_message` を読み、見つけたら `decision: block` で書き直させる）。
 
 ## 判断の経緯
@@ -36,7 +38,7 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - リーダーの選んだ形で設計書を書く。
 
 ## リーダーに決めてほしいこと
-- 検出のしかた（言い換えの一覧で機械的に止めるか、小さなモデルに判定させるか、両方か）。Claude の案: 一覧の Stop フックと CLAUDE.md の言い換えの除去。答えで何が変わるか: 費用、遅れ、見逃しと誤検出の出方。
+- 巷の定番の三段（決まりの文を決まった用語で書き直す、使う語の表を作る、Stop フックの LLM 判定で差し戻す）で進めてよいか。Claude の案: 三段とも。表はフックの判定の文の側に置き、CLAUDE.md には足さない。答えで何が変わるか: 毎ターンの遅れと費用、CLAUDE.md とスキルの書き直しの範囲。
 
 ## 参照
 - `dot_claude/hooks/executable_stop-fabricated-turn-guard.py`
