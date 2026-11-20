@@ -1,0 +1,6 @@
+{
+  "name": "settings-symlink-guard",
+  "version": "0.1.0",
+  "description": "~/.claude/settings.json がソースへの symlink でなくなったら、入力欄の上に出し続ける",
+  "types": "./types/index.d.ts"
+}

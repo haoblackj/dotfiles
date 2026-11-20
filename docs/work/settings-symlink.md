@@ -17,9 +17,9 @@ status: waiting
 
 ## いまの方針
 
-symlink が外れたら知らせる SessionStart のフック（`settings-symlink-guard.sh`）を作り、このブランチにコミットした。
+symlink が外れている間、入力欄の上に赤い帯で出し続ける Mod（`skills/settings-symlink-guard/`）を作った。最初に作った SessionStart のフックの版は、リーダーの希望で Mod に置き換えた。
 案 1 は、コードと実機の読み取りで「働く見込みが高い」ところまで確かめた（「判明した事実」の「案 1 の確かめ」）。
-実際に Orca を動かして確かめる手順と、フックを配る時期は、Windows 側の操作と本番の `~/.claude/settings.json` の書き換えを含むので、リーダーに仰ぐ。
+実際に Orca を動かして確かめる手順と、Mod を配る時期は、Windows 側の操作と本番の `~/.claude/settings.json` の書き換えを含むので、リーダーに仰ぐ。
 
 ## 判明した事実
 
@@ -72,12 +72,13 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 - そのため、変数で中継を止めても、WSL の Claude Code の状態の表示は残る見込みが高い。WSL 側の orcad の導入（symlink をたどる書き方）は変数の影響を受けない。
 - 実際に Orca を再起動して確かめてはいない。確かめるには、Windows 側でアプリの環境変数を設定して Orca を起動し直す操作が要る。
 
-### 知らせるフック
+### 知らせる仕組み
 
-- `dot_claude/hooks/executable_settings-symlink-guard.sh` を SessionStart に配線した（設計は `docs/superpowers/specs/2026-11-21-settings-symlink-guard-design.md`）。
-- 本物の `~/.claude/settings.json` に読み取りだけで走らせると、「通常のファイルになっている」と出た。ファイルの inode と mtime は変わらなかった。
-- 試験は、このフックの 8 件と配線の 1 件を足し、push のときの全件（bats 447 件）が通った。
-- クラウドへ写す `install-cloud.sh` は SessionStart のフックを写さないので、クラウド側の変更は要らない。フック自体も `CLAUDE_CODE_REMOTE=true` では黙る。
+- 最初の版は SessionStart のフック（コミット `a02ed0a`）。本物の `~/.claude/settings.json` に読み取りだけで走らせると「通常のファイルになっている」と出て、ファイルの inode と mtime は変わらなかった。審査では、`jq` が PATH に無いと黙って知らせないこと、`realpath` が失敗すると正しいと判断して黙ることを指摘された（設計の前提は崩さない、という答え）。
+- いまの版は Mod（設計は `docs/superpowers/specs/2026-11-21-settings-symlink-guard-design.md`）。外れている間は入力欄の上（`AbovePrompt`）に帯を出し続け、外れたときにトーストを一度出し、Claude へ一節（`prompt.compose`）を足す。一分ごとに調べ直す。`$.fs.stat` で調べるので外のコマンドに頼らず、フックの版の二つの指摘は起きない。ソースが無いときは正しいと言わない。
+- Mod の試験は 12 件（`claude plugin test`）が通り、`claude plugin validate` も通った（アイコンが無い警告だけ）。
+- 配備は `bg-progress` と同じく、`dot_claude/skills/symlink_settings-symlink-guard.tmpl` で `~/.claude/skills/settings-symlink-guard` から `skills/settings-symlink-guard/` へ symlink を張る。`~/.claude/skills/bg-progress` がこの形で読み込まれていることを確かめた。
+- このセッションで実際に帯が出るかを試すため、Mod をこのセッションの試し用の置き場（`~/.claude/dev-mods/<この会話>/`）に写した。
 
 ## 判断の経緯
 
@@ -101,35 +102,44 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 ### 2026-11-21 採用: 知らせる仕組みは Claude Code の SessionStart のフックにする
 - 出どころ: Claude の判断
 - 理由: Orca が書き換えるのはアプリの起動や接続のときで、その後に立てるセッションで必ず気づける。毎回 `lstat` 一回で費用がほぼ無い。画面（`systemMessage`）と Claude（`additionalContext`）の両方へ届く。systemd でファイルを見張る案は、WSL から Windows の画面へ通知を届ける道を新しく作る必要があり、常駐も増えるので採らない（設計書の「方式の比較」）。
+- 状態: 置き換え済み（2026-11-21 変更: 知らせる仕組みを Mod の帯にする）
+
+### 2026-11-21 変更: 知らせる仕組みを Mod の帯にする
+- 置き換えたもの: 2026-11-21 採用: 知らせる仕組みは Claude Code の SessionStart のフックにする
+- 出どころ: 端末からの入力（会話 86439d41、2026-11-21 02:57、発言 efa20ad4）
+- 要旨（Claude の要約）: Mod にできないか。画面に出しておいたほうが放置しにくい。
+- 理由: SessionStart のフックの表示はセッションの開始時の一行だけで、流れて見えなくなる。Mod の帯なら外れている間ずっと出せる。審査で出たフックの版の欠点（`jq` が無いと黙る）も起きない。
 - 状態: 有効
 
 ## いまの作業
 
-リーダーの答え待ち（案 1 を実機で確かめる手順と、知らせるフックを配る時期）。
+このセッションで Mod を試し用に読み込ませ、帯が出るかを見ている（有効にするかの確認がリーダーに出る）。そのあとはリーダーの答え待ち（案 1 を実機で確かめる手順と、Mod を配る時期）。
 
 ## 済んだこと
 
 - 原因の調査（上の「判明した事実」）。
 - 案 1 のコードと実機の読み取りでの確かめ（「案 1 の確かめ」）。
-- 知らせるフックの実装と試験（コミット `a02ed0a`）。
+- 知らせる仕組みの実装と試験。SessionStart のフックの版（コミット `a02ed0a`）を、Mod の版に置き換えた。
 
 ## 残っていること
 
 - 案 1 を実機で確かめる。
-- 知らせるフックを本番へ配る。
+- このセッションで帯が出ることを確かめる。
+- Mod を本番へ配る（`chezmoi apply` で `~/.claude/skills/settings-symlink-guard` の symlink を張る）。
 - symlink を戻し、Orca のフックと `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行をソースにコミットする。
 - 既定ブランチへ取り込む前の審査（requesting-code-review）と PR。
 - 上の三つの本番の操作は、ソースの作業コピーが別の作業の承認待ちのブランチにあるあいだはできない。
 
 ## 次に Claude がすること
 
-- リーダーの答えを受けたら、このブランチの審査を頼んで PR にする。
-- 別の作業のブランチが片付いたら、リーダーの答えの手順で、symlink を戻す、フックを配る、Orca の環境変数を設定して再起動する、を一続きで行い、再起動の後に知らせるフックが黙っていること、`~/.claude/settings.json` の inode が変わらないこと、Orca の画面で WSL の Claude Code の状態が出ることを確かめる。
+- このセッションで帯が出たかを確かめて記録する。
+- Mod の版の審査を頼み（フックの版の審査は済んでいるが、作りが替わったので頼み直す）、PR にする。
+- 別の作業のブランチが片付いたら、リーダーの答えの手順で、symlink を戻す、Mod を配る、Orca の環境変数を設定して再起動する、を一続きで行い、再起動の後に帯が出ていないこと、`~/.claude/settings.json` の inode が変わらないこと、Orca の画面で WSL の Claude Code の状態が出ることを確かめる。
 
 ## リーダーに決めてほしいこと
 
 - 案 1 を実機で確かめる手順。答えで、Windows 側を誰がどう操作するかと、本番の `~/.claude/settings.json` を書き換える時期が決まる。
-  - Claude の案（推奨）: 別の作業のブランチが片付いたあとに一続きで行う。(1) Claude がソースに Orca のフックと `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行を取り込み、`~/.claude/settings.json` を symlink に戻し、知らせるフックを配る。(2) リーダーが Windows 側で、Orca のアプリが読むユーザーの環境変数 `ORCA_FEATURE_REMOTE_AGENT_HOOKS=0` を設定し、Orca を終了して起動し直す。(3) Claude が上の三点を確かめる。利点は、壊れたら知らせるフックが効いた状態で確かめられること。欠点は、別の作業のブランチが片付くまで待つこと。
+  - Claude の案（推奨）: 別の作業のブランチが片付いたあとに一続きで行う。(1) Claude がソースに Orca のフックと `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行を取り込み、`~/.claude/settings.json` を symlink に戻し、Mod を配る。(2) リーダーが Windows 側で、Orca のアプリが読むユーザーの環境変数 `ORCA_FEATURE_REMOTE_AGENT_HOOKS=0` を設定し、Orca を終了して起動し直す。(3) Claude が上の三点を確かめる。利点は、外れたら帯が出る状態で確かめられること。欠点は、別の作業のブランチが片付くまで待つこと。
   - 別案: 今すぐ (2) だけ行い、`~/.orca-relay` が作り直されないことと状態の表示が残ることだけを見る。利点は早いこと。欠点は、`~/.claude/settings.json` の中身がすでに Windows 側の望む形と同じなので、変数が無くても書き込みは起きず、symlink が守られるかは確かめられないこと。
 - 確かめを強めるために、Windows 側の Orca のアプリのログを読み取りだけで見てよいか。Claude の案: 見なくても進められる。見るなら実機の確かめのときに、中継とリモートへの導入が走らなかったことをログでも確かめる。
 - 取り下げ: 前回の「直し方をどれにするか」の問いは、案 1 を確かめる方向の答え（上の判断の経緯）で置き換えた。
