@@ -32,9 +32,17 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 - prts は Herdr の本体と、Herdr の Claude Code への組み込みフックを使っている。消した引き継ぎのスクリプトは呼んでいない（根拠: 入っている prts のソース）。
 - Windows から WSL の `/proc/<pid>` と `~/.claude/sessions` が `\\wsl.localhost\Ubuntu\...` で読める（2026-11-21 に実測）。
 - `orca plugin dev load` の承認は、Claude Code の自動の判定に止められた。プラグインに権限を与える承認はリーダーが行う。
+- Windows の Node で `\\wsl.localhost` のフォルダに `fs.watch` を掛けると、`EISDIR` が同期で投げられる（2026-11-21 に実測）。元のプラグインのままだと、ワーカーの起動が失敗したまま固まり、サイドバーに何も出ない。
+- Windows の Node で、直したワーカーを偽の Orca の口と偽のホームにつないで起動すると、同梱の CLI に `resources\bin\orca.exe` が選ばれ、フォーカスの補いと本物の CLI の状態で、ゴールとタスク（1 / 3）が描かれた。1 回の更新は CLI 込みで 460 ミリ秒（2026-11-21 に実測）。
+- 本物のホームでは、ファイルだけの更新が 1 回 550 ミリ秒かかる。`~/.claude/sessions` の 162 個のファイルを読み、それぞれの pid を `/proc` で確かめるため。タスクの一覧のフォルダ（28 個）の名前と更新時刻を見るだけなら 11 ミリ秒で、rename で書き換えたタスクにも 0.1 秒ほどで気づく（2026-11-21 に実測）。
 - Herdr に依存する物: 本体（`run_once_80` の Brewfile）、systemd の override、`dot_config/herdr/`（設定とローカルのプラグイン 2 つ）、`run_once_83`（agent skill）、`run_once_84`（プラグイン 7 つ）、`run_once_86`（Claude Code の組み込みフック `herdr-agent-state.sh`）、`run_onchange_after_90`、タブ名の同期のフック、引き継ぎのスクリプト 3 本（`session-handoff.sh`、`loop-handoff.sh`、`herdr-closable.sh`）と `herdr-start-claude.sh`、スキル `session-handoff`、`loop-guard.sh` と `chat-context-guard.sh` の文面、`statusline-context-window.sh` からのタブ名の同期の呼び出し、CLAUDE.md の「Herdr でのセッションの立て方」の節と関連の行、README の節、`docs/herdr-cheatsheet.html`、earlyoom の除外の一覧。Herdr の常駐（`homebrew.herdr.service`）はいま動いていない。
 
 ## 判断の経緯
+
+### 2026-11-21 採用: WSL ではタスクの一覧を 3 秒おきに見て、変わったときだけ更新する
+- 出どころ: Claude の判断（審査の指摘を受けて）
+- 理由: Windows は WSL の共有の変更通知を受けられず、`fs.watch` が例外を投げる。毎回まるごと更新すると 1 回 550 ミリ秒かかるが、一覧の更新時刻だけなら 11 ミリ秒で済む。エージェントの状態は Orca のイベントで、セッションの終わりは 30 秒おきの同期で拾える。
+- 状態: 有効
 
 ### 2026-11-21 採用: prts は仕組みとして残し、Herdr のうち prts が使う物は外さない
 - 出どころ: 端末からの入力（会話 3c33ee18、2026-11-21 01:50、発言 75071a0d）
@@ -70,14 +78,16 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 ## 済んだこと
 
 - 記事の原文の取得と、Orca のプラグインと WSL の関係の調査。
-- orca-milestone の WSL 向けの直し（手元の複製のコミット 3d40e8c。テスト 95 件が通る）。
-- 断捨離のコミット（81ea792）。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。
+- orca-milestone の WSL 向けの直し（手元の複製の 3d40e8c、8f95d9c、3e0ff80。テスト 97 件が通る）。8f95d9c は `fs.watch` の例外の直し、3e0ff80 は許可のカードの場所の表示の直し。
+- 断捨離の PR #99。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。
+- 審査（With fixes）を受け、指摘を直した。取り下げた指摘: `main.mjs` の WSL の配線のテスト（Windows の Node で実際に組み上げて確かめたため）、`\\wsl` で始まるのに一致しないときのログ（起こる場面が無い）、`~/.claude/projects` の読み出しの速さ（実測で、見張りを軽くした後は問題にならない）。
 - prts を Orca へ移す仕事を、別のセッションに渡した。
 
 ## 残っていること
 
-- プラグインの読み込みの承認（リーダー）と、実機での確かめ（サイドバーにタスクの進捗、質問のカード、次の作業のカードが出て、押すと送られるか）。
-- 断捨離の PR の取り込み（リーダー）と、本番の作業コピーが `main` に移ったあとの `chezmoi apply`（`.chezmoiremove` が配布先のスクリプトとスキルを消す）。
+- プラグインの読み込みの承認（リーダー）と、実機での確かめ（サイドバーにタスクの進捗、質問のカード、次の作業のカードが出て、押すと送られるか。`orca plugin logs` にエラーが無いか）。
+- 断捨離の PR の取り込み（リーダー）。本番の作業コピーが載っている別の作業のブランチも、CLAUDE.md の同じ行（ループの引き継ぎ、対話セッションの引き継ぎ、Herdr の節）を書き換えている。後から取り込む側で衝突を解き、取り込んだあとに `git grep -E "loop-handoff|session-handoff|herdr-closable|herdr-start-claude"` が昔の計画書と作業記録の外で 0 件になることを確かめる。
+- 本番の作業コピーが `main` に移ったあとの `chezmoi apply`（`.chezmoiremove` が配布先のスクリプトとスキルを消す）。
 - Orca のチャット画面で起動したセッションにも起動フックが効くかの確かめ。効かなければ、`CLAUDE_CODE_ENABLE_TODO_TOOLS` と記事の指示を設定と CLAUDE.md に足す。
 - prts が Orca へ移ったあと、Herdr の残り（本体、常駐の設定、組み込みフック、設定とプラグイン、タブ名の同期）を外す。
 

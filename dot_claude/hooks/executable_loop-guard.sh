@@ -42,8 +42,6 @@ set -uo pipefail
 
 TIGHT_MIN="${LOOP_GUARD_TIGHT_MIN_SECONDS:-1200}"
 ALLOW_CRON="${LOOP_GUARD_ALLOW_RECURRING_CRON:-0}"
-# 理由の文面に載せるだけなので、~ は展開しない
-# shellcheck disable=SC2088
 [[ "$TIGHT_MIN" =~ ^[0-9]+$ ]] || exit 0
 
 INPUT=$(cat)
