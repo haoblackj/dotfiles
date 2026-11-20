@@ -1,6 +1,6 @@
 ---
 title: 判断と進行状態の持ち方を作り直す
-status: active
+status: waiting
 wish: state-context
 ---
 
@@ -214,12 +214,12 @@ wish: state-context
 - 状態: 有効
 
 ## いまの作業
-両方の PR の審査の指摘（同じ分の発言の結び付き、公開向けの文面の非公開の名前）を直し、試しで直す前と後を比べた。審査役の結果を受けて直し、PR の本文と報告をまとめているところ。
+両方の PR の審査の指摘（同じ分の発言の結び付き、公開向けの文面の非公開の名前）を直し、試しで直す前と後を比べ、審査役の指摘を直して報告を出した。main への取り込み、公開済みの原文の扱い、公開の場にある非公開の名前の扱いについて、リーダーの答えを待っている。
 
 ## 済んだこと
 - 前回まで: prts（queued_command の読み取り、記録の項目による分類、作業記録の表示）、dotfiles（引き継ぎを SendMessage で送る、圧縮のあとの差し込み、優先の順、開発工程の三点）。PR https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9 。
 - 今回: 直す前の本番の設定で六つの場面を動かした（S1 と S5 が不合格）。設計書と計画（practical-trust）。prts の出典の出力と手元の覚えと `prts input`、望みの画面の出典の下の原文（折り畳み）、PRTS の指摘を出典にした行の下の指摘の文、札と「いま」の材料、信頼の範囲の文書（prts a7d0c05..99cd4ae）。dotfiles の CLAUDE.md、スキル work-record と session-handoff、差し込みのフック（二重の差し込みを一つに）、引き継ぎの文面と `--dry-run`、GitHub に載る文書の原文の書き換え（dotfiles 503d978..31dfc9e）。
-- 2 回目の審査への対応: prts の出典を発言の単位にした（prts fb46ebe、40daee8）。dotfiles の公開の決まりを書く場面に置き、文書の出典を発言まで書き直した（dotfiles a221990 と、この記録のコミット）。設計書 source-identity-and-public-scope。試しの基準に公開向けの文面の非公開の物を足し、直す前 12 回中 9 回不合格、直した後 10 回中 0 回不合格。本番の望みの画面で、19 の出典がすべて発言に決まり、未確認は 0、同じ分の別の発言は出ないことを確かめた。
+- 2 回目の審査への対応: prts の出典を発言の単位にした（prts fb46ebe、40daee8）。dotfiles の公開の決まりを書く場面に置き、文書の出典を発言まで書き直した（dotfiles a221990 と、この記録のコミット）。設計書 source-identity-and-public-scope。試しの基準に公開向けの文面の非公開の物を足し、直す前 12 回中 9 回不合格、直した後 16 回中 0 回不合格（審査の直しの後の 6 回を含む）。requesting-code-review の審査（Important 5 件、うち 2 件は審査の後のコミットで済んでいた）を receiving-code-review で受け、決まりの範囲、承認の記録の置き場、退けた理由、Minor 6 件を直した（prts 213c1fb、dotfiles 5ec0ef2）。試験は prts 487 passed、dotfiles pytest 200 passed と bats 440 ok。本番の望みの画面で、19 の出典がすべて発言に決まり、未確認は 0、同じ分の別の発言は出ないことを確かめた。
 - 確かめ（前回）: prts 469 passed、dotfiles pytest 200 passed と bats 440 ok。本番へ反映（`chezmoi status ~/.claude` が空、prts を入れ直して画面 200）。直した後の場面は 12 回中 11 回合格（S7b の 1 回が公開の記録の文面に非公開の作業の名前を書いた。当時は合格としたが誤り）。requesting-code-review の審査（Important 5 件）を receiving-code-review で受けて直した。両方の PR の本文を差し替えた。
 
 ## 残っていること
