@@ -392,6 +392,12 @@ Claude からは引き継がず、ターンも止めない。
 テストは `dot_claude/hooks/chat-context-guard.bats` と `dot_claude/hooks/settings-wiring.bats`。
 `bats dot_claude/hooks/` で、ループ側を含めて確かめる。
 
+#### Orca が手元に書く設定
+
+Orca は、`~/.claude/settings.json` に Claude Code のフック（`~/.orca/agent-hooks/` を呼ぶ物。エージェントの状態を Orca へ知らせる）を、`~/.claude/keybindings.json` に `ctrl+alt+g`（Orca のチャット画面）を書く。
+ソースに無いと `chezmoi apply` で消えるので、`linked/claude/settings.json` と `dot_claude/keybindings.json` に取り込んである。手で直さず、Orca を上げて書き換わったら取り込み直す。
+`env` の `CLAUDE_CODE_ENABLE_TODO_TOOLS` と CLAUDE.md の「Orca のサイドバーへのタスクと次の作業の候補」は、Orca のプラグイン Milestone がタスクの進捗と次の作業のカードを出すための物。
+
 ### クラウドセッション（Claude Code on the web）
 
 クラウドのコンテナは手元の `~/.claude` を読まない（公式: https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup ）。
