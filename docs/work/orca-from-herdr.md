@@ -43,6 +43,12 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 
 ## 判断の経緯
 
+### 2026-11-21 採用: 全体の設定の `CLAUDE_CODE_ENABLE_TODO_TOOLS` だけは、取り込みを待たずに手元へ効かせる
+- 出どころ: 端末からの入力（会話 3c33ee18、2026-11-21 02:32、発言 742aebd4）
+- 要旨（Claude の要約）: settings.json だけは先に適用してよい。ほかは取り込みまで待つ。
+- 理由: 理由の提示なし。Claude の判断として、`~/.claude/settings.json`（いまは symlink でなく実体のファイル）に一行足すだけにし、本番の作業コピーには書かず、`chezmoi re-add` もしない。控えは `~/.cache/orca-from-herdr/settings.json.before-todo-tools`。PR #99 の取り込みの前に `chezmoi apply` を走らせると、この一行は消える。
+- 状態: 有効
+
 ### 2026-11-21 採用: 記事と同じく、全体の設定と CLAUDE.md にもタスクの道具と指示を入れる
 - 出どころ: Claude の判断
 - 理由: 起動フックは CLI からの起動に効かず、画面からの起動に効くかも未確認。記事の筆者も `~/.claude/CLAUDE.md` と `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` で入れている。全体に入れれば起動のしかたによらず効く。フックと二重になっても害は無い。
@@ -90,6 +96,7 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 - orca-milestone の WSL 向けの直し（手元の複製の 3d40e8c から 86ab9f8。テスト 97 件が通る）。リーダーの承認で Windows の Orca に読み込まれ、`running` になった。
 - 実機で確かめたこと: フォーカス中のワークスペースの表示、ほかのワークスペースのタスクの進捗、エラーの無いログ、次の作業の候補（`next` のブロック）が `orca worktree ps` で読めること。
 - 断捨離の PR #99。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。審査（With fixes）の指摘を直した。
+- 全体の設定の `CLAUDE_CODE_ENABLE_TODO_TOOLS` を手元の `~/.claude/settings.json` に効かせた。
 - 全体の設定に `CLAUDE_CODE_ENABLE_TODO_TOOLS`、CLAUDE.md に記事の指示（タスクの記録と `next` のブロック）を足した（PR #99）。CLAUDE.md は 199 行。
 - prts を Orca へ移す仕事を、別のセッションに渡した。
 
