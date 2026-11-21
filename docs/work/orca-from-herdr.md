@@ -120,11 +120,11 @@ PR #99 は審査の指摘を直し終え、取り込みの判断を待ってい�
 
 ## 次に Claude がすること
 
-- 載せ直した差分の審査の指摘を受けて直し、リーダーに PR #99 の取り込みを頼む。取り込まれたら、本番の作業コピーで試しの未コミットの変更（`dot_claude/CLAUDE.md`、`dot_claude/output-styles/exusiai.md`）を持ち越したまま main の先端へ移し、`chezmoi apply` の結果を確かめる。
+- 載せ直した差分の審査の指摘を受けて直し、リーダーに PR #99 の取り込みを頼む。取り込まれたら、本番の作業コピーを main の先端へ移し、`chezmoi apply` の結果を確かめる。試しの未コミットの変更（`dot_claude/CLAUDE.md`、`dot_claude/output-styles/exusiai.md`）は、別の作業が main へ取り込んだ（e35497d）ので、移すと差が無くなる。未コミットの `linked/claude/settings.json` は、#99 の版に置き換えれば失う物は無い（違いは `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行だけ）。
 
 ## リーダーに決めてほしいこと
 
-- PR #99 を main に取り込むか。Claude の案: 取り込む（審査の指摘は直し、試験は通っている）。取り込んだら、本番の作業コピーで試しの未コミットの変更を持ち越したまま main の先端へ移し、`chezmoi apply` の結果を確かめる。
+- PR #99 を main に取り込むか。Claude の案: 取り込む（審査の指摘は直し、試験は通っている）。取り込んだら、本番の作業コピーを main の先端へ移し、`chezmoi apply` の結果を確かめる。
 - 直したプラグインを GitHub に上げるか。Claude の案: 上げない（手元の git だけ）。上げると別のマシンでも使えるが、自分のアカウントに他人のコードの改変を公開することになる。答えで何が変わるか: 上げるなら、フォークを作って `wsl-host` を push する。
 
 ## 参照
