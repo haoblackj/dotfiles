@@ -32,7 +32,7 @@ check_title() {
 
 # 引き継ぐ作業記録を確かめ、解決済みの絶対パスを標準出力に出す。合わなければ理由を出して 1 を返す。
 # 受け付けるのは、git の作業コピーの docs/work/ 直下の .md（作業記録。スキル work-record）だけ。
-# issue のコメントの URL や、リポジトリの外のファイルは受け付けない（判断と進行状態の正本は git で管理する
+# issue のコメントの URL や、リポジトリの外のファイルは受け付けない（判断と進行状態の source of truth は git で管理する
 # 作業記録で、issue には持たせない。haoblackj/dotfiles#86）。symlink は解決してから確かめる。
 check_state_file() {
   local path dir top
