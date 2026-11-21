@@ -7,7 +7,7 @@ hiro-desktop02 や HIRO_DESKTOP02 はこの条件に一致せず、memory行が�
 2026-11-10、実機（HIRO-DESKTOP02）の .wslconfig に合わせた。実機は memory=32GB に下がり、sparseVhd と autoMemoryReclaim が
 足されていた（いつ誰が変えたかの記録は見つからなかった。テンプレートは 2026-08-12 の 48GB のままだった）。
 autoMemoryReclaim は gradual から dropCache に変えた。gradual ではファイルのキャッシュが Windows へなかなか返らず、
-Windows 側の Strata（専門家を RAM に置くローカル LLM）が RAM を取れずに遅くなったため。
+Windows 側のローカル LLM（専門家を RAM に置く物）が RAM を取れずに遅くなったため。
 sparseVhd と autoMemoryReclaim は、職場 PC の挙動を変えないよう HIRO-DESKTOP の機械にだけ出す。
 */ -}}
 [wsl2]

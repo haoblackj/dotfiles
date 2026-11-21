@@ -119,7 +119,7 @@ reverse-engineer-anything rea rea-agents 6.9.0
 ### 文書
 
 dotfiles の `README.md` の「公開と非公開の境界」と `CLAUDE.md` の置き場の表に、外から取ってくるスキルは宣言ファイルで管理し claude-private に置かないことを書き足す。
-penguinEx の memory の `reference_herdr_skill_is_generated` は、`external-skills update` を案内する形に書き換える。
+別のリポジトリの memory の `reference_herdr_skill_is_generated` は、`external-skills update` を案内する形に書き換える。
 
 ## 細部の決定（設計者の判断）
 

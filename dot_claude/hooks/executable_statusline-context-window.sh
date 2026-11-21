@@ -4,7 +4,7 @@
 #   窓幅:   context_window.context_window_size → ${TMPDIR:-/tmp}/claude-status-context-window/$SESSION_ID
 #   使用率: context_window.used_percentage     → ${TMPDIR:-/tmp}/claude-status-context-usage/$SESSION_ID
 #   残量:   rate_limits の5時間枠と週枠          → ${TMPDIR:-/tmp}/claude-status-rate-limits/$SESSION_ID
-#           home-dashboard の collector が全セッション分を読み、枠ごとに最新の値を選ぶ。
+#           別のリポジトリの集計スクリプト（collector）が全セッション分を読み、枠ごとに最新の値を選ぶ。
 #           渡る値に受信時刻が無いので、枠の値が変わった時刻を枠ごとの changedAt として残す。
 #
 # どちらも Claude Code 本体が計算した値で、公式ドキュメントは statusLine を「assistant の
@@ -12,7 +12,7 @@
 # null になり、次の API 呼び出しで圧縮後の値に戻る（2026-09-12 に 25% → null → 7% を実測）。
 # null のときは使用率マーカーを消す。読む側は「マーカーが無い＝いま測れない」として扱い、
 # 古い値を残さない。transcript を自前で解析すると圧縮前の最後の usage を拾ってしまうため、
-# 使用率の出所はこのマーカーに一本化している（penguinEx issue #73）。
+# 使用率の出所はこのマーカーに一本化している（別の非公開リポジトリの issue）。
 #
 # fail-open: マーカー書き込みに失敗しても、ccstatusline の実行(=画面表示)は必ず行う。
 # session_id は既存hookと同じ正規表現でパストラバーサル対策する。

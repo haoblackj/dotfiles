@@ -188,7 +188,7 @@ Expected: `readlink` が `$SP/src/skills/demo` を出す。`ls` に `skills` が
 `~/.local/share/claude-private/` の行の内容を次に替える。
 
 ```markdown
-| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（`idenshi-hakase-diet` / `learning-efficiency-book` / `report-skills` など）/ 移行前の自作スキル（dotfiles#49） |
+| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（書籍のスキル、`report-skills` など）/ 移行前の自作スキル（dotfiles#49） |
 ```
 
 ファイル構造の図で、`dot_claude/` の下に1行、`linked/` の行の後に1行足す。
@@ -267,7 +267,7 @@ Claude-Session: https://claude.ai/code/session_01KyG9mZd6HTT5hYgqGQTXNB" -- .che
 
 ```bash
 git push -u origin HEAD
-gh pr create --title "公開の自作スキルを dotfiles でブランチと履歴つきで開発する仕組み" --body "Refs #48（仕組みの部分。クラウドでの確認が残るので、マージでは閉じない）。スキル本体（penguinEx#97 のリサーチデザインのスキル）は別の PR。
+gh pr create --title "公開の自作スキルを dotfiles でブランチと履歴つきで開発する仕組み" --body "Refs #48（仕組みの部分。クラウドでの確認が残るので、マージでは閉じない）。スキル本体（リサーチデザインのスキル）は別の PR。
 
 - skills/ を .chezmoiignore で配らず、dot_claude/skills/symlink_<名前>.tmpl で symlink する形を README と CLAUDE.md に書いた
 - install-cloud.sh が skills/ の実体をクラウドの ~/.claude/skills へ写す（bats を追加）
@@ -282,4 +282,4 @@ https://claude.ai/code/session_01KyG9mZd6HTT5hYgqGQTXNB"
 - [ ] **Step 2: 状態コメントを書く**
 
 dotfiles#48 に `## 状態` のコメントを書き、一つ前の状態コメントをたたむ。「次の一手」に、最初のスキルの PR でクラウドのセッションに写したスキルが読まれるかを確かめること、読まれなければ Task 1 の写す処理を外すことを書く。
-penguinEx#97 に、仕組みの PR のリンクと、マージの後にスキル本体へ進めることをコメントする。
+スキル本体を頼んだ非公開リポジトリの issue に、仕組みの PR のリンクと、マージの後にスキル本体へ進めることをコメントする。

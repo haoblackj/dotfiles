@@ -72,7 +72,7 @@ add_ai_title() { # title
 
 @test "UserPromptSubmitでai-titleが複数 -> 最後のaiTitleをHaikuで縮めてsessionTitleとして出し、印を置く" {
     add_ai_title "猫の写真フォルダの整理"
-    add_ai_title "Strata 専用 Ubuntu 推論サーバーの構築と性能測定"
+    add_ai_title "専用の Ubuntu 推論サーバーの構築と性能測定"
     run bash "$SCRIPT" <<< "$(ups_input sess-u1)"
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName')" = "UserPromptSubmit" ]
@@ -83,8 +83,8 @@ add_ai_title() { # title
 }
 
 @test "長いai-title -> 元の題より短い名前になる" {
-    add_ai_title "AGENTS.md (dsh illust) の複数ホスト対応"
-    jq -nc '{type:"user",message:{role:"user",content:"dsh illust の AGENTS.md を、複数のホストで使えるように書き直したい"}}' >> "$TRANSCRIPT"
+    add_ai_title "AGENTS.md (画像生成) の複数ホスト対応"
+    jq -nc '{type:"user",message:{role:"user",content:"画像生成の AGENTS.md を、複数のホストで使えるように書き直したい"}}' >> "$TRANSCRIPT"
     run bash "$SCRIPT" <<< "$(ups_input sess-u9)"
     [ "$status" -eq 0 ]
     t=$(title_of "$output")
@@ -93,10 +93,10 @@ add_ai_title() { # title
 }
 
 @test "Haikuが時間内に答えない -> ai-titleをそのまま出す" {
-    add_ai_title "AGENTS.md (dsh illust) の複数ホスト対応"
+    add_ai_title "AGENTS.md (画像生成) の複数ホスト対応"
     CLAUDE_TITLE_SHORTEN_TIMEOUT=0.1 run bash "$SCRIPT" <<< "$(ups_input sess-u10)"
     [ "$status" -eq 0 ]
-    [ "$(title_of "$output")" = "AGENTS.md (dsh illust) の複数ホスト対応" ]
+    [ "$(title_of "$output")" = "AGENTS.md (画像生成) の複数ホスト対応" ]
     marked sess-u10
 }
 

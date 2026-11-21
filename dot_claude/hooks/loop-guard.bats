@@ -203,7 +203,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     ctx 30
     wakeup 1800
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"約 300000 トークン"*"## 状態"* ]]
+    [[ "$(reason)" == *"約 300000 トークン"*"作業記録"* ]]
     wakeup 1800
     [ -z "$output" ]
 }
@@ -222,7 +222,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     ctx 40
     wakeup
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"loop-handoff.sh --state-url"*"Herdr"* ]]
+    [[ "$(reason)" == *"orca-cli"*"Orca の新しいターミナル"* ]]
     wakeup
     [ "$(decision)" = deny ]
 }
@@ -246,7 +246,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     [ "$(decision)" = deny ]
     cron "30 14 28 2 *" "/remind" false
     [ "$(decision)" = deny ]
-    [[ "$(reason)" == *"loop-handoff.sh"* ]]
+    [[ "$(reason)" == *"orca-cli"* ]]
 }
 
 @test "一段目では CronCreate は通す" {
@@ -296,7 +296,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     wakeup 1800 "/loop s"
     ctx 32
     prompt "/loop s"
-    [[ "$(context_of)" == *"この回の作業の前に"*"## 状態"* ]]
+    [[ "$(context_of)" == *"この回の作業の前に"*"作業記録"* ]]
     prompt "/loop s"
     [ -z "$output" ]
     wakeup 1800 "/loop s"
@@ -316,7 +316,7 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
     wakeup 1800 "/loop x"
     ctx 45
     prompt "/loop x"
-    [[ "$(context_of)" == *"Herdr"* ]]
+    [[ "$(context_of)" == *"Orca の新しいターミナル"* ]]
 }
 
 @test "発火で逼迫 -> 間隔の作り直しを知らせる" {
