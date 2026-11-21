@@ -1,6 +1,6 @@
 ---
 title: 判断と進行状態の持ち方を作り直す
-status: active
+status: waiting
 wish: state-context
 ---
 
@@ -347,7 +347,7 @@ wish: state-context
 - 状態: 有効
 
 ## いまの作業
-11-21 10:36 の入力を受け、範囲の外の 14 件を整理し（済んだこと）、main の今のファイルの直しを新しい main に載せ直して、価値判断の物の直しを足し、PR にしている。
+11-21 10:36 の入力で承認された三つ（範囲の外の 14 件の整理、価値判断の物の直し、main の今のファイルの直しの公開）は済んだ。残りはリーダー本人の操作と、ほかのマシンでの移り方で、Claude が今進める物は無い。
 
 ## 済んだこと
 - 前回まで: prts（queued_command の読み取り、記録の項目による分類、作業記録の表示）、dotfiles（引き継ぎを SendMessage で送る、圧縮のあとの差し込み、優先の順、開発工程の三点）。PR https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9 。
@@ -367,6 +367,7 @@ wish: state-context
 - 範囲の外の 14 件（11-21 10:36 の入力）: 行う前に 14 件の今の本文が手元の控えと一致することを確かめ、42 件と同じ手順でコメント 10 件を bot による再掲と書いた見出しと元の id の印を付けて載せ直し、元へのリンク 3 本（前回載せ直した版の中）を付け替え、元のコメント 10 件を消し、本文 4 件を編集した。後で API で、元のコメントが引けないこと、載せ直した 10 件が印を一つずつ持ち期待どおりの本文であること、本文 4 件が新しい文面と同じこと、新しい文面に非公開の名前が 0 で元へのリンクが 0 であることを確かめた。保留と失敗は 0 件。リポジトリの issue と PR の本文、コメント、レビューのコメントの今の表示を走査し、非公開の名前と断片の当たりは 0 件。Support への依頼の文面に本文 4 件を足した（20 本文）。手順と状態は手元の記録（`~/.cache/claude-reports/2026-11-21_left14/`）。
 - main の今のファイルの直しの載せ直し（11-21 10:36 の入力）: 手元のブランチの 1 コミットを新しい main に衝突なく写し、部品の中身のスキルの名前 3 行と run_once_ の注記 2 行を一般の言い方にした。Obsidian の保管庫と Codex の信頼するプロジェクトのパスは、リポジトリに入らないローカルの chezmoi の設定の data から読むテンプレートにし、`chezmoi init` で作り直しても値を引き継ぐようにした（試験 `local-paths.bats`、直す前に 6 件とも失敗、直した後 6 件とも成功）。本番のマシンの設定に data を足し（控えは `~/.cache/claude-ops-backup/20261121/chezmoi.toml.before-local-paths`）、新しいソースで描いた Codex の設定は今の物と同じ、Obsidian の設定は引用符の種類だけが違い、nvim で読めることを確かめた。手元の検査で、非公開の名前の残りは 0 行、残してよい物も 0 行。requesting-code-review で頼んだ code reviewer のサブエージェントの審査（Critical 0、Important 1、Minor 6。設計の前提を崩す指摘は無し）を receiving-code-review で受けた。Important の 1（この作りより前から使っているマシンで data を書かずに apply すると、保管庫と信頼するプロジェクトが黙って消える）は、README に既存のマシンでの移り方を書き、下の「残っていること」に足した。Minor のうち、TOML に読めない escape を出す `quote` を `toJson` に替え（Lua 側は LuaJIT が `\u` の escape を読めないので `quote` のまま）、data の型の誤りで止まるようにし、init を促す知らせとロックファイルのずれを README に書き、特殊な文字と型の誤りの試験を 3 件足した（足した試験のうち直す対象の 2 件は直す前に失敗、直した後は 9 件とも成功）。本番のマシンで描いた結果は直した後も変わらない。
 - 用語: 作業記録の「審査役」3 か所を、スキルの呼び名の「code reviewer のサブエージェント」に直した（リーダーの指摘、端末からの入力（会話 d9ce697d、2026-11-21 10:50）。CLAUDE.md の「レビュー役」も自作の語の疑いがあり、用語の言い換えを防ぐ作業へ伝えた）。
+- 取り込み: 直しを PR #105 にし、確かめた先端（ee71c8e、push 前の pytest と bats は通った）で squash にして取り込んだ（30f61a1）。取り込んだ後の main の今のファイルで、非公開の名前の残りは 0 行。本番の作業コピーを main の先端へ detached で移し（settings.json の未コミットの差分は控えと同じ）、このマシンで `chezmoi init` を流し（作り直した設定の値は前と同じ）、Obsidian の設定 1 ファイルだけを `chezmoi apply` で配った（前の版は `~/.cache/claude-ops-backup/20261121/obsidian.lua.before-apply`）。Obsidian と Codex の設定の `chezmoi status` は空で、配った Lua は nvim で読める。全体の apply は流していない。直しに使ったワークツリーは外した。
 ## 残っていること
 - この作りより前から使っているほかのマシン: 次の apply の前に、配られている Obsidian と Codex の設定からパスを読み取ってローカルの設定の `[data]` に書き、`chezmoi init` を流してから apply する（README「マシンごとのパス」）。書かずに apply すると二つの設定が黙って抜け落ちる。
 - リーダー本人の操作: 両方の PR の変更要求を解く（dismiss。取り込みは済み、記録を閉じるための操作。Claude Code の `!` は bot の名義になるので、別の端末か `! env -u GH_TOKEN gh pr review ...`）。20 本文の前の版の削除を GitHub Support に頼む（文面は手元の記録の `support-request.txt`。本文の編集は済んだので、いつでも出せる）。古いコミットの個人のアドレスの再発を防ぐため、GitHub のアカウント設定「Block command line pushes that expose my email」を入れる。
@@ -375,7 +376,7 @@ wish: state-context
 - 後回しにした小さな点: CLAUDE.md がちょうど 200 行。中断の印が prts の発言の一覧に出る（prts の ideas/bugs、別の作業で直す）。
 
 ## 次に Claude がすること
-- main の今のファイルの直しを PR にし、squash で取り込む。取り込んだら本番の作業コピーを main の先端へ移し、このマシンで `chezmoi init` を流し（作り直した設定が今の設定と同じことは確かめた）、Obsidian の設定 1 ファイルだけを `chezmoi apply` で配る（全体の apply は流さない）。Support が前の版を消したと知らせが来たら、GraphQL で版の中身が引けないことを確かめる。
+- 今進める物は無い。Support が前の版を消したと知らせが来たら、GraphQL で版の中身が引けないことを確かめる。ほかのマシンで作業するセッションは、apply の前に README「マシンごとのパス」の移り方を行う。
 
 ## リーダーに決めてほしいこと
 なし
