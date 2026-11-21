@@ -128,7 +128,7 @@ PR #99 は main に入り（4466ce6）、本番の作業コピーを main へ移
 
 - Orca の画面から起動した Claude に起動フックが効くかの確かめ（効かなくても、CLAUDE.md の指示で補われる）。
 - prts が Orca へ移ったあと（別のセッションが進めている）、Herdr の残り（本体、常駐の設定、組み込みフック、設定とプラグイン、タブ名の同期）を外す。
-- Windows の Orca を起動し直して環境変数を効かせることと、`PermissionRequest` の Orca のフックの `timeout`（ソースは Windows 側の中継が書いた 10、WSL 側の orcad は 130 を書く）をそろえるかは、symlink の調べの作業（ワークツリー `settings-symlink`）に渡した。
+- Windows の Orca を起動し直して環境変数を効かせることと、`PermissionRequest` の Orca のフックの `timeout`（ソースは Windows 側の中継が書いた 10、WSL 側の orcad は 130 を書く）は、symlink の調べの作業（ワークツリー `settings-symlink`）に渡した。その作業はソースを 130 にそろえる変更を PR #100 に載せ、先に Orca を起動し直してから #100 を取り込む順にした（変数の効いていない中継が 130 を見ると 10 に書き直し、symlink をまた置き換えうるため）。
 
 ## 次に Claude がすること
 
