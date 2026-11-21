@@ -2,7 +2,7 @@
 """memory-recall: UserPromptSubmit hook.
 
 発言と意味的に関連する保存済みメモリを検索してコンテキストに注入する。
-設計: penguinEx docs/superpowers/specs/2026-07-18-memory-semantic-recall-design.md
+設計: 別の非公開リポジトリの docs/superpowers/specs/2026-07-18-memory-semantic-recall-design.md
 """
 import datetime
 import hashlib

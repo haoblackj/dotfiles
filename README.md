@@ -151,6 +151,32 @@ run_once は内容のハッシュが変わると再実行されるが、既導�
 - Cloudflare Workers AI のトークン失効時の再発行（下記「Memory Recall」）
 - `setup_vall_e_x.sh`（VALL-E X。必要なときだけ手で実行する）
 - このリポジトリを編集するなら `pre-commit install`（`.pre-commit-config.yaml` が shellcheck を pre-commit で、pytest と bats を pre-push で回す）
+- 下の「マシンごとのパス」を、使うマシンの設定ファイルに書く
+
+### マシンごとのパス
+
+Obsidian の保管庫と、Codex が信頼するプロジェクトのパスは、マシンごとに違い、非公開のリポジトリを指すこともあるので、リポジトリには書かない。
+使うマシンの `~/.config/chezmoi/chezmoi.toml` の `[data]` に手で書く。
+`chezmoi init` で設定を作り直しても、`.chezmoi.toml.tmpl` が書いてある値を引き継ぐ。
+
+```toml
+[data]
+    obsidianWorkspaces = { "<保管庫の名前>" = "~/<保管庫のパス>" }
+    codexTrustedProjects = ["/home/<ユーザー>/<プロジェクトのパス>"]
+```
+
+書かないマシンでは、obsidian.nvim を読み込まず、Codex の設定に信頼するプロジェクトを書かない。
+型を間違えると（表の代わりに並びを書くなど）、apply はそのファイルで止まる。
+テンプレートの試験は `local-paths.bats`。
+
+この作りより前から使っているマシンでは、次の apply の前に移す。
+書かずに apply すると、それまで配られていた保管庫と信頼するプロジェクトが黙って消える。
+
+1. 配られている `~/.config/nvim/lua/plugins/obsidian.lua` と `~/.codex/exusiai.config.toml` から保管庫と信頼するプロジェクトのパスを読み取り、上の形で `[data]` に書く。
+2. `chezmoi init` を流す（`.chezmoi.toml.tmpl` が変わったので、流すまで作り直しを促す知らせが出続ける）。
+3. `chezmoi diff` で、2 ファイルの差が引用符の種類だけになっていることを確かめてから apply する。
+
+obsidian.nvim を使わないマシンで lazy.nvim がロックファイルを書き直すと、`dot_config/nvim/lazy-lock.json` から obsidian.nvim の行が消えてソースとずれる。そのマシンでは `chezmoi diff` に出ても取り込まない。
 
 ## Windows 側
 
@@ -243,7 +269,7 @@ symlink なら Claude Code の書き込みがそのままソースへ届き、ch
 - 埋め込みキャッシュ: 各 memory ディレクトリ直下の `.embeddings.json`（破損時は自動再生成）
 - ログ: `~/.claude/logs/memory-recall.log`（5MB で truncate）
 - テスト: `dot_claude/hooks/tests/test_memory_recall.py`
-- 設計と較正手順: penguinEx の `docs/superpowers/specs/2026-07-18-memory-semantic-recall-design.md` と `docs/superpowers/plans/2026-07-19-memory-semantic-recall.md`
+- 設計と較正手順: 別の非公開リポジトリの `docs/superpowers/specs/2026-07-18-memory-semantic-recall-design.md` と `docs/superpowers/plans/2026-07-19-memory-semantic-recall.md`
 
 トークンを再発行するときは Cloudflare ダッシュボードのカスタムトークン（権限: アカウント / Workers AI / 編集）で作り直し、上記の secrets ファイルを更新する。
 
@@ -251,7 +277,7 @@ symlink なら Claude Code の書き込みがそのままソースへ届き、ch
 
 ```zsh
 echo '{"prompt": "背が高い人に合う家具を探したい"}' | \
-  MEMORY_RECALL_DIR=$HOME/.claude/projects/-home-yagu001-repo-github-com-haoblackj-penguinEx/memory \
+  MEMORY_RECALL_DIR=$HOME/.claude/projects/<プロジェクトのフォルダ名>/memory \
   python3 ~/.claude/hooks/memory_recall.py
 ```
 

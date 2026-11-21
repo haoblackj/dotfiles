@@ -114,11 +114,11 @@ test('URL は gh が失敗しても番号だけで出る', async ($, on) => {
 })
 
 test('別のリポジトリはリポジトリ名を付ける', async ($, on) => {
-  engine(on, issue('移築'))
+  engine(on, issue('例題'))
   await start($)
-  await submit($, 'https://github.com/haoblackj/penguinEx/issues/12')
+  await submit($, 'https://github.com/haoblackj/example-repo/issues/12')
   await settle()
-  expect((await links($)).found[0]?.text).toBe('penguinEx#12 移築')
+  expect((await links($)).found[0]?.text).toBe('example-repo#12 例題')
 })
 
 test('gh issue create の出力で足される', async ($, on) => {

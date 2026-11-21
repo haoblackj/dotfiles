@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Code から Codex へ委譲するときの唯一の入口。
 #
-# 設計は penguinEx の docs/superpowers/specs/2026-08-31-codex-role-separation-design.md。
+# 設計は別の非公開リポジトリの docs/superpowers/specs/2026-08-31-codex-role-separation-design.md。
 #
 # これが在る理由は二つ。
 #   1. 委譲契約とリポジトリ側の知識を連結する作業をスクリプトの責任にする。

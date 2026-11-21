@@ -14,7 +14,7 @@ haoblackj のdotfilesをchezmoiで管理するリポジトリ。Claude Code設�
 | `dot_claude/` (このrepo) | settings / hooks / keybindings |
 | リポジトリ直下の `skills/` (このrepo) | 公開の自作スキル。`dot_claude/skills/symlink_<名前>.tmpl` で `~/.claude/skills/<名前>` へ symlink する |
 | `.chezmoiexternal.toml` の git external | `book-to-skill`（公開・upstream追跡。著作権はupstream） |
-| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（`idenshi-hakase-diet` / `learning-efficiency-book` / `report-skills` など） |
+| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（書籍のスキル、`report-skills` など） |
 
 **非公開データ（memory内容・書籍スキル・自作改変したスキル）を `dot_claude/` に書いてはいけない。**
 
@@ -42,6 +42,15 @@ dot_zshrc.tmpl / dot_gitconfig.tmpl
 公開の自作スキルはリポジトリ直下の `skills/` に置き、`dot_claude/skills/` には symlink テンプレートだけを置く。
 `book-to-skill` は git external で upstream から clone し、機密のものは private repo に置いて sync hook が `~/.claude/skills/` へ symlink する。
 開発の流れは README「公開の自作スキル」。
+
+## push の最中の作業コピー
+
+pre-push（pre-commit の pytest と bats、数分かかる）は、コミットしていない変更を一度よけて、終わったら戻す。
+その間に同じ作業コピーのファイルを編集すると、戻すところで食い違って push が落ち、編集も巻き戻る。
+
+- 自分の push は、先にすべてコミットし、終わるまで作業コピーを編集しない。結果は `git rev-parse origin/<ブランチ>` で確かめる。
+- 本番の作業コピー（`~/.local/share/chezmoi`）は別のセッションも push する。未コミットの変更が消えて見えたら、置き直す前に `pgrep -af 'git push|pre-commit'` で別の push が走っていないかを確かめ、走っていれば終わるのを待つ。
+- 出来事: 2026-11-20 に ops/work-records の push が 2 回落ちた。2026-11-21 に別のセッションの push の最中に変更を置き直し、push が落ちた（Refs #86）。
 
 <!-- claude-private-sync.sh:
      pull (SessionStart): git pull --ff-only → symlink確立
