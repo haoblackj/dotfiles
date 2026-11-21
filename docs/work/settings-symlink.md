@@ -1,6 +1,6 @@
 ---
 title: ~/.claude/settings.json の symlink が通常のファイルに置き換わった原因の調査と直し方
-status: waiting
+status: done
 ---
 
 ## 目的
@@ -169,29 +169,39 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 - 行ったこと: 設定の前は、ユーザーにもマシンにもこの変数は無かった。`powershell.exe` の `[Environment]::SetEnvironmentVariable(..., 'User')` で `0` を入れ、読み直して `0` を確かめた。動いている Orca には、起動し直すまで効かない。戻すときは同じ関数で値を `$null` にする。
 - 状態: 有効
 
+### 2026-11-21 採用: PR #100 を取り込み、Mod を本番へ配る
+- 出どころ: 端末からの入力（会話 86439d41、2026-11-21 11:28）
+- 要旨（Claude の要約）: 取り込む。
+- 理由: 理由の提示なし（Claude が、Orca の起動し直しのあとなら取り込みの順番の心配が無いと報告した直後の答え）。
+- 行ったこと: squash で取り込み（`0d7df5b`）、本番の作業コピーを main の先端へ fast-forward した。`chezmoi apply` は `~/.claude/skills/settings-symlink-guard` だけを名指しした（全体の apply では、別の作業の `.zshrc` と `.codex/codex-delegate.sh` の差も入り、`.zshrc` はホームの側にも手の変更があったため）。
+- 状態: 有効
+
 ## いまの作業
 
-symlink は PR #99 の取り込みで戻り、変数を設定して Orca を起動し直した（11:20）。PR #100（Mod と timeout 130）を取り込むかの答えを待つ。
+なし。原因の断ち切り（変数と Orca の起動し直し）、symlink の戻し、知らせる Mod の配備が済んだ。
 
 ## 済んだこと
 
 - 原因の調査（上の「判明した事実」）。
 - 案 1 のコードと実機の読み取りでの確かめ（「案 1 の確かめ」）。
 - 知らせる仕組みの実装と試験。SessionStart のフックの版（コミット `a02ed0a`）を、Mod の版に置き換えた。
+- Windows のユーザー環境変数に `ORCA_FEATURE_REMOTE_AGENT_HOOKS=0` を設定し、リーダーが Orca を起動し直した。
+- symlink の戻し（別の作業の PR #99 の取り込みで）。
+- PR #100 の取り込み（`0d7df5b`）と、Mod の symlink の配備。本番の置き場で `claude plugin validate` と試験 17 件が通った。試し用に写した Mod はごみ箱へ移した。
 
 ## 残っていること
 
-- PR #100 の取り込み（Mod と timeout 130）と、本番の作業コピーでの `chezmoi apply`（`~/.claude/skills/settings-symlink-guard` の symlink を張る）。
-- 案 1 を実機で確かめる（帯が出ない、`~/.claude/settings.json` の inode が変わらない、Orca の画面に WSL の Claude Code の状態が出る、本番の作業コピーに settings.json の未コミットの差が出ない）。
+- Mod は次に立てるセッションから読み込まれる。新しいセッションで帯が出ないこと（正しい symlink のとき）は、まだ画面で見ていない。
+- 変数が Orca に効いていることは直接は確かめていない。外れれば帯で分かる。
+- 作業ブランチ `haoblackj/settings-symlink` とワークツリーを消すかは、リーダーの判断。
 
 ## 次に Claude がすること
 
-- PR #100 が取り込まれたら、本番の作業コピーで main を取り込んで `chezmoi apply` し、上の「案 1 を実機で確かめる」の四点を見る。
+- 帯が出たと知らされたら、この記録の「判明した事実」から書き手を調べ直す。
 
 ## リーダーに決めてほしいこと
 
-- PR #100（Mod と timeout 130）を取り込むか。Claude の案: 取り込む。答えで、帯の Mod が本番に入るかと、orcad の書き直しで本番の作業コピーに差が出るのを防げるかが決まる。起動し直す前に取り込むと、変数の効いていない Orca が symlink をまた置き換えうる。
-- 取り下げ: 前回の「直し方をどれにするか」の問いは、案 1 を確かめる方向の答え（上の判断の経緯）で置き換えた。
+なし。
 
 ## 参照
 
@@ -201,4 +211,4 @@ symlink は PR #99 の取り込みで戻り、変数を設定して Orca を起�
 - 書き置き: ブランチ `feat/orca-from-herdr` の `ideas/bugs/2026-11-21-settings-json-not-symlink.md`
 - symlink を作ったコミット: `f4aa14a`（2026-09-20、`dot_claude/symlink_settings.json.tmpl`）
 - PR #99（`CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行）
-- PR #100（symlink が外れたら帯で知らせる Mod）
+- PR #100（symlink が外れたら帯で知らせる Mod と timeout 130。squash で `0d7df5b`）
