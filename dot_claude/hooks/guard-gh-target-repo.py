@@ -368,7 +368,7 @@ def graphql_targets(values, resolve_node_owner, owners):
     for node_id in sorted(ids):
         owner = resolve_node_owner(node_id)
         if owner is None:
-            raise Deny('unverified', f'ノード ID {node_id} の持ち主を確かめられません')
+            raise Deny('unverified', f'ノード ID {node_id} の所有者を確かめられません')
         if owner not in owners:
             raise Deny('foreign', f'ノード ID {node_id} の所有者は {owner}')
 
