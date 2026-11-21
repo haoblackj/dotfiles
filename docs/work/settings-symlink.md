@@ -89,6 +89,13 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 - そのため、ソースの timeout を 130 にそろえた（このブランチ、PR #100 に載る）。orcad が書いた版の控え（`~/.cache/orca-from-herdr/prod-before-99/settings.json.uncommitted`）と JSON で比べ、違いは `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行だけになった。
 - 気をつける順番: 変数が効いていない Windows 側の Orca が、ソースの 130 を見てリモートのフックを入れ直すと、10 に書き直して symlink をまた置き換える。Orca を起動し直して変数を効かせてから、130 の版を本番へ入れる（PR #100 の取り込みと `chezmoi apply`）。
 
+### Windows 側の Orca を閉じたときの WSL のセッション（コードで確かめた。実機では未確認）
+
+- Windows 側のアプリのメニューには、普通の終了（Windows では「Exit」）と「Quit Completely...」がある。後者の説明は「エージェントを含むすべての端末のセッションも止める。普通の終了はセッションを動かし続け、次の起動で Orca がつなぎ直す」（`app.asar` の文の要約）。
+- WSL 側の orcad は、Windows の `wsl.exe` の下でなく PID 1 の下で動いている（`ps`）。orcad は、端末のセッションが一つでもあれば止まらない（止まる判定 `idle exit` は端末が無く、接続も無い状態が 15 分続いたときだけ）。
+- Orca が WSL を起こし続ける仕掛け（`orca-wsl-distro-holder`）は、Orca が終わっても利用者のプロセスが残っていれば手放さない。
+- そのため、普通の終了なら、いま動いている WSL の Claude Code のセッションは動き続ける見込みが高い。Orca の Windows 側のアプリを閉じた状態で、この環境で試したことはない。
+
 ### 知らせる仕組み
 
 - 最初の版は SessionStart のフック（コミット `a02ed0a`）。本物の `~/.claude/settings.json` に読み取りだけで走らせると「通常のファイルになっている」と出て、ファイルの inode と mtime は変わらなかった。審査では、`jq` が PATH に無いと黙って知らせないこと、`realpath` が失敗すると正しいと判断して黙ることを指摘された（設計の前提は崩さない、という答え）。
