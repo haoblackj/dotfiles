@@ -15,7 +15,7 @@ chezmoi で管理している Claude Code 設定（settings / keybindings / skil
 
 private repo (github.com/haoblackj/claude-private)  ← clone 先: ~/.local/share/claude-private
   memory/<proj>/*.md   — プロジェクトごとのメモリ（セッション終了時に自動 push）
-  skills/<name>/       — 機密・自作改変スキル（learning-efficiency-book、report-skills、dig など）
+  skills/<name>/       — 機密・自作改変スキル（書籍のスキル、report-skills など）
   secrets/             — memory_recall.py が使う Cloudflare のトークン
 ```
 

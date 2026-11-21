@@ -114,7 +114,7 @@ setup() {
 
 @test "塞いではいけない形: + リフスペックの強制 push（意図して対象外）" {
     # push origin +main は push --force origin main と等価だが、CLAUDE.md の列挙5件の外で
-    # ブランチ名との誤検知リスクがあるため意図して対象外（penguinEx issue #31）。
+    # ブランチ名との誤検知リスクがあるため意図して対象外（別の非公開リポジトリの issue）。
     # 塞ぐ判定を足したらこの検査が落ちる。塞ぐ判断は踏んだ記録が出たときに改めて行う。
     local cmd
     for cmd in \

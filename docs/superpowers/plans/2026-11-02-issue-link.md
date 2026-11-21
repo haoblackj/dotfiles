@@ -113,7 +113,7 @@ hooks の中身：
   - `裸の番号は PR なら出ない`：`#5` → `pr: true` → `Link` が無い、`MODE` だけ。
   - `裸の番号は gh が失敗したら出ない`：exitCode 1 → `Link` が無い。
   - `URL は gh が失敗しても番号だけで出る`：exitCode 1 → 文字が `#73`。
-  - `別のリポジトリはリポジトリ名を付ける`：`https://github.com/haoblackj/penguinEx/issues/12` → 文字が `penguinEx#12 ...`。
+  - `別のリポジトリはリポジトリ名を付ける`：`https://github.com/haoblackj/example-repo/issues/12` → 文字が `example-repo#12 ...`。
   - `gh issue create の出力で足される`：`$.tool.call({ tool: 'Bash', command: 'gh issue create ...' })` に、エンジンの代わりの `tool.call` hook が stdout に URL を返す → リンクが出る。
   - `四つ目は省かれ、新しいものが左`：#1〜#4 の URL を順に送る → リンクは #4、#3、#2 の順で三つ。
   - `store の前の値から戻る`：`store.get` が `[Entry 73 shown]` を返す → `session.start` 後にリンクが出て、`gh api` は呼ばれない（タイトルがあるもの）。

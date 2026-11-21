@@ -10,6 +10,8 @@ install.sh
 install-cloud.sh
 install-cloud.bats
 cloud-skills.txt
+# マシンごとのパスをローカルの data から読むテンプレートの試験。ホームへは配らない
+local-paths.bats
 docs
 # bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
 ideas

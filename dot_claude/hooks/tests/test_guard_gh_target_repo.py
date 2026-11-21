@@ -14,7 +14,7 @@ REAL_GH_ALIASES = guard.gh_aliases
 
 OWN = {'haoblackj'}
 # Real node IDs look like IC_kwDO...; the hook only picks up IDs of that shape.
-NODE_OWNERS = {'IC_kwDOown0001': 'haoblackj', 'IC_kwDOother01': 'kot149'}
+NODE_OWNERS = {'IC_kwDOown0001': 'haoblackj', 'IC_kwDOother01': 'someone'}
 
 
 def resolve(node_id):
@@ -51,14 +51,14 @@ def git(cwd, *args):
 
 @pytest.fixture
 def repo(tmp_path):
-    """origin = haoblackj, upstream = kot149, one local commit not on any remote."""
+    """origin = haoblackj, upstream = someone, one local commit not on any remote."""
     path = tmp_path / 'work'
     path.mkdir()
     git(path, 'init', '-q', '-b', 'main')
     git(path, 'config', 'user.email', 't@example.com')
     git(path, 'config', 'user.name', 't')
-    git(path, 'remote', 'add', 'origin', 'https://github.com/haoblackj/zmk-workspace')
-    git(path, 'remote', 'add', 'upstream', 'https://github.com/kot149/zmk-workspace.git')
+    git(path, 'remote', 'add', 'origin', 'https://github.com/haoblackj/example-fork')
+    git(path, 'remote', 'add', 'upstream', 'https://github.com/someone/example-fork.git')
     git(path, 'commit', '-q', '--allow-empty', '-m', 'docs: local work')
     return path
 
@@ -71,14 +71,14 @@ def test_issue_create_without_repo_is_denied():
 
 
 def test_issue_create_on_own_repo_passes():
-    assert decide('gh issue create -R haoblackj/zmk-workspace --title t --body b') is None
-    assert decide('gh issue create --repo=haoblackj/zmk-workspace --title t --body b') is None
+    assert decide('gh issue create -R haoblackj/example-fork --title t --body b') is None
+    assert decide('gh issue create --repo=haoblackj/example-fork --title t --body b') is None
 
 
 def test_writes_to_other_owners_are_denied():
-    assert decide('gh issue create -R kot149/zmk-workspace --title t --body b') == 'deny'
+    assert decide('gh issue create -R someone/example-fork --title t --body b') == 'deny'
     assert decide('gh pr review https://github.com/other/r/pull/3 --approve') == 'deny'
-    assert decide('gh repo fork kot149/zmk-workspace') == 'deny'
+    assert decide('gh repo fork someone/example-fork') == 'deny'
 
 
 def test_repo_flag_after_the_subcommand_counts():
@@ -92,12 +92,12 @@ def test_url_target_names_the_repo():
 def test_reads_are_not_checked():
     assert decide('gh issue list') is None
     assert decide('gh pr view 3') is None
-    assert decide('gh api repos/kot149/r/issues/4 --jq .state') is None
+    assert decide('gh api repos/someone/r/issues/4 --jq .state') is None
 
 
 def test_api_write_uses_the_path_owner():
     assert decide('gh api -X PATCH repos/haoblackj/r/issues/4 -f state=closed') is None
-    assert decide('gh api -X PATCH repos/kot149/r/issues/4 -f state=closed') == 'deny'
+    assert decide('gh api -X PATCH repos/someone/r/issues/4 -f state=closed') == 'deny'
     assert decide('gh api repos/{owner}/{repo}/issues -f title=x') == 'deny'
 
 
@@ -143,7 +143,7 @@ def test_aliases_are_expanded_before_the_check(aliases):
     assert decide('gh co 3') is None
     assert decide('gh ic --title t --body b') == 'deny'
     assert decide('gh ic -R haoblackj/r --title t --body b') is None
-    assert decide('gh icr kot149/r --title t --body b') == 'deny'
+    assert decide('gh icr someone/r --title t --body b') == 'deny'
     assert decide('gh icr haoblackj/r --title t --body b') is None
 
 
@@ -159,10 +159,10 @@ def test_unknown_subcommands_are_denied(aliases):
 def test_known_extensions(aliases):
     assert decide('gh q') is None
     assert decide('gh token generate --app-id 1') is None
-    assert decide('gh dep list --owner kot149') is None
+    assert decide('gh dep list --owner someone') is None
     assert decide('gh dep') == 'deny'
     assert decide('gh dep approve --group g') == 'deny'
-    assert decide('gh dep merge --group g -R haoblackj/a,kot149/b') == 'deny'
+    assert decide('gh dep merge --group g -R haoblackj/a,someone/b') == 'deny'
     assert decide('gh dep merge --group g -R haoblackj/a,haoblackj/b') is None
     assert decide('gh dep approve --group g --owner haoblackj') is None
 
@@ -178,7 +178,7 @@ def test_gh_as_a_plain_word_is_not_a_call(aliases):
 def test_ghf_is_checked_like_gh(aliases):
     # ghf（atusy/gh-fzf）は引数をそのまま gh に渡す。
     assert decide('ghf issue create --title t --body b') == 'deny'
-    assert decide('ghf issue create -R kot149/r --title t --body b') == 'deny'
+    assert decide('ghf issue create -R someone/r --title t --body b') == 'deny'
     assert decide('ghf issue create -R haoblackj/r --title t --body b') is None
     assert decide('ghf issue') is None
     assert decide('ghf repo fzf | ghf repo clone') is None
@@ -186,7 +186,7 @@ def test_ghf_is_checked_like_gh(aliases):
 
 def test_ghf_write_fed_from_a_pipe_is_denied(aliases):
     # パイプの標準入力は ghf が最後の引数として gh に渡すので、投稿先を確かめられない。
-    assert decide('echo kot149/r | ghf repo fork') == 'deny'
+    assert decide('echo someone/r | ghf repo fork') == 'deny'
     assert decide('echo x | ghf issue create -R haoblackj/r --title t') == 'deny'
 
 
@@ -194,12 +194,12 @@ def test_gh_pr_body_is_checked_as_pr_edit(tmp_path):
     body = tmp_path / 'b.md'
     body.write_text('one\ntwo\nthree\n')
     assert decide(f'gh-pr-body set haoblackj/r 3 {body}') is None
-    assert decide(f'gh-pr-body set --force kot149/r 3 {body}') == 'deny'
-    assert decide(f'gh-pr-body restore {body} kot149/r 3') == 'deny'
-    assert decide('gh-pr-body get kot149/r 3') is None
-    body.write_text('see kot149/zmk-workspace#4\ntwo\nthree\n')
+    assert decide(f'gh-pr-body set --force someone/r 3 {body}') == 'deny'
+    assert decide(f'gh-pr-body restore {body} someone/r 3') == 'deny'
+    assert decide('gh-pr-body get someone/r 3') is None
+    body.write_text('see someone/example-fork#4\ntwo\nthree\n')
     assert decide(f'gh-pr-body set haoblackj/r 3 {body}') == 'deny'
-    assert decide(f'~/.local/bin/gh-pr-body set kot149/r 3 {body}') == 'deny'
+    assert decide(f'~/.local/bin/gh-pr-body set someone/r 3 {body}') == 'deny'
 
 
 def test_variable_subcommands_are_denied():
@@ -209,7 +209,7 @@ def test_variable_subcommands_are_denied():
 
 def test_help_as_an_option_value_is_not_help(aliases):
     assert decide('gh issue create --help') is None
-    assert decide('gh issue create -R kot149/r --title --help') == 'deny'
+    assert decide('gh issue create -R someone/r --title --help') == 'deny'
     assert decide('gh issue create --title --help') == 'deny'
     assert decide('gh dep approve --group --help') == 'deny'
     assert decide('gh dep approve --help') is None
@@ -252,11 +252,11 @@ def test_graphql_query_passes():
 def test_reference_to_another_owners_issue_in_the_body_is_denied(tmp_path):
     # 2026-11-02: a state comment on an own issue named another owner's issue and left a
     # cross-reference on it.
-    assert decide('gh issue comment 2 -R haoblackj/r --body "see kot149/zmk-workspace#4"') == 'deny'
+    assert decide('gh issue comment 2 -R haoblackj/r --body "see someone/example-fork#4"') == 'deny'
     assert decide('gh issue comment 2 -R haoblackj/r --body '
-                  '"https://github.com/kot149/zmk-workspace/issues/4"') == 'deny'
+                  '"https://github.com/someone/example-fork/issues/4"') == 'deny'
     body = tmp_path / 'state.md'
-    body.write_text('別件: kot149/zmk-workspace#4 に誤って立てた\n', encoding='utf-8')
+    body.write_text('別件: someone/example-fork#4 に誤って立てた\n', encoding='utf-8')
     assert decide(f'gh issue comment 2 -R haoblackj/r --body-file {body}') == 'deny'
     assert decide(f'gh api -X PATCH repos/haoblackj/r/issues/comments/1 -F body=@{body}') == 'deny'
 
@@ -290,7 +290,7 @@ def test_body_piped_from_an_unknown_program_is_denied():
 
 
 def test_mentions_of_other_users_are_denied():
-    assert decide('gh issue comment 1 -R haoblackj/r --body "cc @kot149"') == 'deny'
+    assert decide('gh issue comment 1 -R haoblackj/r --body "cc @someone"') == 'deny'
     assert decide('gh issue comment 1 -R haoblackj/r --body "cc @haoblackj"') is None
     assert decide('gh issue comment 1 -R haoblackj/r --body "use `@reviewer` here"') is None
     assert decide('gh issue comment 1 -R haoblackj/r --body "mail a@example.com"') is None
@@ -300,22 +300,22 @@ def test_redirect_links_to_other_owners_pass():
     # redirect.github.com 経由の URL は相手に参照の記録を残さない（公式文書と、
     # 2026-11-03 にリーダーのリポジトリで実際に確かめた結果）。
     assert decide('gh issue comment 2 -R haoblackj/r --body '
-                  '"see https://redirect.github.com/kot149/zmk-workspace/issues/4"') is None
+                  '"see https://redirect.github.com/someone/example-fork/issues/4"') is None
 
 
 def test_url_reference_denial_suggests_redirect():
     _, reason = guard.decision('gh issue comment 2 -R haoblackj/r --body '
-                               '"see https://github.com/kot149/zmk-workspace/issues/4"',
+                               '"see https://github.com/someone/example-fork/issues/4"',
                                owners=OWN, resolve_node_owner=resolve)
-    assert 'https://redirect.github.com/kot149/zmk-workspace/issues/4' in reason
-    _, reason = guard.decision('gh issue comment 2 -R haoblackj/r --body "see kot149/zmk-workspace#4"',
+    assert 'https://redirect.github.com/someone/example-fork/issues/4' in reason
+    _, reason = guard.decision('gh issue comment 2 -R haoblackj/r --body "see someone/example-fork#4"',
                                owners=OWN, resolve_node_owner=resolve)
-    assert 'https://redirect.github.com/kot149/zmk-workspace/issues/4' in reason
+    assert 'https://redirect.github.com/someone/example-fork/issues/4' in reason
 
 
 def test_own_and_bare_references_pass():
     assert decide('gh issue comment 2 -R haoblackj/r --body "see haoblackj/r#3 and #4"') is None
-    assert decide('gh issue comment 2 -R haoblackj/r --body "upstream is kot149/zmk-workspace"') is None
+    assert decide('gh issue comment 2 -R haoblackj/r --body "upstream is someone/example-fork"') is None
 
 
 # --- shell parsing -----------------------------------------------------------------------
@@ -328,7 +328,7 @@ def test_every_gh_in_a_compound_command_is_checked():
 def test_gh_after_any_prefix_is_checked():
     for prefix in ('timeout 30', 'nice -n 5', 'stdbuf -oL', 'echo 1 | xargs', 'time -p', 'flock /x'):
         assert decide(f'{prefix} gh issue create --title t') == 'deny', prefix
-        assert decide(f'{prefix} gh issue create -R kot149/r --title t') == 'deny', prefix
+        assert decide(f'{prefix} gh issue create -R someone/r --title t') == 'deny', prefix
         assert decide(f'{prefix} gh issue create -R haoblackj/r --title t --body b') is None, prefix
     assert decide('if gh issue create --title t; then :; fi') == 'deny'
     assert decide('echo `gh issue create --title t`') == 'deny'
@@ -336,7 +336,7 @@ def test_gh_after_any_prefix_is_checked():
 
 def test_gh_inside_quoted_commands_is_checked():
     assert decide('bash -c "gh issue create --title t"') == 'deny'
-    assert decide("ssh host 'gh issue comment 1 -R kot149/r --body x'") == 'deny'
+    assert decide("ssh host 'gh issue comment 1 -R someone/r --body x'") == 'deny'
     assert decide('echo "$(gh issue create --title t)"') == 'deny'
     assert decide('echo "gh issue create --title t" | bash') == 'deny'
     assert decide('bash -c "gh issue create -R haoblackj/r --title t --body b"') is None
@@ -349,8 +349,8 @@ def test_bodies_and_commit_messages_are_not_read_as_commands():
 
 
 def test_reference_after_japanese_is_denied():
-    assert decide('gh issue comment 1 -R haoblackj/r --body "別件はkot149/zmk-workspace#4で"') == 'deny'
-    assert decide('gh issue comment 1 -R haoblackj/r --body "確認お願いします@kot149"') == 'deny'
+    assert decide('gh issue comment 1 -R haoblackj/r --body "別件はsomeone/example-fork#4で"') == 'deny'
+    assert decide('gh issue comment 1 -R haoblackj/r --body "確認お願いします@someone"') == 'deny'
 
 
 def test_scripts_that_call_gh_are_checked(tmp_path):
@@ -358,7 +358,7 @@ def test_scripts_that_call_gh_are_checked(tmp_path):
     shell.write_text('#!/bin/sh\ngh issue create --title t\n')
     assert decide(f'bash {shell}') == 'deny'
     assert decide(str(shell)) == 'deny'
-    shell.write_text('#!/bin/sh\ngh issue list -R kot149/r\n')
+    shell.write_text('#!/bin/sh\ngh issue list -R someone/r\n')
     assert decide(f'bash {shell}') is None
 
 
@@ -385,7 +385,7 @@ def test_push_to_own_remote_passes(repo):
 
 def test_push_to_other_owners_remote_is_denied(repo):
     assert decide('git push upstream main', cwd=str(repo)) == 'deny'
-    assert decide('git push https://github.com/kot149/zmk-workspace main', cwd=str(repo)) == 'deny'
+    assert decide('git push https://github.com/someone/example-fork main', cwd=str(repo)) == 'deny'
 
 
 def test_push_without_remote_uses_the_branch_remote(repo):
@@ -396,7 +396,7 @@ def test_push_without_remote_uses_the_branch_remote(repo):
 
 
 def test_push_of_commits_that_reference_other_issues_is_denied(repo):
-    git(repo, 'commit', '-q', '--allow-empty', '-m', 'fix: see kot149/zmk-workspace#4')
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'fix: see someone/example-fork#4')
     assert decide('git push origin main', cwd=str(repo)) == 'deny'
 
 
@@ -407,10 +407,10 @@ def test_push_with_unresolvable_remote_is_denied(repo):
 # --- other paths to the GitHub API -------------------------------------------------------
 
 def test_curl_writes_to_github_are_checked():
-    assert decide('curl -X POST https://api.github.com/repos/kot149/r/issues -d @b.json') == 'deny'
+    assert decide('curl -X POST https://api.github.com/repos/someone/r/issues -d @b.json') == 'deny'
     assert decide('curl -X POST https://api.github.com/repos/haoblackj/r/issues -d @b.json') is None
     assert decide('curl -d x https://api.github.com/graphql') == 'deny'
-    assert decide('curl https://api.github.com/repos/kot149/r/issues/4') is None
+    assert decide('curl https://api.github.com/repos/someone/r/issues/4') is None
 
 
 def test_programs_talking_to_the_github_api_are_denied(tmp_path):
@@ -427,12 +427,12 @@ def test_mcp_github_writes_need_own_owner():
                               {'owner': 'haoblackj', 'repo': 'r', 'title': 't', 'body': 'b'},
                               OWN)[0] is None
     assert guard.mcp_decision('mcp__github__create_issue',
-                              {'owner': 'kot149', 'repo': 'r', 'title': 't'}, OWN)[0] == 'deny'
+                              {'owner': 'someone', 'repo': 'r', 'title': 't'}, OWN)[0] == 'deny'
     assert guard.mcp_decision('mcp__github__add_issue_comment',
                               {'owner': 'haoblackj', 'repo': 'r', 'body': 'see other/r#2'},
                               OWN)[0] == 'deny'
     assert guard.mcp_decision('mcp__github__create_issue', {'title': 't'}, OWN)[0] == 'deny'
-    assert guard.mcp_decision('mcp__github__get_issue', {'owner': 'kot149', 'repo': 'r'},
+    assert guard.mcp_decision('mcp__github__get_issue', {'owner': 'someone', 'repo': 'r'},
                               OWN)[0] is None
 
 
@@ -454,5 +454,5 @@ def test_hook_emits_permission_decision():
 
 def test_hook_handles_mcp_payloads():
     result = run_hook({'tool_name': 'mcp__github__create_issue',
-                       'tool_input': {'owner': 'kot149', 'repo': 'r', 'title': 't'}})
+                       'tool_input': {'owner': 'someone', 'repo': 'r', 'title': 't'}})
     assert result['permissionDecision'] == 'deny'
