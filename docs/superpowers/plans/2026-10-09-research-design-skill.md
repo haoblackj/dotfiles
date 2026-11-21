@@ -8,7 +8,7 @@
 
 **Tech Stack:** Markdown、Python 3（標準ライブラリ）、pytest 9、chezmoi
 
-**Spec:** haoblackj/penguinEx の `docs/superpowers/specs/2026-10-09-research-design-skill-design.md`（承認済み、コミット 1eeefda）。置き場所と開発の流れは、このリポジトリの `docs/superpowers/specs/2026-10-09-self-made-skills-design.md`（dotfiles#48 の決定）。実装の issue は dotfiles#51。
+**Spec:** 別の非公開リポジトリ（以下 元のリポジトリ）の `docs/superpowers/specs/2026-10-09-research-design-skill-design.md`（承認済み、コミット 1eeefda）。置き場所と開発の流れは、このリポジトリの `docs/superpowers/specs/2026-10-09-self-made-skills-design.md`（dotfiles#48 の決定）。実装の issue は dotfiles#51。
 
 ## Global Constraints
 
@@ -18,7 +18,7 @@
 - スクリプトは中身の良し悪しを判定しない。止めるのは、必須の項目の欠けと「答えによって判断がどう変わるか」の欠けだけ（spec「スクリプトの検査」）。
 - スクリプトは Python の標準ライブラリだけで書く。
 - 分野の下調べは `researcher` を haiku で走らせ、分野の候補を並べるところで止め、問いの答えを探させない（spec「範囲」「担い手と費用」）。
-- 参照ファイルに写す引用と数値は、書く者が出典を自分で取得して逐語で照合する。サブエージェントの報告や penguinEx#97 の要約から、照合せずに写さない。照合できなかったものは、参照ファイルに「未照合」または「未確認」と明記する。
+- 参照ファイルに写す引用と数値は、書く者が出典を自分で取得して逐語で照合する。サブエージェントの報告や、元のリポジトリでこのスキルを頼んだ issue（以下 元の issue）の要約から、照合せずに写さない。照合できなかったものは、参照ファイルに「未照合」または「未確認」と明記する。
 - ファイルの編集は Read / Edit / Write で行う。sed や python のワンライナーで書き換えない。
 - コミットはパスを名指しする。既存ファイルは `git commit -- <パス>`、新規ファイルは `git add -N -- <パス>` を1ファイルずつ打ってから `git commit -- <パス>`。`git commit -a` と裸の `git commit` は使わない。
 - PR はマージコミットで取り込む（スカッシュを推さない）。
@@ -86,7 +86,7 @@
 ```python
 """post_design.py の単体テスト。
 
-spec: haoblackj/penguinEx の
+spec: 別の非公開リポジトリの
 docs/superpowers/specs/2026-10-09-research-design-skill-design.md「スクリプトの検査」。
 """
 import contextlib
@@ -362,7 +362,7 @@ if __name__ == "__main__":
 """リサーチデザインの JSON を検査し、Markdown に整形して issue コメントとして投稿する。
 
 中身の良し悪しは判定しない。必須の項目が欠けているときだけ、投稿せずに止まる
-（spec: haoblackj/penguinEx の
+（spec: 別の非公開リポジトリの
 docs/superpowers/specs/2026-10-09-research-design-skill-design.md「スクリプトの検査」）。
 
 使い方:
@@ -589,7 +589,7 @@ git commit -- skills/research-design/scripts/post_design.py skills/research-desi
 | A | de Vaus『Research Design in Social Research』は、社会調査を記述（descriptive）と説明（explanatory）の2種に分ける | `empirical-descriptive.md`、`empirical-causal.md` |
 | B | Malhotra『Marketing Research』は、経営上の意思決定問題（management decision problem）を行動志向、マーケティングリサーチ問題（marketing research problem）を情報志向とする | `purpose-to-question.md` |
 | C | Repko は、関係しうる分野を「その研究対象に、問題や問いにかかわる現象を少なくとも一つ含む分野」と定義し、分野をしばしば3つか4つに絞る | `interdisciplinary.md` |
-| D | 分野を絞る基準「問題に直接つながる、研究の蓄積がある、有力な理論がある」（spec の流れの5。出どころが penguinEx#97 の調査結果に無い） | `interdisciplinary.md` |
+| D | 分野を絞る基準「問題に直接つながる、研究の蓄積がある、有力な理論がある」（spec の流れの5。出どころが元の issue の調査結果に無い） | `interdisciplinary.md` |
 | E | Repko の段階のうち、関係する分野の特定、洞察の対立の特定、共通の土台の作成の、本文での説明 | `interdisciplinary.md` |
 | F | Alvesson & Sandberg (2011) の、前提を崩して問いを作る段階（problematization）の中身 | `purpose-to-question.md` |
 
@@ -606,7 +606,7 @@ git commit -- skills/research-design/scripts/post_design.py skills/research-desi
 - [ ] **Step 3: dotfiles#51 にコメントを書く**
 
 見出しは `## 出典の裏取り` とし、上の表の記号ごとに、照合済み、未照合、未確認のどれかと根拠を書く。
-D が見つからなかったときは、`interdisciplinary.md` の絞り込みの基準を、照合できた C と E の範囲で書き直すことと、spec と食い違うことをコメントに書く。spec の書き換えは penguinEx 側の承認が要るので、このプランでは行わない。
+D が見つからなかったときは、`interdisciplinary.md` の絞り込みの基準を、照合できた C と E の範囲で書き直すことと、spec と食い違うことをコメントに書く。spec の書き換えは spec の置き場の側の承認が要るので、このプランでは行わない。
 
 ---
 
@@ -643,7 +643,7 @@ D が見つからなかったときは、`interdisciplinary.md` の絞り込み�
 ```
 
 「出典」には、項目ごとに URL と照合の状態（照合済み、未照合、未確認）を書く。
-引用を載せるときは、書く時点で出典を取得して逐語で照合する（penguinEx#97 で照合済みとされたものも、このリポジトリへ写す前に取り直す）。
+引用を載せるときは、書く時点で出典を取得して逐語で照合する（元の issue で照合済みとされたものも、このリポジトリへ写す前に取り直す）。
 
 各ファイルに載せる中身:
 
@@ -830,7 +830,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/post_design.py <design.json> --repo <owner/n
 - [ ] **Step 4: 公開してよい中身かを確かめる**
 
 確かめること:
-- `skills/research-design/` の下と symlink テンプレートに、非公開リポジトリの名前と、その中身（個別の依頼の経緯）が書かれていないこと（`AZ-104`、`claude-private`、`penguinEx#97` を grep して出ないこと。spec のリンクとしての `penguinEx` の名前は、SKILL.md と参照ファイルには書かない）。
+- `skills/research-design/` の下と symlink テンプレートに、非公開リポジトリの名前と、その中身（個別の依頼の経緯）が書かれていないこと（非公開リポジトリの名前を grep して出ないこと。spec の置き場のリポジトリの名前は、SKILL.md と参照ファイルには書かない）。
 - 参照ファイルの引用のすべてに、照合の状態が付いていること。
 
 - [ ] **Step 5: コミットする**
@@ -902,7 +902,7 @@ dotfiles#51 に PR へのリンクを状態コメントで書き、ラベルを 
   - 読まれた: README の「クラウドで配るもの」の表の `skills/` の行から「クラウドで読まれるかは最初のスキルで確かめる」を外す変更を、別の PR で出す。#48 を閉じる。
   - 読まれなかった: spec のとおり、`install-cloud.sh` の写す処理を外し、クラウドでは使えないことを README に書く変更を、別の PR で出す。
 - dotfiles#51 に `## 状態` コメント（済んだこと、決定、次の一手）を書き、一つ前の状態コメントをたたむ。issue を閉じる。
-- penguinEx#97 に、スキルが使えるようになったことをコメントする。受け入れの試験は penguinEx 側とリーダーが持つことも書く。
+- 元の issue に、スキルが使えるようになったことをコメントする。受け入れの試験は元のリポジトリの側とリーダーが持つことも書く。
 
 ---
 

@@ -2,7 +2,7 @@
 """リサーチデザインの JSON を検査し、Markdown に整形して issue コメントとして投稿する。
 
 中身の良し悪しは判定しない。必須の項目が欠けているときだけ、投稿せずに止まる
-（spec: haoblackj/penguinEx の
+（spec: 別の非公開リポジトリの
 docs/superpowers/specs/2026-10-09-research-design-skill-design.md「スクリプトの検査」）。
 
 使い方:

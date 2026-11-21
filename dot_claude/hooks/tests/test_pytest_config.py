@@ -3,7 +3,7 @@
 **期待値は設定から読み直さない。**ここに書き下した列挙が正であり、
 `pyproject.toml` の側がこれと一致することを確かめる。
 
-spec: penguinEx の
+spec: 別の非公開リポジトリの
 docs/superpowers/specs/2026-09-06-test-foundation-design.md の層3。
 """
 import os
@@ -63,7 +63,7 @@ class PytestConfigTest(unittest.TestCase):
 
     def test_no_pythonpath_is_needed_here(self):
         # **このリポジトリのテストはどれも素の兄弟 import に依存しない**
-        # （importlib.util で自前に読む）。penguinEx 側と違って pythonpath は
+        # （importlib.util で自前に読む）。元のリポジトリの側と違って pythonpath は
         # 要らない。足すと「なぜ要るのか」の根拠が無い設定が残る。
         self.assertNotIn("pythonpath", _ini())
 

@@ -7,7 +7,7 @@
 #   (2) 名前付きの subagent_type で、ローカルの .claude/agents/ に定義があり、
 #       その frontmatter に model が無く、tool_input にも model が無い。
 # Explore や code-review のように定義がローカルに見つからない型は、こちらが書いて
-# いない経路を推測で止めると壊れるため対象外にする(penguinEx issue #54)。
+# いない経路を推測で止めると壊れるため対象外にする(別の非公開リポジトリの issue)。
 # ローカルに定義があるものはこちらが書いた経路なので、この理由に反しない。
 #
 # (2) の定義の探し方は Claude Code の解決順に合わせる(公式 docs/en/sub-agents)。
@@ -40,7 +40,7 @@
 # tool_result に is_error:true と理由文がそのまま入る。ただし is_error を持たない
 # tool_result も混ざる(実測で 79件中16件)ため、is_error だけでは拒否と判定できない。
 # 集計はこの目印と is_error の両方で照合する。**この文字列を変えないこと。**
-# 変えると過去の記録と突き合わせられなくなる(penguinEx issue #44 の受け入れ条件7)。
+# 変えると過去の記録と突き合わせられなくなる(別の非公開リポジトリの issue の受け入れ条件7)。
 set -uo pipefail
 
 payload=$(cat)

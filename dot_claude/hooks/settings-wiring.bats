@@ -29,7 +29,9 @@ PY
     python3 - "$S" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1])); h=d.get("hooks",{})
-assert not h.get("PostCompact"), "PostCompact(重複recovery)が残存"
+# Orca が自分で書くフック（~/.orca/agent-hooks/ を呼ぶ物）は別物として許す
+left=[x["command"] for g in h.get("PostCompact",[]) for x in g.get("hooks",[]) if "/.orca/agent-hooks/" not in x.get("command","")]
+assert not left, "PostCompact(重複recovery)が残存"
 print("PASS")
 PY
 }

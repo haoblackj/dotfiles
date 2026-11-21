@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-# 設定の門（penguinEx issue #16、テスト基盤の層3）。追加の依存はゼロ。
+# 設定の門（別の非公開リポジトリの issue、テスト基盤の層3）。追加の依存はゼロ。
 #
 # **`strict` は pytest 9 の機能。**strict_config・strict_markers・
 # strict_xfail・strict_parametrization_ids を一度に有効にする。
@@ -12,7 +12,7 @@ testpaths = ["dot_claude/hooks/tests", "skills/research-design/tests"]
 
 # **`pythonpath` は置かない。**このリポジトリのテストはどれも
 # importlib.util で対象を自前に読み込んでおり、素の兄弟 import に
-# 依存していない（penguinEx 側とはここが違う）。
+# 依存していない（元のリポジトリの側とはここが違う）。
 
 log_level = "INFO"
 addopts = ["-ra"]
@@ -25,9 +25,9 @@ filterwarnings = [
     # するので pytest がキャッシュを書けない（このリポジトリでは実測1件）。
     # 層1の設計そのものが生む警告で、テストの欠陥ではない。
     "default::pytest.PytestCacheWarning",
-    # penguinEx 側と同じ許可を対で置く。**このリポジトリ単体の走行では
+    # 元のリポジトリの側と同じ許可を対で置く。**このリポジトリ単体の走行では
     # 現時点で発火していない**（実測: 許可を足した状態で 80 passed、
     # 3 warnings）が、両リポジトリの設定を同じ形に保つ。
-    # 記録: penguinEx の ideas/bugs/2026-09-07-pytest-unraisable-deallocator.md
+    # 記録: 別の非公開リポジトリの ideas/bugs/2026-09-07-pytest-unraisable-deallocator.md
     "default::pytest.PytestUnraisableExceptionWarning",
 ]

@@ -1,6 +1,6 @@
 """post_design.py の単体テスト。
 
-spec: haoblackj/penguinEx の
+spec: 別の非公開リポジトリの
 docs/superpowers/specs/2026-10-09-research-design-skill-design.md「スクリプトの検査」。
 """
 import contextlib
