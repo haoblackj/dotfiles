@@ -6,3 +6,9 @@
 .config/herdr/plugins/local/open-github
 # 上流の japanese-guard.py の Stop hook（Mod の skills/japanese-guard に置き換えた。dotfiles#79）
 .claude/hooks/japanese-guard.py
+# Herdr で新しいタブへ引き継いだスキルとスクリプト（Orca の公式スキル orca-cli に置き換えた）
+.claude/skills/session-handoff
+.claude/scripts/session-handoff.sh
+.claude/scripts/loop-handoff.sh
+.claude/scripts/herdr-closable.sh
+.claude/scripts/herdr-start-claude.sh

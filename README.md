@@ -294,7 +294,7 @@ issue と PR は議論とレビューに使い、状態は持たせない。auto
 - 優先の順: 安全と権限の決まり（指示範囲の厳守、本番データの保護、GitHub を含む外への書き込みの制限、環境の境界（WSL/Windows）、chezmoi の扱い、破壊的な操作）、いまの会話でのリーダーの指示、作業記録の有効な判断（出どころが端末からの入力の物）、CLAUDE.md の一般の決まり、作業記録のうち Claude の技術の判断、そのほか（memory、issue、圧縮の要約）。記録はいまの指示を覆さない。
 - 読み戻し: `dot_claude/hooks/executable_work-record-context.py` が SessionStart（startup、resume、clear、compact）で、今のリポジトリとそのワークツリーの開いている記録の一覧（題、状態、次の一手、決めてほしいことの件数、場所）だけを差し込む。本文は Claude が要るときに読む。圧縮のあとには、一つ前の圧縮の境目（無ければ会話の始め）より後の端末からの入力（queued_command、Claude の候補を選んだ入力を含む。新しい 8 件、各 400 文字まで。省いたら件数と `prts candidates --session <id>` を示す）を「端末からの入力（リーダーの入力として扱う）」として原文で添え（手元のコンテキストだけで、記録には写さない）、要約に溶けた新しい指示を古い記録が覆さないようにする。
 - 書き忘れの合図: 同じフックが UserPromptSubmit で、開いている記録の最後のコミットが HEAD のコミットより古く、記録に未コミットの変更が無いときに一度だけ知らせる。
-- 引き継ぎ: `session-handoff.sh` と `loop-handoff.sh` は作業記録のパスを受け取り、引き継ぎ先に読ませる。
+- 引き継ぎ: Orca の公式スキル `orca-cli` で新しいセッションを立てるとき、作業記録のパスを渡して引き継ぎ先に読ませる。
 - 状況の説明: prts の Stop フックが、前書きの `wish:` で記録を望みに結び、望みの画面に記録の中身を出す（prts のリポジトリの `docs/dashboard-contract.md`）。
 - テスト: `dot_claude/hooks/tests/test_work_record_context.py`
 
@@ -381,25 +381,23 @@ curl -s 'http://127.0.0.1:8080/usage?provider=both' | jq .   # serve が値を�
 |---|---|
 | 下の stop と二段目に当たらないとき | 繰り返しの `CronCreate`（固定間隔のループ）を deny し、自己ペースの `/loop` へ回させる。一度きりは通す |
 | 振り先が stop | 止める以外の予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書いてループを止めさせる |
-| コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書き、新しいタブへ引き継がせる |
+| コンテキストが二段目（1M の窓で 400K、使用率 75%） | 予約と新しいループを deny（一度きりの `CronCreate` も）。状態を書き、Orca の新しいターミナルへ引き継がせる |
 | コンテキストが一段目（1M の窓で 300K、使用率 50%） | 予約を一度だけ deny し、作業記録を今に合わせさせる |
 | 振り先が offload か lean | 間隔が 20 分より短い予約を deny |
 
 判定は上の表の順で、先に当たったものだけが効く。
 通した予約の prompt を覚えておき、同じ prompt の発火（UserPromptSubmit）には、コンテキストの二段目と一段目をその回の作業の前に知らせる（一段目は一度だけ）。
 固定間隔のループは発火をフックから止められないので、既定で作らせない。`LOOP_GUARD_ALLOW_RECURRING_CRON=1` で許したときだけ、発火に振り先（stop、逼迫）の知らせも入れる。振り先のファイルはツールを呼んだときにしか書き換わらず、発火の時点では古いことがあるため、自己ペースのループでは予約の時点の判定に任せる。
-二段目の引き継ぎは `dot_claude/scripts/executable_loop-handoff.sh`（配置先 `~/.claude/scripts/loop-handoff.sh`）が受け持つ。
-Claude が渡すのは作業記録（リポジトリの `docs/work/<作業名>.md`）、引き継ぎ先のセッションの名前（`--title`、作業の中身を表す 20 文字以内。タブ名にもなる）、モデル、エフォート、ループの指示だけで、今のペインと同じワークスペースと cwd でのタブの作成、シェルの立ち上がりを待っての `claude` の起動、引き継ぎの文面はスクリプトが決まった形で行う。
-git の作業コピーの `docs/work/` 直下の `.md` でなければ止まる。issue のコメントの URL は受け付けない（進行状態と決めたことを issue に持たせない、#86 の 2026-11-19 の決定）。
+二段目の引き継ぎは、Orca の公式スキル `orca-cli` の手順で、同じワークスペースに新しい Claude Code のターミナルを立てて行わせる。
 
 コンテキストの閾値は `CONTEXT_GUARD_*`、逼迫の間隔と固定間隔の許可は `LOOP_GUARD_*` の環境変数で差し替えられ、deny と知らせは `~/.local/state/claude-loop-guard/decisions.log` に残る。
-テストは `dot_claude/hooks/loop-guard.bats` と `dot_claude/scripts/loop-handoff.bats`。
+テストは `dot_claude/hooks/loop-guard.bats`。
 
 #### ループ以外の対話セッションの見張り
 
 `dot_claude/hooks/executable_chat-context-guard.sh`（UserPromptSubmit）が、コンテキストが大きくなったことを、応答の最後にリーダーへ一言知らせるよう指示する。
 Claude からは引き継がず、ターンも止めない。
-移る時機はリーダーが決め、「移って」「新しいセッションへ移って」と言われたときだけ、スキル `session-handoff` の手順で同じワークスペースの新しいタブへ移る（決定は haoblackj/dotfiles#87。#73 の「40% で自分から引き継ぐ」を置き換えた）。
+移る時機はリーダーが決め、「移って」「新しいセッションへ移って」と言われたときだけ、`orca-cli` スキルの引き継ぎ（handoff）の手順で新しいセッションへ移る（決定は haoblackj/dotfiles#87。#73 の「40% で自分から引き継ぐ」を置き換えた）。
 
 | コンテキスト | 知らせ |
 |---|---|
@@ -414,24 +412,17 @@ Claude からは引き継がず、ターンも止めない。
 対話の閾値は `CONTEXT_GUARD_CHAT_HANDOFF_PCT` と `CONTEXT_GUARD_CHAT_URGENT_PCT` で差し替えられ、ループの 50% / 75% と 300K / 400K は変えない。
 知らせは `~/.local/state/claude-chat-context-guard/decisions.log` に残る。
 
-手順の実体は [`skills/session-handoff/SKILL.md`](skills/session-handoff/SKILL.md)。
 引き継ぐ状態は、作業記録（下の「作業記録」）を今に合わせてコミットしたもので、引き継ぎのための別のファイルや issue のコメントは書かない。
 引き継ぎ先は、作業記録の「判断の経緯」で状態が有効の物を過去の判断として読み、食い違ったときは CLAUDE.md の「作業記録」の優先の順に従う。「リーダーに決めてほしいこと」の Claude の案は答えが出るまで決定として扱わない。案が決めたこととして渡り、引き継いだ先が形にしてリーダーに断られたことがあるため（#86 の試し）。
-残りの仕事からモデルとエフォートと、作業の中身を表す 20 文字以内の名前を選び、`~/.claude/scripts/session-handoff.sh --state <作業記録> --cwd <作業フォルダかワークツリー> --title <名前> --model <モデル> --effort <エフォート>` で引き継ぐ。
-名前は `claude --name` で渡り、セッションのタイトルとタブ名になる。渡さないと最初の発言（引き継ぎの定型文）から題が作られ、「〇〇の引き継ぎ」になる（#91）。
-スクリプトはセッションを立てるだけで、引き継ぎの文面は打ち込まない。文面は成功の JSON の `prompt` で返り、呼んだ Claude が `ListAgents` に `--title` の名前が出たことを確かめて `SendMessage` で送る。`herdr agent prompt` で打ち込んだ文は、受けた側の記録でリーダー自身の入力と見分けがつかないため。`loop-handoff.sh` は `/loop` を打つ必要があるので、これまでどおり打ち込む。
-失敗したら出力をリーダーに報告して止まり、掃除へ進まない。
 
-成功したら `~/.claude/scripts/herdr-closable.sh list --exclude-pane <立てたペイン>` で候補を出す。
-元のセッションが各候補の `last_reply` を読み、そのセッションが自分の仕事について「閉じていい」とはっきり書いているものだけを、一覧の `pane` と `session_id` を組にして `~/.claude/scripts/herdr-closable.sh close <ペイン>=<session_id>...` に渡す。
-迷えば残し、セッションに宣言を求めない。
-スクリプトは自分自身、新しく立てたペイン、ループ中のセッション、応答後にユーザーの入力があるものなどを候補から外し、閉じる直前にも idle かを確かめる。
-他のペインがあるタブとワークスペースの最後のタブは閉じない。
-元のセッションで引き継いだ先、閉じたタブ、残した候補とその理由を報告し、最後に「このセッションは閉じていい」と書いて止まる。
-掃除の結果は引き継ぎ先へ渡す文面には入れない。
+テストは `dot_claude/hooks/chat-context-guard.bats` と `dot_claude/hooks/settings-wiring.bats`。
+`bats dot_claude/hooks/` で、ループ側を含めて確かめる。
 
-テストは `dot_claude/hooks/chat-context-guard.bats`、`dot_claude/hooks/settings-wiring.bats`、`dot_claude/scripts/session-handoff.bats`、`dot_claude/scripts/herdr-closable.bats`。
-`bats dot_claude/hooks/ dot_claude/scripts/` で、ループ側を含めて確かめる。
+#### Orca が手元に書く設定
+
+Orca は、`~/.claude/settings.json` に Claude Code のフック（`~/.orca/agent-hooks/` を呼ぶ物。エージェントの状態を Orca へ知らせる）を、`~/.claude/keybindings.json` に `ctrl+alt+g`（Orca のチャット画面）を書く。
+ソースに無いと `chezmoi apply` で消えるので、`linked/claude/settings.json` と `dot_claude/keybindings.json` に取り込んである。手で直さず、Orca を上げて書き換わったら取り込み直す。
+`env` の `CLAUDE_CODE_ENABLE_TODO_TOOLS` と CLAUDE.md の「Orca のサイドバーへのタスクと次の作業の候補」は、Orca のプラグイン Milestone がタスクの進捗と次の作業のカードを出すための物。
 
 ### クラウドセッション（Claude Code on the web）
 
