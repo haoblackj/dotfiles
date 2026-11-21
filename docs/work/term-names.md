@@ -26,6 +26,7 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 日本語圏の実践者の直し方（2026-11-21 にサブエージェントが調べた。多くは記事の要約で読んだ物。要旨）: 技術用語の自作の言い換えをそのまま論じた記事と「Claude語」に当たる呼び名は見つからなかった。近い現象は「AI-Slop な日本語」「AI臭」「翻訳調」と呼ばれる。yomiyasu の作者（Zenn、2026-10-01）と溝口コージ氏（Zenn、2026-07-13）は、禁止語の一覧は別の語への置き換えに移るだけで効きにくいと書いている。yomiyasu は自分の SKILL.md もリンターで検査し、指示文の文体が出力に移るのを防いでいる。NCDC のいばらき氏（Zenn、2026-09-01）は、gh で投稿する日本語を Stop フックで Claude Haiku に判定させて差し戻している（それでも半分以上は手で直したと書いている）。textlint-rule-preset-ai-writing（azu 氏）は「表現でなく構造を縛る」方針で、自作の言い換えを見つける規則は無い。日本語で起きやすい理由を根拠付きで示した研究は見つからなかった。
   - 出典: https://zenn.dev/algoartis/articles/0b1c731881b25c 、https://zenn.dev/coji/articles/natural-japanese-ai-smell-lint 、https://zenn.dev/ncdc/articles/6ea029ba5ecf65 、https://github.com/textlint-ja/textlint-rule-preset-ai-writing
 - 英語の報告を止めるフックが働いた最初は 11 月 2 日ごろの記録で、9 月 28 日の週の跳ね上がりの原因ではない。
+- 試しを本番に入れた後の実例（2026-11-21、別の作業のセッション）: サブエージェントのモデル（Opus）を報告で「段」と書き、リーダーが Claude語だと指摘した（出典: 端末からの入力（会話 d9ce697d、2026-11-21 10:49、発言 36daa49a））。グローバルの CLAUDE.md の Herdr の節が、モデルの選び方を「いちばん上の段と最大のエフォート」と書いており、指示文の言い換えがそのまま報告に出た例と見られる。直前にサブエージェントの起動を止めたフック（`guard-agent-model-unspecified.sh`）の知らせは「ティア」と書いていた。指示文やフックの知らせの語が報告に出る経路は、禁止の行を外す試しでは塞がらない（指示文の書き直しは未決）。
 - dotfiles には、応答の本文を Stop フックで機械的に調べる前例がある（`dot_claude/hooks/executable_stop-fabricated-turn-guard.py`。`last_assistant_message` を読み、見つけたら `decision: block` で書き直させる）。
 
 - 前後の比べ方（2026-11-21 に審査の指摘を受けて決めた。Claude の判断）:
