@@ -60,6 +60,8 @@ wish: state-context
 - 編集の履歴の版を消せない件（2026-11-21。GitHub は読んだだけ）: リーダーは dotfiles の admin で、公式文書の条件（コメントの投稿者か write 権限の人）を満たしており、権限は原因ではない。issue #91 と PR #95 の本文の履歴はどちらも今の版と作成時の版の 2 版で、非公開の物は作成時の版だけにある。公式文書の版の削除は「コメント」の履歴についてしか書かず、本文と初版を消せるかは書いていない（第三者の手順書は、本文の履歴は消せないことがあり Support に頼むと案内）。どちらが効いているかは試しの編集をしないと分けられない。公開の API に版を消す操作は無く、bot には画面も無いので、bot の認証情報でも正規の機能でも版は消せない。コメントを消すと、コメントと履歴は API から引けなくなり（前回の 43 件で確かめた）、タイムラインには誰が消したかを伏せた削除の印が残る。Support は機密データ（認証情報など）だけを扱うと書いており、本文の版の削除を受けるかは分からない。載せ直す候補のコメント 28 件は、ほかのコメントからのリンクが 7 本、リアクションは 0、リーダーが書いた物が 4 件。
 - 承認された整理の結果（2026-11-21）: 行う前に 42 件の今の本文が手元の控えと一致し、控えに本文と編集の全版があることを確かめた。コメント 28 件を、元の作成順に、bot による再掲と書いた見出しと元の id の印を付けて一般化した版で載せ直し、GitHub で本文を確かめた。元へのリンク 7 本を付け替えた（載せ直した版の中で 4 本、残るコメントの編集で 3 本。付け替えたコメントの前の版はリンクしか持たない）。リンクが残っていないことを確かめてから、元のコメント 28 件を消した。本文 14 件を編集した。後で API で、元のコメント 28 件が引けないこと、載せ直した 28 件が印を一つずつ持ち期待どおりの本文であること、本文 14 件が新しい文面と同じこと、新しい文面に非公開の名前が 0 であること、元へのリンクが 0 であることを確かめた。保留と失敗は 0 件。手順と状態は手元の記録で、途中で止まっても印と状態から重複なく再開できる。
 - 整理の後も残る物: 16 本文（今回の 14 と #91、#95）の前の版 17 版は、編集の履歴から読める（GitHub Support への依頼の文面を用意した）。消したコメントのタイムラインの削除の印（誰が消したかは伏せられる）。Git の履歴（main のコミットの本文と古いファイル、PR #98 の作業ブランチのコミット）。作成の時点の外の写し。
+- 取り込みの後の本番（2026-11-21）: `chezmoi diff ~/.claude` は 0 行を出すが、`chezmoi status ~/.claude` は `.claude/settings.json` と `.claude/keybindings.json` を両方とも MM と出す。diff の 0 行は、ソースとホームが同じことの根拠にならない。前の確かめ（11-20 の「`chezmoi diff ~/.claude` が 0 行」）も、同じ見方をしていた可能性がある。原因は別の作業（settings.json の件）が調べている。
+- 本番の作業コピーからの push の落ち方（2026-11-21）: pre-push の pre-commit は試験の約 11 分の間、未コミットの変更をよけている。その間に別のセッションが変更が消えたと見て置き直し、pre-commit は試験中にファイルが変わったとして置き直しを巻き戻し、push を落とした（bats 3072 件と pytest 203 件はどちらも失敗 0）。置き直しは同じ中身で、失われた物は無かった（会話の記録と今のファイルで確かめた）。本番の作業コピーには別の作業の未コミットの変更が長く残るので、この記録の push は、きれいな別のワークツリーから行う。
 - 範囲の外の残り（2026-11-21 の確かめで見つけた）: 今の表示に、非公開リポジトリの名前か、リーダーの短い言い回しが残る物が 14 件ある（コメント 10、本文 4。うち 9 件は 2026-09 の物）。監査の取り込みが 2026-10-01 より後に作られた issue と コメントだけを見ていたことと、名前の一覧に略称が無かったこと、短い言い回しの一部を拾わなかったことによる。issue と PR の題と、PR のレビューの本文には 0 件。14 件の今の本文と編集の全版は手元に控えた。承認の範囲の外なので、手を付けていない。
 
 ## 判断の経緯
@@ -320,7 +322,7 @@ wish: state-context
 - 状態: 有効（結果は判明した事実。この記録の更新は手元のコミットまで）
 
 ### 2026-11-21 採用: 元に戻せる操作は承認された物として進める
-- 出どころ: 端末からの入力（会話 3c33ee18、2026-11-21 03:22、発言 406c4255）
+- 出どころ: 端末からの入力（会話 3c33ee18、2026-11-21 03:22、発言 406c4255）。この入力を伝えた引き継ぎの文のほかの部分（入力の読み方、状況、進め方）は別の Claude が書いた物で、判断にしていない。
 - 要旨（Claude の要約）: 元に戻せる操作は承認してよい。作業ブランチに載っていた試しの 2 コミットは、その試しを担当するセッションに扱わせる。
 - 置き換えたもの: 「リーダーに決めてほしいこと」の、統合を実施するかの問い
 - 状態: 有効
@@ -334,11 +336,11 @@ wish: state-context
 ### 2026-11-21 採用: 取り込みの後に `chezmoi apply ~/.claude` を流さない
 - 出どころ: Claude の判断（技術の選択）
 - 内容: 本番の作業コピーを main へ移した後、ソースのツリーが移る前と同じことを確かめ、`chezmoi apply ~/.claude` は流さない。
-- 理由: `~/.claude/settings.json` が symlink でない実体のファイルになり、ソースに無い設定（許可を得て足した環境変数、フックの timeout の違い）を持ち、`~/.claude/keybindings.json` にも別の作業の割り当てがある。apply すると消える。ソースのツリーが変わらなければ、apply で配る物も変わらない。settings.json の件は別の作業が調べている。
+- 理由: `~/.claude/settings.json` が symlink でない実体のファイルになり、ソースに無い設定（環境変数とフックの timeout の違い。引き継ぎの文が伝えた物で、出どころは未確認）を持ち、`~/.claude/keybindings.json` にも別の作業の割り当てがある。apply すると消える。ソースのツリーが変わらなければ、apply で配る物も変わらない。settings.json の件は別の作業が調べている。
 - 状態: 有効
 
 ## いまの作業
-11-21 03:22 の入力を受け、元に戻せる操作として、prts の #9 と dotfiles の #98 を取り込み、本番を main へ移している。試しの 2 コミットは担当のセッションが ops/work-records から外し（中身は本番の作業コピーの未コミットの変更として残し、試しを続けている）、push を止める理由は無くなった。
+11-21 03:22 の入力を受け、元に戻せる操作として、prts の #9 と dotfiles の #98 を取り込み、本番を main の先端へ移した（済んだこと）。残りは戻せない操作で、リーダーの答えを待っている。
 
 ## 済んだこと
 - 前回まで: prts（queued_command の読み取り、記録の項目による分類、作業記録の表示）、dotfiles（引き継ぎを SendMessage で送る、圧縮のあとの差し込み、優先の順、開発工程の三点）。PR https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9 。
@@ -353,15 +355,15 @@ wish: state-context
 - 統合の最終準備（21:00 の依頼）: 公開の残りを四つに分けた（手元の記録）。main の今のファイルの直しを広げて仕上げ、審査の指摘を直した（手元のブランチ fix/example-text、31e11e3。push していない）。両方の PR の試験、取り込んだ後のツリー、本番との一致、chezmoi の範囲、出典の表示を確かめた。統合の手順と切り戻しは手元の記録（`~/.cache/claude-reports/2026-11-20_integration/integration.md`）。
 - 承認された整理（11-21 00:29 の依頼）: コメント 28 件を載せ直して元を消し、リンク 7 本を付け替え、本文 14 件を一般化した。API で確かめた（判明した事実）。
 - 公開の扱いの見直し（23:44 の依頼）: 84 件の今の本文と編集の全版を手元に控え、方法ごとに今の表示と編集の履歴と Git の履歴のどこに残るかを並べ、42 件の方法と、価値判断の物の種類ごとの推奨を決めた（手元の記録 `judgement-2.md`）。
+- 統合（11-21 03:22 の入力）: 手元にだけあった記録の 4 コミットを読み直し、古いコミットのアドレスの場所を指す一文を一般化して 1 コミットにまとめ、push した（4261fea。pre-push の pytest と bats は通った）。prts の #9 を確かめた先端（77cb19d）でマージコミットにして取り込み（d30324c）、本番の prts のリポジトリを main へ移して入れ直し、prts-web を立て直した（画面 200、`prts quote` が発言まで出典を返す）。dotfiles の #98 を確かめた先端（4261fea）で squash にして取り込んだ（275dd27。リモートの作業ブランチは自動で消えた）。本番の作業コピーを origin/main の先端へ移した（ブランチの `main` は別のワークスペースが持っているので detached。ツリーは移る前と同じ）。未コミットの変更 3 ファイルは控え（`~/.cache/claude-ops-backup/20261121/`）と同じ形で残り、追跡外の 3 ファイルもそのまま。`chezmoi apply` は流していない。
 ## 残っていること
-- リーダー本人の操作: 両方の PR の変更要求を解く（dismiss。取り込みは止めないので、記録を閉じるための操作。Claude Code の `!` は bot の名義になるので、別の端末か `! env -u GH_TOKEN gh pr review ...`）。16 本文の前の版の削除を GitHub Support に頼む（文面は手元の記録の `support-request.txt`。本文の編集は済んだので、いつでも出せる）。
+- リーダー本人の操作: 両方の PR の変更要求を解く（dismiss。取り込みは済み、記録を閉じるための操作。Claude Code の `!` は bot の名義になるので、別の端末か `! env -u GH_TOKEN gh pr review ...`）。16 本文の前の版の削除を GitHub Support に頼む（文面は手元の記録の `support-request.txt`。本文の編集は済んだので、いつでも出せる）。
 - 統合の後の通常の運用で評価すること: 新しい依頼や指摘の入口で工程のスキルを呼ぶか（本番で 3 つの依頼のうち 1 つで抜けた）、長い自律の作業で記録が今に合い続けるか、新しい出典が発言に決まり続けるか、公開の場に書く物に非公開の名前が入らないか。測り方は手元の記録。
 - prts のほかの開いている望みには作業記録がまだ無い。それぞれのセッションが次に動くときに作る。
 - 後回しにした小さな点: CLAUDE.md がちょうど 200 行。中断の印が prts の発言の一覧に出る（prts の ideas/bugs、別の作業で直す）。
 
 ## 次に Claude がすること
-- この記録を push し、prts の #9 をマージコミットで取り込んで本番の prts を main から入れ直し、dotfiles の #98 を squash で取り込む。手元の main を新しくしてから本番の作業コピーを main へ移し、未コミットの変更（試しの 2 ファイル、Orca へ移す作業の settings.json、ideas/bugs の 2 件、settings.json.bak）を持ち越す。ツリーが移る前と同じことと、`chezmoi diff ~/.claude` が移る前と同じことを確かめる。apply は流さない（上の判断）。済んだら、Orca へ移す作業のセッションに知らせる。
-- 範囲の外の 14 件は、承認が出たら同じ手順（控えとの照合、載せ直し、リンクの付け替え、元の削除、本文の編集、API での照合）で行う。Support が前の版を消したと知らせが来たら、GraphQL で版の中身が引けないことを確かめる。
+- リーダーの答えを待つ。範囲の外の 14 件は、承認が出たら同じ手順（控えとの照合、載せ直し、リンクの付け替え、元の削除、本文の編集、API での照合）で行う。Support が前の版を消したと知らせが来たら、GraphQL で版の中身が引けないことを確かめる。
 
 ## リーダーに決めてほしいこと
 - 範囲の外の残り 14 件（コメント 10、本文 4）を、42 件と同じ方法で整理するか。Claude の案: 同じ方法で行う（コメントは載せ直して元を消し、本文は編集して Support への依頼に足す）。答えで変わること: 行わなければ、非公開リポジトリの名前とリーダーの短い言い回しが今の表示に残る。統合を止める物ではない。
@@ -370,10 +372,10 @@ wish: state-context
 
 ## 参照
 - 議論: https://github.com/haoblackj/dotfiles/issues/86
-- 設計: [docs/superpowers/specs/2026-11-20-source-identity-and-public-scope-design.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-source-identity-and-public-scope-design.md)、[docs/superpowers/specs/2026-11-20-practical-trust-design.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-practical-trust-design.md)、[前の設計](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/specs/2026-11-20-speaker-identification-design.md)
-- 計画: [docs/superpowers/plans/2026-11-20-practical-trust.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/docs/superpowers/plans/2026-11-20-practical-trust.md)
+- 設計: [docs/superpowers/specs/2026-11-20-source-identity-and-public-scope-design.md](https://github.com/haoblackj/dotfiles/blob/main/docs/superpowers/specs/2026-11-20-source-identity-and-public-scope-design.md)、[docs/superpowers/specs/2026-11-20-practical-trust-design.md](https://github.com/haoblackj/dotfiles/blob/main/docs/superpowers/specs/2026-11-20-practical-trust-design.md)、[前の設計](https://github.com/haoblackj/dotfiles/blob/main/docs/superpowers/specs/2026-11-20-speaker-identification-design.md)
+- 計画: [docs/superpowers/plans/2026-11-20-practical-trust.md](https://github.com/haoblackj/dotfiles/blob/main/docs/superpowers/plans/2026-11-20-practical-trust.md)
 - PR: https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9
-- 書き方: [skills/work-record/SKILL.md](https://github.com/haoblackj/dotfiles/blob/ops/work-records/skills/work-record/SKILL.md)
+- 書き方: [skills/work-record/SKILL.md](https://github.com/haoblackj/dotfiles/blob/main/skills/work-record/SKILL.md)
 - 本番の変更前の状態: `~/.cache/claude-ops-backup/20261120/`
-- 本番の戻し方（統合の後）: dotfiles は手元の作業コピーで `git switch ops/work-records`（今の本番と同じ）か `git switch --detach 5f91b0e`（#98 の前）のあと `chezmoi apply ~/.claude`。#98 の前へ戻すときは、行き先の無くなる `~/.claude/skills/work-record` の symlink を `trash-put` で外す。prts は prts のリポジトリで `git switch feat/work-record` か `git switch --detach a021bc3` のあと、`uv tool install --force --reinstall .`、`systemctl --user restart prts-web.service`。データはそのまま使える。
+- 本番の戻し方（統合の後）: main から外すなら、dotfiles は 275dd27、prts は d30324c（`-m 1`）を revert する PR を作る。本番の dotfiles の作業コピーは `git switch --detach 5f91b0e`（#98 の前。手元のブランチ ops/work-records も残してある）。その後に `chezmoi apply ~/.claude` を流すと、手元にだけある settings.json と keybindings.json の中身が消えるので、先に控えるかソースへ取り込む。#98 の前へ戻すときは、行き先の無くなる `~/.claude/skills/work-record` の symlink を `trash-put` で外す。prts は prts のリポジトリで `git switch --detach a021bc3`（#9 の前）のあと、`uv tool install --force --reinstall .`、`systemctl --user restart prts-web.service`。データはそのまま使える。
 - 会話: 3f8034b1（この作業）、a0ad3736（11-19 の決定）
