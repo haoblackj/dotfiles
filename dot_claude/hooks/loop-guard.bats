@@ -229,15 +229,15 @@ context_of() { jq -r '.hookSpecificOutput.additionalContext // empty' <<< "$outp
 
 @test "200K の窓では使用率で判定する（50% で一段目、75% で二段目）" {
     ctx 49 200000; wakeup; [ -z "$output" ]
-    ctx 50 200000; wakeup; [ "$(decision)" = deny ]; [[ "$(reason)" == *"一段目"* ]]
-    ctx 75 200000; wakeup; [ "$(decision)" = deny ]; [[ "$(reason)" == *"二段目"* ]]
+    ctx 50 200000; wakeup; [ "$(decision)" = deny ]; [[ "$(reason)" == *"一つ目の閾値"* ]]
+    ctx 75 200000; wakeup; [ "$(decision)" = deny ]; [[ "$(reason)" == *"二つ目の閾値"* ]]
 }
 
 @test "窓の大きさが無いときも使用率で判定する" {
     mkdir -p "$TMPDIR/claude-status-context-usage"
     echo 80 > "$TMPDIR/claude-status-context-usage/sess"
     wakeup
-    [[ "$(reason)" == *"二段目"* ]]
+    [[ "$(reason)" == *"二つ目の閾値"* ]]
 }
 
 @test "二段目では新しい CronCreate も、一度きりも deny" {
