@@ -43,6 +43,15 @@ dot_zshrc.tmpl / dot_gitconfig.tmpl
 `book-to-skill` は git external で upstream から clone し、機密のものは private repo に置いて sync hook が `~/.claude/skills/` へ symlink する。
 開発の流れは README「公開の自作スキル」。
 
+## push の最中の作業コピー
+
+pre-push（pre-commit の pytest と bats、数分かかる）は、コミットしていない変更を一度よけて、終わったら戻す。
+その間に同じ作業コピーのファイルを編集すると、戻すところで食い違って push が落ち、編集も巻き戻る。
+
+- 自分の push は、先にすべてコミットし、終わるまで作業コピーを編集しない。結果は `git rev-parse origin/<ブランチ>` で確かめる。
+- 本番の作業コピー（`~/.local/share/chezmoi`）は別のセッションも push する。未コミットの変更が消えて見えたら、置き直す前に `pgrep -af 'git push|pre-commit'` で別の push が走っていないかを確かめ、走っていれば終わるのを待つ。
+- 出来事: 2026-11-20 に ops/work-records の push が 2 回落ちた。2026-11-21 に別のセッションの push の最中に変更を置き直し、push が落ちた（Refs #86）。
+
 <!-- claude-private-sync.sh:
      pull (SessionStart): git pull --ff-only → symlink確立
      push (Stop): migrate_new() → commit → git push。失敗時はstderrに出して継続（exit 0） -->
