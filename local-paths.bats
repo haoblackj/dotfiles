@@ -175,3 +175,24 @@ EOF
     [ "$status" -ne 0 ]
     [[ "$output" == *"codexTrustedProjects"* ]]
 }
+
+# opencode の導入スクリプトは、PATH に入っていないとき、~/.zshrc に同じ行（展開したパス）が
+# 無ければ `# opencode` と `export PATH=<ホーム>/.opencode/bin:$PATH` を書き足す。
+# ソースに同じ行を置き、opencode のあるマシンでだけ描く。
+@test "opencode があるマシンでは、導入スクリプトと同じ PATH の行を .zshrc に描く" {
+    without_data
+    local home="$BATS_TEST_TMPDIR/home"
+    mkdir -p "$home/.opencode/bin"
+    run env HOME="$home" chezmoi --config "$CFG" --persistent-state "$STATE" --source "$SRC" execute-template < "$SRC/dot_zshrc.tmpl"
+    [ "$status" -eq 0 ]
+    grep -Fxq "export PATH=$home/.opencode/bin:\$PATH" <<<"$output"
+}
+
+@test "opencode の無いマシンでは、.zshrc に opencode の行を描かない" {
+    without_data
+    local home="$BATS_TEST_TMPDIR/home"
+    mkdir -p "$home"
+    run env HOME="$home" chezmoi --config "$CFG" --persistent-state "$STATE" --source "$SRC" execute-template < "$SRC/dot_zshrc.tmpl"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *".opencode"* ]]
+}
