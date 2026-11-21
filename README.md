@@ -166,7 +166,17 @@ Obsidian の保管庫と、Codex が信頼するプロジェクトのパスは�
 ```
 
 書かないマシンでは、obsidian.nvim を読み込まず、Codex の設定に信頼するプロジェクトを書かない。
+型を間違えると（表の代わりに並びを書くなど）、apply はそのファイルで止まる。
 テンプレートの試験は `local-paths.bats`。
+
+この作りより前から使っているマシンでは、次の apply の前に移す。
+書かずに apply すると、それまで配られていた保管庫と信頼するプロジェクトが黙って消える。
+
+1. 配られている `~/.config/nvim/lua/plugins/obsidian.lua` と `~/.codex/exusiai.config.toml` から保管庫と信頼するプロジェクトのパスを読み取り、上の形で `[data]` に書く。
+2. `chezmoi init` を流す（`.chezmoi.toml.tmpl` が変わったので、流すまで作り直しを促す知らせが出続ける）。
+3. `chezmoi diff` で、2 ファイルの差が引用符の種類だけになっていることを確かめてから apply する。
+
+obsidian.nvim を使わないマシンで lazy.nvim がロックファイルを書き直すと、`dot_config/nvim/lazy-lock.json` から obsidian.nvim の行が消えてソースとずれる。そのマシンでは `chezmoi diff` に出ても取り込まない。
 
 ## Windows 側
 

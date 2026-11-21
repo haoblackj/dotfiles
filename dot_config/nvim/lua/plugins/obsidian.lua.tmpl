@@ -3,6 +3,11 @@
       名前からパスへの表）から読む（README「マシンごとのパス」）。
       無いマシンでは obsidian.nvim を読み込まない（workspaces が空だと起動時に失敗する）。 */ -}}
 {{- $ws := get . "obsidianWorkspaces" | default dict -}}
+{{- if not (kindIs "map" $ws) -}}
+{{-   fail "obsidianWorkspaces は保管庫の名前からパスへの表（{ \"名前\" = \"~/パス\" }）で書く" -}}
+{{- end -}}
+{{- /* 文字列は quote（Go の %q）で書く。印字できる文字はそのまま残り、Lua でも読める。
+      toJson は < > & を < のように書き、LuaJIT が読めない。 */ -}}
 {{- if $ws -}}
 return {
   'obsidian-nvim/obsidian.nvim',

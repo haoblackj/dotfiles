@@ -28,8 +28,13 @@ gpt-6-astra = 4
 {{- /* 信頼するプロジェクトのパスはマシンごとに違い、非公開のリポジトリを指すこともあるので、
       リポジトリに入らないローカルの chezmoi の設定の data（codexTrustedProjects）から読む
       （README「マシンごとのパス」）。 */ -}}
-{{- range get . "codexTrustedProjects" | default list }}
+{{- $trusted := get . "codexTrustedProjects" | default list -}}
+{{- if not (kindIs "slice" $trusted) -}}
+{{-   fail "codexTrustedProjects はパスの並び（[\"/home/...\"]）で書く" -}}
+{{- end -}}
+{{- /* キーは toJson で書く（JSON の escape は TOML の basic string でも読める）。 */ -}}
+{{- range $trusted }}
 
-[projects.{{ . | quote }}]
+[projects.{{ . | toJson }}]
 trust_level = "trusted"
 {{- end }}

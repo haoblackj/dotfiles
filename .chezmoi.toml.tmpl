@@ -51,10 +51,11 @@ umask = 0o022
     # マシンごとのパス（README「マシンごとのパス」）。非公開のリポジトリを指すことがあるので
     # リポジトリには書かず、このマシンの設定ファイルに手で書いた値を chezmoi init でも引き継ぐ。
     # obsidianWorkspaces は保管庫の名前からパスへの表、codexTrustedProjects は Codex が信頼するプロジェクトのパスの並び。
+    # 文字列は toJson で書く（JSON の escape は TOML の basic string でも読める。quote は TOML で読めない escape を出す）。
 {{- $obsidian := get . "obsidianWorkspaces" | default dict -}}
 {{- $pairs := list -}}
 {{- range $name, $path := $obsidian -}}
-{{- $pairs = append $pairs (printf "%s = %s" ($name | quote) ($path | quote)) -}}
+{{- $pairs = append $pairs (printf "%s = %s" ($name | toJson) ($path | toJson)) -}}
 {{- end }}
     obsidianWorkspaces = { {{ join ", " $pairs }} }
     codexTrustedProjects = {{ get . "codexTrustedProjects" | default list | toJson }}
