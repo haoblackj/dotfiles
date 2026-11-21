@@ -1,0 +1,25 @@
+{{- /* 保管庫のパスはマシンごとに違い、非公開のリポジトリを指すこともあるので、
+      リポジトリに入らないローカルの chezmoi の設定の data（obsidianWorkspaces、
+      名前からパスへの表）から読む（README「マシンごとのパス」）。
+      無いマシンでは obsidian.nvim を読み込まない（workspaces が空だと起動時に失敗する）。 */ -}}
+{{- $ws := get . "obsidianWorkspaces" | default dict -}}
+{{- if $ws -}}
+return {
+  'obsidian-nvim/obsidian.nvim',
+  version = '*',
+  lazy = true,
+  ft = 'markdown',
+  dependencies = { 'nvim-lua/plenary.nvim' },
+  opts = {
+    legacy_commands = false,
+    workspaces = {
+{{- range $name, $path := $ws }}
+      { name = {{ $name | quote }}, path = {{ $path | quote }} },
+{{- end }}
+    },
+    picker = { name = 'telescope.nvim' },
+  },
+}
+{{- else -}}
+return {}
+{{- end }}

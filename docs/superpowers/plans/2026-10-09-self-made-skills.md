@@ -188,7 +188,7 @@ Expected: `readlink` が `$SP/src/skills/demo` を出す。`ls` に `skills` が
 `~/.local/share/claude-private/` の行の内容を次に替える。
 
 ```markdown
-| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（`idenshi-hakase-diet` / `learning-efficiency-book` / `report-skills` など）/ 移行前の自作スキル（dotfiles#49） |
+| `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（書籍のスキル、`report-skills` など）/ 移行前の自作スキル（dotfiles#49） |
 ```
 
 ファイル構造の図で、`dot_claude/` の下に1行、`linked/` の行の後に1行足す。

@@ -48,6 +48,16 @@ umask = 0o022
     # 起動、bitwarden-cli、zsh の SSH_AUTH_SOCK）は自宅以外では配らず走らせない。
     # 職場機では npiperelay.exe 経由の agent がマルウェア検知に当たるため。
     isHome = {{ $isHome }}
+    # マシンごとのパス（README「マシンごとのパス」）。非公開のリポジトリを指すことがあるので
+    # リポジトリには書かず、このマシンの設定ファイルに手で書いた値を chezmoi init でも引き継ぐ。
+    # obsidianWorkspaces は保管庫の名前からパスへの表、codexTrustedProjects は Codex が信頼するプロジェクトのパスの並び。
+{{- $obsidian := get . "obsidianWorkspaces" | default dict -}}
+{{- $pairs := list -}}
+{{- range $name, $path := $obsidian -}}
+{{- $pairs = append $pairs (printf "%s = %s" ($name | quote) ($path | quote)) -}}
+{{- end }}
+    obsidianWorkspaces = { {{ join ", " $pairs }} }
+    codexTrustedProjects = {{ get . "codexTrustedProjects" | default list | toJson }}
 
 [edit]
     command = "code"

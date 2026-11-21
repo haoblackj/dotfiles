@@ -17,7 +17,7 @@ brew "bats-core"      # Bash のテストランナー（hook 群・morning ス�
 brew "bitwarden-cli"  # パスワードマネージャ CLI（Bitwarden 関連は自宅 PC だけ）
 {{ end -}}
 brew "steipete/tap/codexbar" # Claude と Codex の利用枠を JSON で返す（usage-route.sh が serve を読む）
-brew "ffmpeg"         # 音声・動画変換（kikimimi / VALL-E X のセットアップが依存）
+brew "ffmpeg"         # 音声・動画変換（音声の作業と VALL-E X のセットアップが依存）
 brew "fzf"            # ファジーファインダー
 brew "gemini-cli"     # Google Gemini モデルの CLI
 brew "gh"             # GitHub CLI
@@ -44,7 +44,7 @@ brew "tesseract"      # OCR エンジン
 brew "tesseract-lang" # Tesseract 追加言語データ
 brew "tmux"           # MulmoTerminalのセッション永続化バックエンド（未導入時はplain PTYにフォールバック）
 brew "trash-cli"      # freedesktop 準拠のゴミ箱 CLI
-brew "uv"             # Pythonパッケージ・ツール管理（wikiwalk等のuv tool install対象に必要）
+brew "uv"             # Pythonパッケージ・ツール管理（uv tool install で入れるツールに必要）
 brew "yq"             # YAML / TOML プロセッサ（jq の YAML 版）
 cask "claude-code@latest" # Claude Code 本体（実機は @latest 版。無印は一つ古い版が入る）
 cask "gcloud-cli"     # Google Cloud SDK（gcloud/gsutil）

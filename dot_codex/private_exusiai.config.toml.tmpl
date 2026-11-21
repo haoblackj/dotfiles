@@ -25,6 +25,11 @@ terminal_title = ["activity", "thread-name", "project-name"]
 "gpt-5.5" = 1
 gpt-6-astra = 4
 "gpt-6.1-sol" = 4
+{{- /* 信頼するプロジェクトのパスはマシンごとに違い、非公開のリポジトリを指すこともあるので、
+      リポジトリに入らないローカルの chezmoi の設定の data（codexTrustedProjects）から読む
+      （README「マシンごとのパス」）。 */ -}}
+{{- range get . "codexTrustedProjects" | default list }}
 
-[projects."/home/yagu001/repo/github.com/haoblackj/zmk-workspace"]
+[projects.{{ . | quote }}]
 trust_level = "trusted"
+{{- end }}

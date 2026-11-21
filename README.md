@@ -151,6 +151,22 @@ run_once は内容のハッシュが変わると再実行されるが、既導�
 - Cloudflare Workers AI のトークン失効時の再発行（下記「Memory Recall」）
 - `setup_vall_e_x.sh`（VALL-E X。必要なときだけ手で実行する）
 - このリポジトリを編集するなら `pre-commit install`（`.pre-commit-config.yaml` が shellcheck を pre-commit で、pytest と bats を pre-push で回す）
+- 下の「マシンごとのパス」を、使うマシンの設定ファイルに書く
+
+### マシンごとのパス
+
+Obsidian の保管庫と、Codex が信頼するプロジェクトのパスは、マシンごとに違い、非公開のリポジトリを指すこともあるので、リポジトリには書かない。
+使うマシンの `~/.config/chezmoi/chezmoi.toml` の `[data]` に手で書く。
+`chezmoi init` で設定を作り直しても、`.chezmoi.toml.tmpl` が書いてある値を引き継ぐ。
+
+```toml
+[data]
+    obsidianWorkspaces = { "<保管庫の名前>" = "~/<保管庫のパス>" }
+    codexTrustedProjects = ["/home/<ユーザー>/<プロジェクトのパス>"]
+```
+
+書かないマシンでは、obsidian.nvim を読み込まず、Codex の設定に信頼するプロジェクトを書かない。
+テンプレートの試験は `local-paths.bats`。
 
 ## Windows 側
 
