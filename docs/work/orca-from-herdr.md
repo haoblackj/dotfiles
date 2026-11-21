@@ -133,7 +133,7 @@ PR #99 は審査の指摘を直し終え、取り込みの判断を待ってい�
 
 ## 次に Claude がすること
 
-- 載せ直した差分の審査の指摘を受けて直し、リーダーに PR #99 の取り込みを頼む。取り込まれたら、本番の作業コピーを main の先端へ移し、`chezmoi apply` の結果を確かめる。試しの未コミットの変更（`dot_claude/CLAUDE.md`、`dot_claude/output-styles/exusiai.md`）は、別の作業が main へ取り込んだ（e35497d）ので、移すと差が無くなる。未コミットの `linked/claude/settings.json` は、#99 の版に置き換えれば失う物は無い（違いは `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行だけ）。
+- 載せ直した差分の審査の指摘を受けて直し、リーダーに PR #99 の取り込みを頼む。取り込まれたら、本番の作業コピーを main の先端へ移し、`chezmoi apply ~/.claude` の結果を確かめる。全体の `chezmoi apply` は流さない（2026-11-21 の `chezmoi status` で、`~/.zshrc` にソースに無い opencode の行があり消える側に出たうえ、run_once と run_onchange のスクリプトが走る側に出た。`ideas/bugs/2026-11-21-zshrc-opencode-path-not-in-source.md`）。`~/.claude/settings.json` と `~/.claude/keybindings.json` は、中身が #99 の版と同じ（JSON の比較と `cmp` で確かめた）なので、apply で失う物は無い。試しの未コミットの変更（`dot_claude/CLAUDE.md`、`dot_claude/output-styles/exusiai.md`）は、別の作業が main へ取り込んだ（e35497d）ので、移すと差が無くなる。未コミットの `linked/claude/settings.json` は、#99 の版に置き換えれば失う物は無い（違いは `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行だけ）。
 
 ## リーダーに決めてほしいこと
 
