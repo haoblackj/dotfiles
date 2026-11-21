@@ -167,6 +167,13 @@ def read_text(name, cwd):
         return None
 
 
+def is_executable(name, cwd):
+    path = Path(name).expanduser()
+    if not path.is_absolute():
+        path = Path(cwd or Path.cwd()) / path
+    return path.is_file() and os.access(path, os.X_OK)
+
+
 def without_code(text):
     text = re.sub(r'```.*?(```|$)', ' ', text, flags=re.S)
     text = re.sub(r'~~~.*?(~~~|$)', ' ', text, flags=re.S)
@@ -565,7 +572,7 @@ def check_http(tokens, owners):
             raise Deny('foreign', f'{m.group(1)}/{m.group(2)}')
 
 
-def check_program(tokens, cwd, owners, resolve_node_owner, depth):
+def check_program(tokens, cwd, owners, resolve_node_owner, depth, command=''):
     """GitHub API に触れるそのほかのプログラムを止め、シェルのスクリプトは中身を同じ判定に掛ける。
 
     シェル以外のコードの中の gh の呼び出しは探さない（リーダー、2026-11-03）。'gh' の文字列で
@@ -583,8 +590,12 @@ def check_program(tokens, cwd, owners, resolve_node_owner, depth):
     if re.fullmatch(r'(python|python3|python3\.\d+|node|bash|sh|zsh|ruby|perl|deno|bun)', name) \
             and '-m' not in tokens and '-c' not in tokens:
         script = next((t for t in tokens[1:] if not t.startswith('-')), None)
-    elif tokens and '/' in tokens[0]:
-        script = tokens[0]  # ./x.sh や ~/bin/x.py のようにパスで直接実行するもの
+    elif tokens and '/' in tokens[0] and (is_executable(tokens[0], cwd) or 'chmod' in command):
+        # ./x.sh や ~/bin/x.py のようにパスで直接実行するもの。実行ビットを見るのは、ヒアドキュメントや
+        # -c のコードの `open("q8/cases.jsonl")` が `(` で区切られてパスで始まる行に見えるため
+        # （2026-11-12、GitHub の URL を含む jsonl を読むだけの python が止められた）。
+        # 同じコマンドの chmod で実行ビットを付けてから走らせる形は、フックの時点でビットが無いので読む。
+        script = tokens[0]
     text = read_text(script, cwd) if script else None
     if text:
         texts.append(text)
@@ -672,7 +683,7 @@ def analyse(command, owners, cwd, resolve_node_owner, depth=0):
         if name == 'git':
             check_git(tokens, cwd, owners)
         elif name not in GH_PROGRAMS + GH_WRAPPERS + HTTP_PROGRAMS:
-            check_program(tokens, cwd, owners, resolve_node_owner, depth)
+            check_program(tokens, cwd, owners, resolve_node_owner, depth, command)
         # timeout や xargs などの前置きが何であっても、その後ろの gh / curl に同じ判定を掛ける。
         for at, word in enumerate(without_redirects):
             found = program([word.strip('`')])

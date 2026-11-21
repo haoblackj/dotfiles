@@ -357,6 +357,8 @@ def test_scripts_that_call_gh_are_checked(tmp_path):
     shell = tmp_path / 'post.sh'
     shell.write_text('#!/bin/sh\ngh issue create --title t\n')
     assert decide(f'bash {shell}') == 'deny'
+    assert decide(f'chmod +x {shell} && {shell}') == 'deny'
+    shell.chmod(0o755)
     assert decide(str(shell)) == 'deny'
     shell.write_text('#!/bin/sh\ngh issue list -R someone/r\n')
     assert decide(f'bash {shell}') is None
@@ -418,6 +420,24 @@ def test_programs_talking_to_the_github_api_are_denied(tmp_path):
     script.write_text('import requests\nrequests.post("https://api.github.com/x")\n')
     assert decide(f'python3 {script}') == 'deny'
     assert decide("python3 -c 'import urllib.request; urllib.request.urlopen(\"https://api.github.com/x\")'") == 'deny'
+
+
+def test_data_files_named_in_python_code_are_not_read_as_scripts(tmp_path):
+    """コードの `open("q8/cases.jsonl")` は、`(` で区切るとパスで始まるコマンドに見える。実行できない
+    ファイルは実行されないので読まない（2026-11-12、GitHub の URL を含む jsonl を読むだけの python が
+    止められた）。"""
+    (tmp_path / 'q8').mkdir()
+    data = tmp_path / 'q8' / 'cases.jsonl'
+    data.write_text('{"url": "https://api.github.com/repos/kot149/r/issues/1"}\n')
+    assert decide(f"cd {tmp_path} && python3 - <<'EOF'\nimport json\n"
+                  "c=[json.loads(l) for l in open(\"q8/cases.jsonl\")]\nEOF") is None
+    assert decide(f"cd {tmp_path} && python3 -c \"\nimport json\n"
+                  "j=[json.loads(l) for l in open('q8/cases.jsonl')]\n\"") is None
+    assert decide(f"python3 -c \"print(open('{data}').read())\"") is None
+    script = tmp_path / 'post.sh'
+    script.write_text('#!/bin/sh\ncurl -X POST https://api.github.com/repos/kot149/r/issues\n')
+    script.chmod(0o755)
+    assert decide(str(script)) == 'deny'
 
 
 # --- MCP tools ---------------------------------------------------------------------------
