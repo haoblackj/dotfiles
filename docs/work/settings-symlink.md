@@ -150,7 +150,7 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 
 ## いまの作業
 
-変数の設定はリーダーが決めた。本番の `~/.claude/settings.json` を symlink に戻す時期（別の作業のブランチが片付いたあと）と、PR #100 の取り込みの答えを待つ。
+symlink は PR #99 の取り込みで戻った。変数は設定済みで、Orca の起動し直しを待っている。そのあとに PR #100（Mod と timeout 130）を取り込むかの答えを待つ。
 
 ## 済んだこと
 
@@ -160,22 +160,19 @@ WSL 側が既存の timeout 10 のフックを書き直すかは、まだ確か�
 
 ## 残っていること
 
-- 案 1 を実機で確かめる。
-- Mod を本番へ配る（`chezmoi apply` で `~/.claude/skills/settings-symlink-guard` の symlink を張る）。
-- symlink を戻し、Orca のフックと `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行をソースにコミットする。
-- PR #100 の取り込み（審査は済んだ）。
-- 上の三つの本番の操作は、ソースの作業コピーが別の作業の承認待ちのブランチにあるあいだはできない。
+- リーダーが Windows 側の Orca を終了して起動し直す（変数を効かせる）。
+- PR #100 の取り込み（Mod と timeout 130）と、本番の作業コピーでの `chezmoi apply`（`~/.claude/skills/settings-symlink-guard` の symlink を張る）。
+- 案 1 を実機で確かめる（帯が出ない、`~/.claude/settings.json` の inode が変わらない、Orca の画面に WSL の Claude Code の状態が出る、本番の作業コピーに settings.json の未コミットの差が出ない）。
 
 ## 次に Claude がすること
 
-- PR #100 の取り込みはリーダーの判断を待つ（Mod の版の審査は済み、指摘は直した）。
-- 別の作業のブランチが片付いたら、リーダーの答えの手順で、symlink を戻す、Mod を配る、Orca の環境変数を設定して再起動する、を一続きで行い、再起動の後に帯が出ていないこと、`~/.claude/settings.json` の inode が変わらないこと、Orca の画面で WSL の Claude Code の状態が出ることを確かめる。
+- Orca が起動し直されたら、`~/.claude/settings.json` が symlink のままで、Orca の画面の状態の表示が残ることを確かめる。
+- PR #100 が取り込まれたら、本番の作業コピーで main を取り込んで `chezmoi apply` し、上の「案 1 を実機で確かめる」の四点を見る。
 
 ## リーダーに決めてほしいこと
 
-- 案 1 を実機で確かめる順番。変数を設定すること自体は決まった（判断の経緯）。答えで、本番の `~/.claude/settings.json` を書き換える時期が決まる。
-  - Claude の案（推奨）: 変数は 2026-11-21 10:34 過ぎに設定済み（Orca を起動し直すまで効かない）。確かめは、別の作業のブランチが片付いたあとに一続きで行う。(1) Claude がソースに Orca のフックと `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行を取り込み、`~/.claude/settings.json` を symlink に戻し、Mod を配る。(2) リーダーが Windows 側で、Orca のアプリが読むユーザーの環境変数 `ORCA_FEATURE_REMOTE_AGENT_HOOKS=0` を設定し、Orca を終了して起動し直す。(3) Claude が上の三点を確かめる。利点は、外れたら帯が出る状態で確かめられること。欠点は、別の作業のブランチが片付くまで待つこと。
-  - 別案: 今すぐ (2) だけ行い、`~/.orca-relay` が作り直されないことと状態の表示が残ることだけを見る。利点は早いこと。欠点は、`~/.claude/settings.json` の中身がすでに Windows 側の望む形と同じなので、変数が無くても書き込みは起きず、symlink が守られるかは確かめられないこと。
+- Windows 側の Orca を終了して起動し直してほしい（変数を効かせる。Claude からは Windows のアプリを止められない）。
+- そのあと、PR #100（Mod と timeout 130）を取り込むか。Claude の案: 取り込む。答えで、帯の Mod が本番に入るかと、orcad の書き直しで本番の作業コピーに差が出るのを防げるかが決まる。起動し直す前に取り込むと、変数の効いていない Orca が symlink をまた置き換えうる。
 - 取り下げ: 前回の「直し方をどれにするか」の問いは、案 1 を確かめる方向の答え（上の判断の経緯）で置き換えた。
 
 ## 参照
