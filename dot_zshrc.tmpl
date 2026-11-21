@@ -107,7 +107,8 @@ export PATH="$DOTNET_ROOT:$PATH"
 {{- /* opencode（curl の導入スクリプトで ~/.opencode/bin に入る）。導入スクリプトは、PATH に入って
       いないとき、この行と一字一句同じ行（展開したパス）が無ければ ~/.zshrc の末尾に書き足し、
       ソースとずれる（2026-11-21、opencode upgrade で起きた）。同じ行を、opencode のある
-      マシンでだけ描く。 */ -}}
+      マシンでだけ描く。apply の後で opencode を初めて入れたマシンでは、導入スクリプトの
+      書き足しで一度だけ MM になり、次の apply で同じ行に揃う。 */ -}}
 {{- if stat (joinPath .chezmoi.homeDir ".opencode/bin") }}
 
 # opencode
