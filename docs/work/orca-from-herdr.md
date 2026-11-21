@@ -1,6 +1,6 @@
 ---
 title: Herdr 時代の仕掛けを戻せる形で外し、Orca で Zenn の記事と同じ運用を組む
-status: waiting
+status: active
 ---
 
 ## 目的
@@ -100,44 +100,43 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 - 理由: 止まるのは Windows が持つ端末向けの中継と、`~/.claude/settings.json` へのリモートのフックの書き込みだけで、いまのセッションは WSL 側の orcad の下で動いている。
 - 状態: 有効。進め方は、symlink の調べの作業（ワークツリー `settings-symlink`）に渡した。
 
+### 2026-11-21 採用: 環境変数の登録を確かめ、ほかのセッションに差し支えが無ければ PR #99 を取り込む
+- 出どころ: 端末からの入力（会話 3c33ee18、2026-11-21 10:59、発言 9f721399）
+- 要旨（Claude の要約）: 環境変数が登録済みなら、ほかのセッションの状態も見て、問題が無さそうなら取り込んでよい。
+- 理由: 理由の提示なし。
+- 状態: 有効（取り込んだ）
+
 ### 2026-11-21 棄却: Orca の組み込みの機能だけで済ませる
 - 理由: 質問のカードは組み込みにあるが、タスクの進捗のサイドバーと、次の作業の候補を押して送る機能が無く、記事の三つの柱のうち二つが欠ける。
 - 状態: 有効
 
 ## いまの作業
 
-PR #99 は審査の指摘を直し終え、取り込みの判断を待っている。
+PR #99 は main に入り（4466ce6）、本番の作業コピーを main へ移して `~/.claude` へ配った。残りは、prts が Orca へ移ったあとの Herdr の残りを外すことと、起動フックの確かめ。
 
 ## 済んだこと
 
 - 記事の原文の取得と、Orca のプラグインと WSL の関係の調査。
-- orca-milestone の WSL 向けの直し（手元の複製の 3d40e8c から 86ab9f8。テスト 97 件が通る）。リーダーの承認で Windows の Orca に読み込まれ、`running` になった。
-- 実機で確かめたこと: フォーカス中のワークスペースの表示、ほかのワークスペースのタスクの進捗、エラーの無いログ、次の作業のカードを押すと依頼文がそのまま WSL の Claude に届くこと（2026-11-21、リーダーが押した）。試しのターミナルは閉じた。
-- 断捨離の PR #99。フックのテスト 293 件が通る。タグ `herdr-era-final` を移す前の `main`（5f91b0e）に打った。審査（With fixes）の指摘を直した。
-- PR #98 が main に入った（275dd27）ので、origin/main をこのブランチへマージし（14ffd55）、衝突は main の版にこの PR の直しを当て直して解いた。CLAUDE.md は 199 行。
-- 載せ直した差分の審査（With fixes）を受け、`--prompt` と `orca terminal send` で渡す文をスラッシュコマンドと試しの検証に限り、引き継ぎの文面は SendMessage で送る決まりに直した（984259a）。`--prompt` で立てた三つのセッションには、初めのプロンプトは Claude の文でリーダーの入力ではないと伝えた。
-- Orca が手元に書いたフックの設定（`~/.claude/settings.json` の agent-hooks の 16 か所）とキーの割り当て（`ctrl+alt+g`）をソースへ取り込んだ（d51515c）。設定のつながりの試験は、Orca の PostCompact のフックを許すように直した。フックの試験 294 件、pytest 203 件が通る。
-- 全体の設定の `CLAUDE_CODE_ENABLE_TODO_TOOLS` を手元の `~/.claude/settings.json` に効かせた。
-- 全体の設定に `CLAUDE_CODE_ENABLE_TODO_TOOLS`、CLAUDE.md に記事の指示（タスクの記録と `next` のブロック）を足した（PR #99）。CLAUDE.md は 199 行。
-- prts を Orca へ移す仕事を、別のセッションに渡した。
+- orca-milestone の WSL 向けの直し（3d40e8c から 86ab9f8。テスト 97 件が通る）。リーダーの承認で Windows の Orca に読み込まれ、`running` になった。
+- 実機で確かめたこと: フォーカス中のワークスペースの表示、ほかのワークスペースのタスクの進捗、エラーの無いログ、次の作業のカードを押すと依頼文がそのまま WSL の Claude に届くこと（2026-11-21、リーダーが押した）。
 - プラグインの fork（https://github.com/haoblackj/orca-milestone）を、リーダーが本人の名義で作った（Claude の `gh repo fork` は外部のリポジトリへの書き込みを止めるフックに止められた）。手元の複製の `origin` を fork、`upstream` を上流に向け、`wsl-host`（86ab9f8）を push した。fork の `main` は上流の写しのまま残し、上流の版が出たら `upstream/main` を `wsl-host` へ merge し、テストを通してから push して Orca に読み込み直す。公開した 4 コミットは、書き手が noreply のメールで、差分と本文に手元の名前や非公開の物が無いことを確かめた。
+- 断捨離の PR #99 を main に取り込んだ（4466ce6、squash）。取り込みの前に main（#105 まで）をマージし、#105 が書き換えた `skills/session-handoff/SKILL.md` は #99 の削除の側で解いた。pytest 203 件、bats 363 件が通った。取り込みの前に、Windows のユーザーの環境変数に `ORCA_FEATURE_REMOTE_AGENT_HOOKS=0` が登録されていること（`reg.exe query`）と、ほかのセッションに取り込みを止める作業が無いことを確かめた。
+- 本番の作業コピーを main の先端（4466ce6）へ移し、`chezmoi apply --force ~/.claude` を流した。`~/.claude/settings.json` は symlink に戻り、Herdr の 4 本のスクリプトと `session-handoff` のスキルが消え、`chezmoi status ~/.claude` の違いは 0 件になった。移す前の控えは `~/.cache/orca-from-herdr/prod-before-99/`（本番の未コミットだった `settings.json`、手元の `settings.json`、差分、元の HEAD）。全体の `chezmoi apply` は流していない（`ideas/bugs/2026-11-21-zshrc-opencode-path-not-in-source.md`）。
+- prts を Orca へ移す仕事を、別のセッションに渡した。
 
 ## 残っていること
 
-- Orca の画面から起動した Claude に起動フックが効くかの確かめ（効かなくても、PR #99 の取り込みのあとは CLAUDE.md の指示で補われる）。
-- PR #98 の取り込み（本番の作業コピーに立てた別のセッションが進めている）。入ったら、PR #99 を新しい `main` に載せ直し、衝突を解いて、テストと審査をやり直す。
-- 断捨離の PR の取り込み（リーダー）。本番の作業コピーが載っている別の作業のブランチも、CLAUDE.md の同じ行（ループの引き継ぎ、対話セッションの引き継ぎ、Herdr の節、決定論的処理の節）を書き換えている。後から取り込む側で衝突を解き、取り込んだあとに `git grep -E "loop-handoff|session-handoff|herdr-closable|herdr-start-claude"` が昔の計画書と作業記録の外で 0 件になることを確かめる。
-- 本番の作業コピーが `main` に移ったあとの `chezmoi apply`（`.chezmoiremove` が配布先のスクリプトとスキルを消し、CLAUDE.md の追加が効く）。
-- `~/.claude/settings.json` が symlink でなくなった件は、別のセッション（chezmoi のワークツリー `settings-symlink`）が調べている。
+- Orca の画面から起動した Claude に起動フックが効くかの確かめ（効かなくても、CLAUDE.md の指示で補われる）。
 - prts が Orca へ移ったあと（別のセッションが進めている）、Herdr の残り（本体、常駐の設定、組み込みフック、設定とプラグイン、タブ名の同期）を外す。
+- Windows の Orca を起動し直して環境変数を効かせることと、`PermissionRequest` の Orca のフックの `timeout`（ソースは Windows 側の中継が書いた 10、WSL 側の orcad は 130 を書く）をそろえるかは、symlink の調べの作業（ワークツリー `settings-symlink`）に渡した。
 
 ## 次に Claude がすること
 
-- 載せ直した差分の審査の指摘を受けて直し、リーダーに PR #99 の取り込みを頼む。取り込まれたら、本番の作業コピーを main の先端へ移し、`chezmoi apply ~/.claude` の結果を確かめる。全体の `chezmoi apply` は流さない（2026-11-21 の `chezmoi status` で、`~/.zshrc` にソースに無い opencode の行があり消える側に出たうえ、run_once と run_onchange のスクリプトが走る側に出た。`ideas/bugs/2026-11-21-zshrc-opencode-path-not-in-source.md`）。`~/.claude/settings.json` と `~/.claude/keybindings.json` は、中身が #99 の版と同じ（JSON の比較と `cmp` で確かめた）なので、apply で失う物は無い。試しの未コミットの変更（`dot_claude/CLAUDE.md`、`dot_claude/output-styles/exusiai.md`）は、別の作業が main へ取り込んだ（e35497d）ので、移すと差が無くなる。未コミットの `linked/claude/settings.json` は、#99 の版に置き換えれば失う物は無い（違いは `CLAUDE_CODE_ENABLE_TODO_TOOLS` の一行だけ）。
+- prts の Orca への移行が済んだと知らせが来たら、Herdr の残りを外す PR を作る。
 
 ## リーダーに決めてほしいこと
 
-- PR #99 を main に取り込むか。Claude の案: 取り込む（審査の指摘は直し、試験は通っている）。取り込んだら、本番の作業コピーを main の先端へ移し、`chezmoi apply` の結果を確かめる。
+なし
 
 ## 参照
 
