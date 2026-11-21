@@ -120,6 +120,7 @@ PR #99 は審査の指摘を直し終え、取り込みの判断を待ってい�
 - 全体の設定の `CLAUDE_CODE_ENABLE_TODO_TOOLS` を手元の `~/.claude/settings.json` に効かせた。
 - 全体の設定に `CLAUDE_CODE_ENABLE_TODO_TOOLS`、CLAUDE.md に記事の指示（タスクの記録と `next` のブロック）を足した（PR #99）。CLAUDE.md は 199 行。
 - prts を Orca へ移す仕事を、別のセッションに渡した。
+- プラグインの fork（https://github.com/haoblackj/orca-milestone）を、リーダーが本人の名義で作った（Claude の `gh repo fork` は外部のリポジトリへの書き込みを止めるフックに止められた）。手元の複製の `origin` を fork、`upstream` を上流に向け、`wsl-host`（86ab9f8）を push した。fork の `main` は上流の写しのまま残し、上流の版が出たら `upstream/main` を `wsl-host` へ merge し、テストを通してから push して Orca に読み込み直す。公開した 4 コミットは、書き手が noreply のメールで、差分と本文に手元の名前や非公開の物が無いことを確かめた。
 
 ## 残っていること
 
@@ -137,7 +138,6 @@ PR #99 は審査の指摘を直し終え、取り込みの判断を待ってい�
 ## リーダーに決めてほしいこと
 
 - PR #99 を main に取り込むか。Claude の案: 取り込む（審査の指摘は直し、試験は通っている）。取り込んだら、本番の作業コピーを main の先端へ移し、`chezmoi apply` の結果を確かめる。
-- fork を作る操作。外部のリポジトリへの書き込みを止めるフックが `gh repo fork andoshin11/orca-milestone` を止めたので、リーダーに本人の名義で `! env -u GH_TOKEN gh repo fork andoshin11/orca-milestone --clone=false --default-branch-only` を打ってもらう。上流の fork の一覧に載る。fork ができたら、Claude が手元の複製の `origin` を fork に、`upstream` を上流に向け、`wsl-host` を push する。公開する 4 コミットは、書き手が noreply のメールで、差分と本文に手元の名前や非公開の物が無いことを確かめた。
 
 ## 参照
 
