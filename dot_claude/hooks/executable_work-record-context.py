@@ -131,7 +131,7 @@ def session(payload: dict) -> None:
     if not found:
         return
     found.sort(key=lambda r: (not r["here"], -r["mtime"]))
-    lines = ["このリポジトリの開いている作業記録（判断と進行状態の正本。書き方はスキル work-record）:"]
+    lines = ["このリポジトリの開いている作業記録（判断と進行状態の source of truth。書き方はスキル work-record）:"]
     for r in found[:MAX_LIST]:
         when = time.strftime("%m/%d %H:%M", time.localtime(r["mtime"]))
         where = "" if r["here"] else "（別のワークツリー）"

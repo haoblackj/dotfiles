@@ -125,9 +125,9 @@ RETRY_LIMIT = ('\n同じ書き込みをこのフックに 2 回止められた�
 REASONS = {
     'unnamed': '投稿先のリポジトリを確かめられません（{detail}）。-R owner/repo（gh api なら '
                'repos/owner/repo/... のパス）で投稿先を名指ししてください。',
-    'foreign': '書き込み先がリーダーの持ち物ではありません（{detail}）。' + RULE +
+    'foreign': '書き込み先がリーダーの所有するリポジトリではありません（{detail}）。' + RULE +
                ' 必要なら本文を示して、リーダーに手で投稿してもらってください。',
-    'reference': '本文に、リーダーの持ち物でないリポジトリの issue / PR への参照があります（{detail}）。'
+    'reference': '本文に、リーダーが所有していないリポジトリの issue / PR への参照があります（{detail}）。'
                  '相手の issue に参照の記録が残り、書き換えても消えません。リンクが要るなら、矢印の'
                  '先の redirect.github.com の URL に書き換えてください（相手に記録が残りません。'
                  '短縮形の owner/repo#N は使いません）。',
@@ -368,9 +368,9 @@ def graphql_targets(values, resolve_node_owner, owners):
     for node_id in sorted(ids):
         owner = resolve_node_owner(node_id)
         if owner is None:
-            raise Deny('unverified', f'ノード ID {node_id} の持ち主を確かめられません')
+            raise Deny('unverified', f'ノード ID {node_id} の所有者を確かめられません')
         if owner not in owners:
-            raise Deny('foreign', f'ノード ID {node_id} は {owner} の持ち物')
+            raise Deny('foreign', f'ノード ID {node_id} の所有者は {owner}')
 
 
 def gh_aliases():

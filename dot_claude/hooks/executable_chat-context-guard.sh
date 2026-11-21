@@ -55,18 +55,18 @@ notify() {
   exit 0
 }
 
-# 知らせの文。$1 は段の名前（予備の閾値か、引き継ぎの閾値か）
+# 通知の文。$1 は閾値の名前（予備の閾値か、引き継ぎの閾値か）
 # 移ることや /clear を勧める文は指示しない。決まった文を添えさせると、リーダーが直前に
-# 「移り方が決まっていない」と退けた勧めを、この知らせの直後に繰り返した（2026-11-19、#86）。
+# 「移り方が決まっていない」と退けた勧めを、この通知の直後に繰り返した（2026-11-19、#86）。
 # 移るかどうかと時機はリーダーが決め、Claude はその会話でリーダーが言ったことに従う。
 notice_text() {
   printf '%s が%sを越えた。自分からは引き継がず、ターンも止めない。この依頼はいつもどおり進め、応答の最後に、コンテキストの大きさを事実として一文で知らせる。移ることや /clear を勧める文は足さない。' "$(ctx_desc)" "$1"
 }
 
 if [[ "$CHAT_CTX" == urgent ]] && take_once "$URGENT_MARK"; then
-  notify urgent "$(notice_text 'コンテキストの知らせの予備の閾値')"
+  notify urgent "$(notice_text 'コンテキストの通知の予備の閾値')"
 fi
 if [[ "$CHAT_CTX" == handoff ]] && take_once "$HANDOFF_MARK"; then
-  notify handoff "$(notice_text 'コンテキストの知らせの閾値')"
+  notify handoff "$(notice_text 'コンテキストの通知の閾値')"
 fi
 exit 0
