@@ -359,7 +359,7 @@ wish: state-context
 - 状態: 有効
 
 ## いまの作業
-`.zshrc` と委譲スクリプトの差を扱っている。opencode の行のソースへの取り込みを PR にし、取り込んだら二つのファイルだけを本番へ配る。
+`.zshrc` と委譲スクリプトの差は扱い終えた（済んだこと）。残りはリーダー本人の操作と、ほかのマシンでの移り方と、流していない 3 本のスクリプトで、Claude が今進める物は無い。
 
 ## 済んだこと
 - 前回まで: prts（queued_command の読み取り、記録の項目による分類、作業記録の表示）、dotfiles（引き継ぎを SendMessage で送る、圧縮のあとの差し込み、優先の順、開発工程の三点）。PR https://github.com/haoblackj/dotfiles/pull/98 、https://github.com/haoblackj/prts/pull/9 。
@@ -380,7 +380,9 @@ wish: state-context
 - main の今のファイルの直しの載せ直し（11-21 10:36 の入力）: 手元のブランチの 1 コミットを新しい main に衝突なく写し、部品の中身のスキルの名前 3 行と run_once_ の注記 2 行を一般の言い方にした。Obsidian の保管庫と Codex の信頼するプロジェクトのパスは、リポジトリに入らないローカルの chezmoi の設定の data から読むテンプレートにし、`chezmoi init` で作り直しても値を引き継ぐようにした（試験 `local-paths.bats`、直す前に 6 件とも失敗、直した後 6 件とも成功）。本番のマシンの設定に data を足し（控えは `~/.cache/claude-ops-backup/20261121/chezmoi.toml.before-local-paths`）、新しいソースで描いた Codex の設定は今の物と同じ、Obsidian の設定は引用符の種類だけが違い、nvim で読めることを確かめた。手元の検査で、非公開の名前の残りは 0 行、残してよい物も 0 行。requesting-code-review で頼んだ code reviewer のサブエージェントの審査（Critical 0、Important 1、Minor 6。設計の前提を崩す指摘は無し）を receiving-code-review で受けた。Important の 1（この作りより前から使っているマシンで data を書かずに apply すると、保管庫と信頼するプロジェクトが黙って消える）は、README に既存のマシンでの移り方を書き、下の「残っていること」に足した。Minor のうち、TOML に読めない escape を出す `quote` を `toJson` に替え（Lua 側は LuaJIT が `\u` の escape を読めないので `quote` のまま）、data の型の誤りで止まるようにし、init を促す知らせとロックファイルのずれを README に書き、特殊な文字と型の誤りの試験を 3 件足した（足した試験のうち直す対象の 2 件は直す前に失敗、直した後は 9 件とも成功）。本番のマシンで描いた結果は直した後も変わらない。
 - 用語: 作業記録の「審査役」3 か所を、スキルの呼び名の「code reviewer のサブエージェント」に直した（リーダーの指摘、端末からの入力（会話 d9ce697d、2026-11-21 10:50）。CLAUDE.md の「レビュー役」も自作の語の疑いがあり、用語の言い換えを防ぐ作業へ伝えた）。
 - 取り込み: 直しを PR #105 にし、確かめた先端（ee71c8e、push 前の pytest と bats は通った）で squash にして取り込んだ（30f61a1）。取り込んだ後の main の今のファイルで、非公開の名前の残りは 0 行。本番の作業コピーを main の先端へ detached で移し（settings.json の未コミットの差分は控えと同じ）、このマシンで `chezmoi init` を流し（作り直した設定の値は前と同じ）、Obsidian の設定 1 ファイルだけを `chezmoi apply` で配った（前の版は `~/.cache/claude-ops-backup/20261121/obsidian.lua.before-apply`）。Obsidian と Codex の設定の `chezmoi status` は空で、配った Lua は nvim で読める。全体の apply は流していない。直しに使ったワークツリーは外した。
+- `.zshrc` と委譲スクリプトの差（11-21 11:34 の入力）: 経緯は判明した事実。opencode の PATH の行を `dot_zshrc.tmpl` に、導入スクリプトと一字一句同じ形で、`~/.opencode/bin` のあるマシンでだけ描くように足した（試験 2 件を `local-paths.bats` に足し、1 件目は直す前に失敗、11 件とも成功）。requesting-code-review で頼んだ code reviewer のサブエージェントの審査（Critical と Important は 0、Minor 4）を receiving-code-review で受け、apply の後で opencode を入れたマシンで一度だけずれることを注記に書いた（ほかの 3 件は、この変更が招く問題でないので直していない）。PR #110 を確かめた先端（9ff5eb7、push 前の試験は通った）で squash にして取り込み（0a3fb86）、直したバグの書き置きを外した。本番の作業コピーを main の先端へ移し、配る前の 2 ファイルを `~/.cache/claude-ops-backup/20261121/` に控えてから、`~/.zshrc` と `~/.codex/codex-delegate.sh` だけを配った（`.zshrc` はホームが変わっているという確かめで止まったので、差が注記 1 行だけなのを確かめてから `--force` を付けた）。配った後、2 ファイルと控えの差はそれぞれ注記 1 行で、opencode の行は残り、対話の zsh で `opencode` が PATH から引ける。`chezmoi status` に残るのは ` R` の 3 本のスクリプトだけ。
 ## 残っていること
+- 流していない 3 本のスクリプト（`chezmoi status` の ` R`）: `10_system-base.sh`（run_once。sudo の apt を含む）、`80_cli-tools.sh`（run_once。PR #105 の注記の書き換えで中身のハッシュが変わった。`brew bundle install --no-upgrade` なので入っている物は入れ直さない）、`92_imozuru-serve.sh`（run_onchange）。全体の apply で走る。どれも二つのファイルの扱いの範囲の外なので流していない。
 - この作りより前から使っているほかのマシン: 次の apply の前に、配られている Obsidian と Codex の設定からパスを読み取ってローカルの設定の `[data]` に書き、`chezmoi init` を流してから apply する（README「マシンごとのパス」）。書かずに apply すると二つの設定が黙って抜け落ちる。
 - リーダー本人の操作: 両方の PR の変更要求を解く（dismiss。取り込みは済み、記録を閉じるための操作。Claude Code の `!` は bot の名義になるので、別の端末か `! env -u GH_TOKEN gh pr review ...`）。20 本文の前の版の削除を GitHub Support に頼む（文面は手元の記録の `support-request.txt`。本文の編集は済んだので、いつでも出せる）。古いコミットの個人のアドレスの再発を防ぐため、GitHub のアカウント設定「Block command line pushes that expose my email」を入れる。
 - 統合の後の通常の運用で評価すること: 新しい依頼や指摘の入口で工程のスキルを呼ぶか（本番で 3 つの依頼のうち 1 つで抜けた）、長い自律の作業で記録が今に合い続けるか、新しい出典が発言に決まり続けるか、公開の場に書く物に非公開の名前が入らないか。測り方は手元の記録。
