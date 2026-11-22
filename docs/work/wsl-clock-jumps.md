@@ -54,7 +54,13 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
    - Windows の PowerShell から送ったバージョン 3 の問い合わせには、ntp.nict.jp も IPv4 と IPv6 の両方で答えた。Windows Time のサービス本体も 02:31:27 に ntp.nict.jp から有効な時刻を受け、02:31:29 に同期した（イベントログの id 37 と 35）。
    - Windows の時計が 8 秒ずれていた理由はイベントログにあった。この PC の Windows Time はドメインの時刻源から時刻を取る設定で、ドメインの相手を見つけられないエラー（id 129）が毎日続き、「使用可能なタイム スタンプが無いので約 86,000〜117,000 秒同期していない」（id 36）が 11/20 から毎日記録されている。何日も同期しないまま時計が進んだと読める（推定。設定そのものは管理者権限が要り読めていない）。
    - 02:58 に Windows の時計は time.google.com に対して -0.014 秒まで合っていた。
-8. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
+8. Windows Time の同期先の経緯（2026-11-23 03:0x に読んだ。読み取りだけ）:
+   - イベントログの 14 日分: 11/18 まではドメインの階層の相手（`ntp.d`）から毎日有効な時刻を受けて同期していた。11/19 からドメインの相手を見つけられないエラー（id 129）が続き、同期は 11/23 02:31 まで一度も無かった。
+   - 11/23 02:30 ごろ、リーダーが NICT へ同期する設定に変えた（出典は「判断の経緯」）。02:31 に手で指定した同期先（`ntp.m`）の `ntp.nict.jp,0x8` と同期した。
+   - いまの設定（レジストリ、管理者権限なしで読んだ）: `Parameters\Type = NTP`、`NtpServer = ntp.nict.jp,0x8`、`NtpClient\Enabled = 1`、`Config\MinPollInterval = 10`、`MaxPollInterval = 15`（1,024〜32,768 秒）、`MaxPosPhaseCorrection` と `MaxNegPhaseCorrection` は 0xFFFFFFFF（ずれの大きさで補正を拒まない）、`LargePhaseOffset = 50000000`（5 秒。これを超えるずれは一気に合わせる）。`w32tm /query /peers` も同期先は ntp.nict.jp だけで、状態はアクティブ。
+   - グループ ポリシーの W32Time のキー（`HKLM\SOFTWARE\Policies\Microsoft\W32Time` の下）は無い。ドメインのポリシーが設定を上書きする形跡は無い。
+   - `w32tm /query /configuration` は管理者権限が要り、まだ読めていない（各値が Local か Policy かを確かめるため、リーダーに頼んでいる）。
+9. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
 
 ## 判断の経緯
@@ -81,6 +87,12 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 - 理由: 理由の提示なし（Claude の推奨の案を選んだ）。
 - 状態: 有効
 
+### 2026-11-23 採用: Windows Time を NICT へ直接同期させる
+- 出どころ: 端末からの入力（会話 e6df2c15、2026-11-23 03:05、発言 ea5973e3）
+- 要旨（Claude の要約）: 少し前に、Windows Time を NICT と同期するように設定した（リーダーが自分で設定した）。
+- 理由: 理由の提示なし。
+- 状態: 有効
+
 ### 2026-11-22 棄却: `.wslconfig` の kernelCommandLine で `timesync_implicit=0` を渡す
 - 理由: Windows 側のファイルの編集と WSL の再起動が要り、再起動しない方針に反する。
 - 状態: 有効
@@ -105,7 +117,11 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 ## 残っていること
 
 - ほかのマシンの WSL（2.7 以降で chronyd が動くもの）でも timesyncd との奪い合いが起きうる。そのマシンでは手で disable する（chezmoi では配らない判断）。
-- Windows の時計がまたずれうる。Windows Time は、毎日ドメインの時刻源を見つけられずに同期しないまま過ごしている（下の「判明した事実」の 7）。直すなら Windows Time の設定の変更（Windows 側、管理者）になり、リーダーの判断が要る。
+- Windows Time を NICT へ直接同期させる設定の確かめ（「判明した事実」の 8）。設定はリーダーが入れ済みで、再起動なしで効いている。Claude の案は次のとおり。
+  1. 案の中心は、いまの設定（`Type = NTP`、`NtpServer = ntp.nict.jp,0x8`）をそのまま使うこと。足すものは無い。同じ設定を入れ直すなら、管理者の PowerShell で `w32tm /config /manualpeerlist:"ntp.nict.jp,0x8" /syncfromflags:manual /update` を打ってから `w32tm /resync` を打つ。どちらも再起動は要らない。
+  2. 確かめること: `w32tm /query /configuration /verbose` で、`Type` と `NtpServer` が `(Local)` から来ていること（`(Policy)` なら、ドメインのポリシーが後で上書きしうる）。数時間後にイベントログの id 35 か 37 が ntp.nict.jp で増えていること。
+  3. 足してもよいもの（任意）: 同期先を NICT 一つにすると、NICT に届かないときに同期が止まる。`/manualpeerlist:"ntp.nict.jp,0x8 time.google.com,0x8"` のように二つ目を足す。利点は片方が落ちても同期が続くこと。欠点は時刻源が混ざること（どちらも stratum 1 なので差は ms 以下の見込み）。
+  4. ドメインの相手が 11/19 から見つからない件そのものは、Windows Time とは別の、ドメインの側の問題として残る（ログオンやほかのドメインの機能に響きうる）。この作業では扱っていない。
 - WSL を次に起動したとき、同じ飛びが戻らないかを測って確かめる（`timesync_implicit` が 1 に戻った状態で）。
 
 ## 次に Claude がすること
