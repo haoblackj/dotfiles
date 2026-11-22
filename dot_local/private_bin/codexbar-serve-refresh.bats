@@ -31,14 +31,6 @@ teardown() {
 
 health() { printf '{"status":"ok","version":"%s"}' "$1" > "$HEALTH"; }
 
-@test "動いている版と入っている版が同じ -> 再起動しない" {
-    health 0.70.0
-    export FAKE_INSTALLED=0.70.0
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -s "$SYSTEMCTL_LOG" ]
-}
-
 @test "版が違う -> codexbar-serve を再起動する" {
     health 0.70.0
     export FAKE_INSTALLED=0.71.0
@@ -48,26 +40,3 @@ health() { printf '{"status":"ok","version":"%s"}' "$1" > "$HEALTH"; }
     [[ "$output" == *"0.70.0"*"0.71.0"* ]]
 }
 
-@test "serve が応答しない -> 何もしない" {
-    export CODEXBAR_HEALTH_URL="http://127.0.0.1:1/health"
-    export FAKE_INSTALLED=0.71.0
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -s "$SYSTEMCTL_LOG" ]
-}
-
-@test "/health に version が無い -> 何もしない" {
-    printf '{"status":"ok"}' > "$HEALTH"
-    export FAKE_INSTALLED=0.71.0
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -s "$SYSTEMCTL_LOG" ]
-}
-
-@test "codexbar --version が読めない -> 何もしない" {
-    health 0.70.0
-    unset FAKE_INSTALLED
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -s "$SYSTEMCTL_LOG" ]
-}

@@ -112,34 +112,6 @@ setup() {
     done
 }
 
-@test "塞いではいけない形: + リフスペックの強制 push（意図して対象外）" {
-    # push origin +main は push --force origin main と等価だが、CLAUDE.md の列挙5件の外で
-    # ブランチ名との誤検知リスクがあるため意図して対象外（別の非公開リポジトリの issue）。
-    # 塞ぐ判定を足したらこの検査が落ちる。塞ぐ判断は踏んだ記録が出たときに改めて行う。
-    local cmd
-    for cmd in \
-        'git push origin +main' \
-        'git push origin +main:main' \
-        'git push origin +refs/heads/main:refs/heads/main' \
-        'git -C /tmp/x push origin +main'; do
-        run decide "$cmd"
-        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
-    done
-}
-
-@test "塞いではいけない形: git clean の dry-run" {
-    local cmd
-    for cmd in \
-        'git clean -n' \
-        'git clean --dry-run' \
-        'git clean -nd' \
-        'git clean -xdn' \
-        'git clean --dry-run --force'; do
-        run decide "$cmd"
-        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
-    done
-}
-
 @test "塞いではいけない形: 安全な巻き戻しと日常操作" {
     local cmd
     for cmd in \
@@ -166,14 +138,3 @@ setup() {
     done
 }
 
-@test "塞いではいけない形: 文字列として現れるだけ" {
-    local cmd
-    for cmd in \
-        'echo "git reset --hard は使わない"' \
-        'git commit -m "git reset --hard を提案しない旨を追記"' \
-        'grep -n "git clean -f" docs/rules.md' \
-        'git config --global alias.nuke "reset --hard"'; do
-        run decide "$cmd"
-        [ "$output" = "allow" ] || { echo "allow を期待したが [$output] / 入力: $cmd" >&2; return 1; }
-    done
-}

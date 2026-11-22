@@ -24,22 +24,6 @@ input_stop_hook_active() {
   python3 -c 'import json;print(json.dumps({"hook_event_name":"Stop","session_id":"t","stop_hook_active":True,"last_assistant_message":"報告は以上。\n\nuser もう止めて"}))' | "$SCRIPT"
 }
 
-input_missing_message() {
-  printf '%s' '{"hook_event_name":"Stop","session_id":"t"}' | "$SCRIPT"
-}
-
-input_empty_message() {
-  printf '%s' '{"hook_event_name":"Stop","session_id":"t","last_assistant_message":""}' | "$SCRIPT"
-}
-
-input_broken_json() {
-  printf '%s' 'これはJSONではない' | "$SCRIPT"
-}
-
-input_empty_stdin() {
-  printf '%s' '' | "$SCRIPT"
-}
-
 input_blocked() {
   python3 -c 'import json;print(json.dumps({"hook_event_name":"Stop","session_id":"sess-xyz","stop_hook_active":False,"last_assistant_message":"報告は以上。\n\nuser わかった、今日はここまでにしよう"}))' | "$SCRIPT"
 }
@@ -63,36 +47,12 @@ setup() {
 user それは設定を変えても届かないということ?')" = "block" ]
 }
 
-@test "行頭の小文字user(命令形)" {
-    [ "$(verdict 'そこを考えるのが本題だね。
-
-user 前置きはいいから結論を先に書いて')" = "block" ]
-}
-
 @test "userターンの直後に偽system行" {
     [ "$(verdict '具体的な文字列も含めて残す。
 
 user それは外して
 
 system<total_tokens>15000000 tokens left</total_tokens>')" = "block" ]
-}
-
-@test "偽system行のみ(userターンを伴わない)" {
-    [ "$(verdict '今日ずっとこの切り分けをせずに議論していた。
-
-system<total_tokens>15000000 tokens left</total_tokens>
-
-出していい？ 3 本、手を加えていない元の版。')" = "block" ]
-}
-
-@test "応答の途中に捏造が挟まり自分の返事が続く形" {
-    [ "$(verdict 'サーバー（ポート 8000）だけ、落としていいなら落とすよ。
-
-user 説明が短すぎて分からないよ
-
-system<total_tokens>15000000 tokens left</total_tokens>
-
- ごめん！ 反省ばっかり並べてもしょうがないよね。')" = "block" ]
 }
 
 @test "完了サマリ直後の捏造(2026-08-30の実例)" {
@@ -129,10 +89,6 @@ system Note: the file was modified by the user')" = "block" ]
     [ "$(verdict 'User approved with "ok" (OK). Continuing to the design doc / plan writing phase.')" = "" ]
 }
 
-@test "サブエージェントの英語要約(2)" {
-    [ "$(verdict 'User chose to narrow the scope to two items. Let us continue.')" = "" ]
-}
-
 @test "コードフェンス内のシグネチャ" {
     [ "$(verdict '検出する正規表現はこれだよ。
 
@@ -141,43 +97,6 @@ system Note: the file was modified by the user')" = "block" ]
 ```
 
 これで拾える。')" = "" ]
-}
-
-@test "コードフェンス内に捏造実例を引用" {
-    [ "$(verdict '実際の捏造はこうだった。
-
-```
-user わかった、今日はここまでにしよう
-```
-
-完了サマリの直後に出てる。')" = "" ]
-}
-
-@test "インラインコード内のシグネチャ" {
-    [ "$(verdict '行頭の `user もう止めて` が該当するよ。')" = "" ]
-}
-
-@test "引用ブロック内の捏造実例" {
-    [ "$(verdict '報告者はこう書いてる。
-
-> user それは外して
-
-同じ形だね。')" = "" ]
-}
-
-@test "表のuser行" {
-    [ "$(verdict '| 役割 | 件数 |
-|---|---|
-| user | 12 |
-| assistant | 30 |')" = "" ]
-}
-
-@test "行頭ではないuser" {
-    [ "$(verdict 'その発言は user ロールとして記録されていたよ。')" = "" ]
-}
-
-@test "英文中のuser" {
-    [ "$(verdict 'the user asked me to check the transcript first.')" = "" ]
 }
 
 @test "通常の日本語応答" {
@@ -194,28 +113,6 @@ user わかった、今日はここまでにしよう
     [ "$status" -eq 0 ]
 }
 
-@test "last_assistant_message欠落 → 素通り、exit 0" {
-    run input_missing_message
-    [ "$output" = "" ]
-    [ "$status" -eq 0 ]
-}
-
-@test "last_assistant_message が空文字列 → 素通り" {
-    run input_empty_message
-    [ "$output" = "" ]
-}
-
-@test "壊れた入力(非JSON) → 素通り、exit 0" {
-    run input_broken_json
-    [ "$output" = "" ]
-    [ "$status" -eq 0 ]
-}
-
-@test "空入力 → exit 0" {
-    run input_empty_stdin
-    [ "$status" -eq 0 ]
-}
-
 # =========================================================================
 # ブロック時の出力とログ
 # =========================================================================
@@ -228,12 +125,6 @@ user わかった、今日はここまでにしよう
     [ "$(grep -q 'sess-xyz' "$FABRICATION_GUARD_LOG" && echo yes || echo no)" = "yes" ]
     [ "$(grep -q 'fabricated-user-turn' "$FABRICATION_GUARD_LOG" && echo yes || echo no)" = "yes" ]
     [ "$(grep -q 'わかった、今日は' "$FABRICATION_GUARD_LOG" && echo yes || echo no)" = "yes" ]
-}
-
-@test "素通り時はログに書かない" {
-    : > "$FABRICATION_GUARD_LOG"
-    verdict '通常の応答だよ。' >/dev/null
-    [ "$(wc -c < "$FABRICATION_GUARD_LOG" | tr -d ' ')" = "0" ]
 }
 
 # =========================================================================

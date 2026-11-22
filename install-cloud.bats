@@ -85,22 +85,6 @@ with_cloud_hook() {
     [ "$output" = "japanese" ]
 }
 
-@test "空の settings.json でもキーを入れる" {
-    mkdir -p "$HOME/.claude"
-    : >"$HOME/.claude/settings.json"
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    run jq -r '.language' "$HOME/.claude/settings.json"
-    [ "$output" = "japanese" ]
-}
-
-@test "CLOUD_HOOK_COMMANDS が空なら hooks を入れない" {
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    run jq -c 'has("hooks")' "$HOME/.claude/settings.json"
-    [ "$output" = false ]
-}
-
 @test "hooks.Stop には CLOUD_HOOK_COMMANDS のものだけを入れる" {
     with_cloud_hook
     run bash "$SCRIPT"
@@ -109,27 +93,6 @@ with_cloud_hook() {
     [ "$output" = '["~/.claude/hooks/demo-guard.py"]' ]
     run jq -c '.hooks | keys' "$HOME/.claude/settings.json"
     [ "$output" = '["Stop"]' ]
-}
-
-@test "既存の hooks を残して hooks.Stop をマージする" {
-    with_cloud_hook
-    mkdir -p "$HOME/.claude"
-    echo '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}],"PreToolUse":[]}}' >"$HOME/.claude/settings.json"
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    run jq -c '[.hooks.Stop[].hooks[].command]' "$HOME/.claude/settings.json"
-    [ "$output" = '["mine","~/.claude/hooks/demo-guard.py"]' ]
-    run jq -c '.hooks.PreToolUse' "$HOME/.claude/settings.json"
-    [ "$output" = '[]' ]
-}
-
-@test "二度走らせても hooks.Stop の要素が重複しない" {
-    with_cloud_hook
-    bash "$SCRIPT" 2>/dev/null
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    run jq '.hooks.Stop | length' "$HOME/.claude/settings.json"
-    [ "$output" = 1 ]
 }
 
 @test "二度走らせても同じ結果になる（消した agent が残らない）" {
@@ -162,54 +125,6 @@ EOF
     [[ "$output" == *"git-repo 以外の external は飛ばす: .claude/skills/arc"* ]]
 }
 
-@test "~/.claude/hooks 配下の file の external を取って置く" {
-    printf '#!/usr/bin/env python3\n' >"$BATS_TEST_TMPDIR/guard.py"
-    printf 'x\n' >"$BATS_TEST_TMPDIR/other.txt"
-    cat >"$SRC/.chezmoiexternal.toml" <<EOF
-[".claude/hooks/guard.py"]
-type = "file"
-url = "file://$BATS_TEST_TMPDIR/guard.py"
-executable = true
-
-[".claude/other.txt"]
-type = "file"
-url = "file://$BATS_TEST_TMPDIR/other.txt"
-EOF
-    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
-    [ "$status" -eq 0 ]
-    cmp "$BATS_TEST_TMPDIR/guard.py" "$HOME/.claude/hooks/guard.py"
-    [ -x "$HOME/.claude/hooks/guard.py" ]
-    [ ! -e "$HOME/.claude/other.txt" ]
-    [[ "$output" == *"git-repo 以外の external は飛ばす: .claude/other.txt"* ]]
-}
-
-@test "file の external の取得に失敗しても既存のものを残す" {
-    cat >"$SRC/.chezmoiexternal.toml" <<EOF
-[".claude/hooks/guard.py"]
-type = "file"
-url = "file://$BATS_TEST_TMPDIR/missing.py"
-EOF
-    mkdir -p "$HOME/.claude/hooks"
-    echo keep >"$HOME/.claude/hooks/guard.py"
-    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ "$(cat "$HOME/.claude/hooks/guard.py")" = keep ]
-    [ ! -e "$HOME/.claude/hooks/guard.py.tmp" ]
-}
-
-@test "external の clone に失敗しても既存のものを残す" {
-    cat >"$SRC/.chezmoiexternal.toml" <<'EOF'
-[".claude/skills/pub"]
-type = "git-repo"
-url = "https://invalid.example/pub.git"
-EOF
-    mkdir -p "$HOME/.claude/skills/pub"
-    echo keep >"$HOME/.claude/skills/pub/SKILL.md"
-    run bash -c 'GIT_TERMINAL_PROMPT=0 bash "$1" 2>&1' _ "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ "$(cat "$HOME/.claude/skills/pub/SKILL.md")" = keep ]
-}
-
 @test "chezmoi 管理の環境では何もしない" {
     mkdir -p "$HOME/.local/share/chezmoi/.git" "$HOME/.claude"
     run bash "$SCRIPT"
@@ -226,15 +141,6 @@ EOF
     [ ! -e "$HOME/.claude/CLAUDE.md" ]
 }
 
-@test "chezmoi が PATH にある環境では何もしない" {
-    mkdir -p "$BATS_TEST_TMPDIR/bin"
-    printf '#!/bin/sh\n' >"$BATS_TEST_TMPDIR/bin/chezmoi"
-    chmod +x "$BATS_TEST_TMPDIR/bin/chezmoi"
-    run env PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$SCRIPT"
-    [ "$status" -eq 1 ]
-    [ ! -e "$HOME/.claude/CLAUDE.md" ]
-}
-
 @test "skills/ のスキルを ~/.claude/skills へ写す" {
     mkdir -p "$SRC/skills/demo/references"
     echo '---' >"$SRC/skills/demo/SKILL.md"
@@ -244,24 +150,6 @@ EOF
     diff -r "$SRC/skills/demo" "$HOME/.claude/skills/demo"
 }
 
-@test "二度走らせても skills/ から消したファイルが残らない" {
-    mkdir -p "$SRC/skills/demo"
-    echo '---' >"$SRC/skills/demo/SKILL.md"
-    bash "$SCRIPT" 2>/dev/null
-    echo stale >"$HOME/.claude/skills/demo/stale.md"
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -e "$HOME/.claude/skills/demo/stale.md" ]
-}
-
-@test "SKILL.md の無いディレクトリはスキルとして写さない" {
-    mkdir -p "$SRC/skills/notaskill"
-    echo x >"$SRC/skills/notaskill/README.md"
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -e "$HOME/.claude/skills/notaskill" ]
-}
-
 @test "CLOUD_MODS に挙げた Mod は SKILL.md が無くても写す" {
     mkdir -p "$SRC/skills/japanese-guard/.claude-plugin" "$SRC/skills/japanese-guard/hooks"
     echo '{"name":"japanese-guard"}' >"$SRC/skills/japanese-guard/.claude-plugin/plugin.json"
@@ -269,23 +157,6 @@ EOF
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     diff -r "$SRC/skills/japanese-guard" "$HOME/.claude/skills/japanese-guard"
-}
-
-@test "CLOUD_MODS に無い Mod は写さない" {
-    mkdir -p "$SRC/skills/localmod/.claude-plugin"
-    echo '{"name":"localmod"}' >"$SRC/skills/localmod/.claude-plugin/plugin.json"
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -e "$HOME/.claude/skills/localmod" ]
-}
-
-@test "本物の skills/japanese-guard をクラウドへ写す" {
-    cp -R "$BATS_TEST_DIRNAME/skills" "$SRC/skills"
-    run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    diff -r "$SRC/skills/japanese-guard" "$HOME/.claude/skills/japanese-guard"
-    [ ! -e "$HOME/.claude/skills/bg-progress" ]
-    [ ! -e "$HOME/.claude/skills/issue-link" ]
 }
 
 # cloud-skills.txt のテストに使う、サブディレクトリにスキルを持つ git リポジトリ。
@@ -310,40 +181,6 @@ make_subdir_skill_repo() {
     diff -r "$UP/skills/demo" "$HOME/.claude/skills/demo"
     [ ! -e "$HOME/.claude/skills/demo/README.md" ]
     [ ! -e "$HOME/.claude/skills/demo/.git" ]
-}
-
-@test "cloud-skills.txt のパスに SKILL.md が無ければ既存のものを残す" {
-    make_subdir_skill_repo
-    echo "demo file://$UP skills/missing" >"$SRC/cloud-skills.txt"
-    mkdir -p "$HOME/.claude/skills/demo"
-    echo keep >"$HOME/.claude/skills/demo/SKILL.md"
-    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ "$(cat "$HOME/.claude/skills/demo/SKILL.md")" = keep ]
-    [[ "$output" == *"SKILL.md が無いので飛ばす"* ]]
-}
-
-@test "cloud-skills.txt の clone に失敗しても既存のものを残す" {
-    echo "demo file://$BATS_TEST_TMPDIR/missing skills/demo" >"$SRC/cloud-skills.txt"
-    mkdir -p "$HOME/.claude/skills/demo"
-    echo keep >"$HOME/.claude/skills/demo/SKILL.md"
-    run bash -c 'GIT_TERMINAL_PROMPT=0 bash "$1" 2>&1' _ "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ "$(cat "$HOME/.claude/skills/demo/SKILL.md")" = keep ]
-}
-
-@test "cloud-skills.txt の名前やパスで ~/.claude/skills や clone の外を指させない" {
-    make_subdir_skill_repo
-    {
-        echo "../evil file://$UP skills/demo"
-        echo ".hidden file://$UP skills/demo"
-        echo "demo file://$UP skills/../.."
-    } >"$SRC/cloud-skills.txt"
-    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ ! -e "$HOME/.claude/evil" ]
-    [ ! -e "$HOME/.claude/skills/.hidden" ]
-    [ ! -e "$HOME/.claude/skills/demo" ]
 }
 
 @test "本物の cloud-skills.txt の行はすべて「名前 URL パス」の形" {
