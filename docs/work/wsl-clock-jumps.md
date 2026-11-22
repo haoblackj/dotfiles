@@ -27,7 +27,9 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
    - 1 tick ごとに 11ms 進めるので、CLOCK_MONOTONIC と CLOCK_REALTIME の進み方が実際より 10% 速い。NTP サーバ（ntp.nict.jp）と比べても、段差の間の時計は 0.53 秒ごとに約 0.048 秒ずつ先行した。
    - 誰が設定したかは分からない。この distro に adjtimex、chrony、ntpd は無く、コンテナは特権も CAP_SYS_TIME も持たず、過去の Claude の会話の記録にも設定した跡が無い。
    - 2026-11-22 23:2x に sudo で 10000 に戻すと一時は 10000 と読めたが、35 秒後の測定では CLOCK_MONOTONIC が RAW の 1.10 倍のままで、数分後には 11000 に戻っていた。何かが繰り返し 11000 を書いている。「一度書かれて残っているだけ」という最初の見立ては外れた。
-   - 書きうる候補: systemd-timesyncd は `clock_adjtime` を呼ぶ（ただし普通は tick を書かない）。WSL の `/init` は静的リンクで中身を読めない。同じカーネルを共有するほかの WSL の distro の時刻同期（chrony なら周波数の補正が 500ppm を超えると tick を上限の ±10% まで動かす）も候補だが、ここからは見えない。
+   - 書き手は別の distro の chronyd と確定した。ftrace の instance で時刻を書くシステムコールを 90 秒記録すると（2026-11-23 00:3x、リーダーの sudo）、tick が 10000 から 11000 に戻った瞬間（mono 1096786.610）の 1ms 前に `chronyd`（PID 185）が `clock_adjtime` を呼んでいた。chronyd は約 8 秒ごとに `clock_adjtime` を 4 回ずつ呼び続け、timesyncd は 32 秒ごとに 1 回呼んでいた。この distro の PID 185 は別のプロセスで、chrony も入っていないので、chronyd は同じカーネルを共有する別の WSL の distro（別の PID の名前空間）で動いている。
+   - chrony は周波数の補正が 500ppm を超えると tick を上限の ±10% まで動かす。timesyncd が時計を戻し続けるので、chronyd は時計が遅れ続けていると見て tick を上限の 11000 に張り付かせている、と読める（推定）。
+   - Ubuntu の chrony は WSL の中では既定で時計を書かず、`SYNC_IN_CONTAINER="yes"` を設定したときだけ書く（Ubuntu の WSL の文書）。その distro では、この設定が入っているか、Ubuntu 以外の chrony が動いている見込み。
 2. Hyper-V の時刻同期と systemd-timesyncd が、5 秒ごとに別々の時刻を書き合っている。
    - `hv_utils` の `timesync_implicit` が Y で、ホスト（Windows）が 5 秒ごとに送る時刻の標本でゲストの時計を書き換える。WSL の時計が 10% 速いので、ゲストの時間では約 5.5 秒ごとになる。
    - 書き換えられた直後、timesyncd が時計の変更を検知して NTP に問い合わせ、約 0.27 秒後に -8 秒戻す。根拠: `timedatectl timesync-status` が毎回 `Offset: -7.99s` を示し、timesyncd の起動（19:26）からの送信 2777 回が段差の回数の見積もり（約 2550 回）とほぼ合う。journald と systemd-resolved も 5 秒ごとに時計の変更を記録している。
@@ -62,8 +64,8 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 ## いまの作業
 
 `tick` を 11000 に書き戻している者を探している。
-2026-11-22 23:29:24 に 10000 にした 8.3 秒後（23:29:31）に 11000 へ戻った。timesyncd の同期（23:29:22 と 23:29:53）とは重なっておらず、timesyncd 以外の書き手の見込みが高い。
-書いたプロセスの名前を取るため、ftrace の instance で `adjtimex`、`clock_adjtime`、`settimeofday`、`clock_settime` の呼び出しを 90 秒記録するスクリプトを用意し、リーダーが sudo で走らせるのを待っている（スクリプトは Claude の scratchpad の `trace_tick.sh`）。
+書き手は別の distro の chronyd と分かった（「判明した事実」）。
+どの distro かを調べるには Windows の `wsl.exe -l -v` を読む必要があり、Windows 側に触るのでリーダーの許可を待っている。
 
 ## 済んだこと
 
@@ -78,7 +80,8 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 
 ## 次に Claude がすること
 
-- ftrace の記録で、tick が 11000 に戻った時刻の前後に時刻を書くシステムコールを呼んだプロセス（timesyncd とこのスクリプトの python3 以外）を特定し、止め方を決める。
+- 許可が出たら `wsl.exe -l -v` で動いている distro を見て、chronyd の動く distro と、その chrony の設定（`SYNC_IN_CONTAINER` など）を読む。
+- 時刻を書く仕組みを、常に動くこの distro の timesyncd 一つにまとめる。案は、その distro の chronyd に時計を書かせない（止める、または `SYNC_IN_CONTAINER` を外す）こと。どちらも再起動は要らないが、別の distro の設定を変えるのでリーダーに確かめる。
 - 書き手を止めたら、`time.time()` と `time.monotonic()` を 30 秒並べて段差が 0 件、CLOCK_MONOTONIC と RAW の比が 1.000 に近く、NTP とのずれが数十 ms に収まることを確かめる。結果をここに書いて送り手のセッションへ返す。
 
 ## リーダーに決めてほしいこと
