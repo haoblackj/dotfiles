@@ -71,6 +71,68 @@ class TestResolveMemoryDir(unittest.TestCase):
         self.assertEqual(got, proj + "/memory")
 
 
+def make_repo_with_worktree(root):
+    """root の下に本体 main/ とそのワークツリー wt/ を作り、両方のパスを返す。"""
+    import subprocess
+    main = os.path.join(root, "main")
+    wt = os.path.join(root, "wt")
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+           "-c", "init.defaultBranch=main"]
+    subprocess.run(git + ["init", "-q", main], check=True)
+    subprocess.run(git + ["-C", main, "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+    subprocess.run(git + ["-C", main, "worktree", "add", "-q", "-b", "b", wt], check=True)
+    return main, wt
+
+
+def project_dir_name(path):
+    return "".join(c if c.isascii() and c.isalnum() else "-" for c in path)
+
+
+class TestResolveRepoMemoryDir(unittest.TestCase):
+    """Claude Code はワークツリーでも本体のパスから <project> を決める（2026-11-22 に実測）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = os.path.realpath(self.tmp.name)
+        self.main, self.wt = make_repo_with_worktree(root)
+        self.base = os.path.join(root, "projects")
+        self.mem = os.path.join(self.base, project_dir_name(self.main), "memory")
+        os.makedirs(self.mem)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_worktree_resolves_to_main_checkout_memory(self):
+        self.assertEqual(mod.resolve_repo_memory_dir(self.wt, self.base), self.mem)
+
+    def test_main_checkout_resolves_to_its_memory(self):
+        self.assertEqual(mod.resolve_repo_memory_dir(self.main, self.base), self.mem)
+
+    def test_subdirectory_of_worktree_resolves(self):
+        sub = os.path.join(self.wt, "a", "b")
+        os.makedirs(sub)
+        self.assertEqual(mod.resolve_repo_memory_dir(sub, self.base), self.mem)
+
+    def test_none_outside_git(self):
+        self.assertIsNone(mod.resolve_repo_memory_dir(self.base, self.base))
+
+    def test_none_when_memory_missing(self):
+        os.rmdir(self.mem)
+        self.assertIsNone(mod.resolve_repo_memory_dir(self.wt, self.base))
+
+    def test_non_utf8_repo_path_returns_none(self):
+        # git の出力が UTF-8 で読めないとき、例外を外へ出さずに None で従来の解決へ落とす。
+        import subprocess
+        raw = os.path.join(os.fsencode(os.path.realpath(self.tmp.name)), b"r\xff")
+        subprocess.run([b"git", b"init", b"-q", raw], check=True)
+        self.assertIsNone(mod.resolve_repo_memory_dir(os.fsdecode(raw), self.base))
+
+    def test_rejects_bad_cwd(self):
+        self.assertIsNone(mod.resolve_repo_memory_dir(None, self.base))
+        self.assertIsNone(mod.resolve_repo_memory_dir("relative/dir", self.base))
+        self.assertIsNone(mod.resolve_repo_memory_dir("/no/such/dir/xyz", self.base))
+
+
 class TestPureLogic(unittest.TestCase):
     def test_normalize_unit_length(self):
         v = mod.normalize([3.0, 4.0])
@@ -265,6 +327,33 @@ class TestScoringAndMain(unittest.TestCase):
             self.assertIn("[memory-recall]", out)
             self.assertIn("height.md", out)
             self.assertIn("身長183cm", out)
+
+    def test_main_finds_memory_from_worktree_cwd(self):
+        # ワークツリーの transcript の置き場には memory が無い。cwd から本体の memory を引く。
+        with tempfile.TemporaryDirectory() as t:
+            root = os.path.realpath(t)
+            main, wt = make_repo_with_worktree(root)
+            base = os.path.join(root, "projects")
+            mem = os.path.join(base, project_dir_name(main), "memory")
+            os.makedirs(mem)
+            Path(mem, "height.md").write_text("---\ndescription: 身長183cm\n---\n本文")
+            wt_proj = os.path.join(base, project_dir_name(wt))
+            os.makedirs(wt_proj)
+            secrets = Path(root, "tok")
+            secrets.write_text("CF_ACCOUNT_ID=a\nCF_API_TOKEN=t\n")
+
+            def fake_embed(texts, cfg, timeout=None):
+                return [[1.0, 0.0] for _ in texts]
+
+            payload = {"prompt": "背が高い人向けの家具を探している", "cwd": wt,
+                       "transcript_path": os.path.join(wt_proj, "s.jsonl")}
+            with patch.object(mod, "embed_texts", fake_embed), \
+                    patch.object(mod, "PROJECTS_BASE", base), \
+                    patch.dict(os.environ, {"MEMORY_RECALL_SECRETS": str(secrets)}):
+                os.environ.pop("MEMORY_RECALL_DIR", None)
+                self._run_main(payload, {})
+                out = self._run_main(payload, {})
+            self.assertIn("height.md", out)
 
     def test_main_silent_when_below_threshold(self):
         with tempfile.TemporaryDirectory() as d:
