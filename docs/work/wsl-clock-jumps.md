@@ -1,6 +1,6 @@
 ---
 title: WSL のシステム時刻が数秒ごとに前後へ飛ぶバグを直す
-status: waiting
+status: done
 ---
 
 ## 目的
@@ -13,16 +13,14 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 
 ## いまの方針
 
-再起動（Windows も WSL も）をしない方法で直す。
-WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要るのでリーダーが別の端末で打つ。`!` の欄では sudo のパスワードを読めない）。
-`timesync_implicit` は戻せた。`tick` は書き戻されるので、書き手を探している。
-戻したら、引き継ぎで使ったのと同じ並べ方（`time.time()` と `time.monotonic()` を並べて回す）で飛びが消えたことを確かめる。
+再起動（Windows も WSL も）をしない方法で直した。
+時刻を書く仕組みを WSL 2.7 の chronyd 一つにまとめ（Ubuntu の timesyncd を disable）、chronyd が従う Windows の時計を `w32tm /resync` で NTP に合わせ直した。
 
 ## 判明した事実
 
-原因は二つあり、組み合わさって今の症状になっている。
+直す前の症状は、二つの原因が組み合わさって起きていた（1 から 3 は調べた順に書いた途中の見立てを含み、確定した原因は 1 の「書き手は」以降と 2 と 5）。
 
-1. カーネルの `tick` が 11000 になっている（通常は 10000）。
+1. カーネルの `tick` が 11000 になっていた（通常は 10000）。
    - 根拠: `adjtimex`（読み取りだけ）で `tick 11000`。CLOCK_MONOTONIC_RAW の 9.092 秒の間に CLOCK_MONOTONIC が 10.002 秒進んだ（比 1.100）。
    - 1 tick ごとに 11ms 進めるので、CLOCK_MONOTONIC と CLOCK_REALTIME の進み方が実際より 10% 速い。NTP サーバ（ntp.nict.jp）と比べても、段差の間の時計は 0.53 秒ごとに約 0.048 秒ずつ先行した。
    - 誰が設定したかは分からない。この distro に adjtimex、chrony、ntpd は無く、コンテナは特権も CAP_SYS_TIME も持たず、過去の Claude の会話の記録にも設定した跡が無い。
@@ -48,7 +46,10 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
    - `w32tm /query /status` は、最終の正常な同期が 02:31:29（ソース ntp.nict.jp）、ルート分散 16 秒。同期には成功したのに時計は 8 秒進んだまま。Windows Time は既定でずれが 50 秒未満（`LargePhaseOffset`）なら時計を一気に合わせず少しずつ寄せるので、そのためと読める（推定）。10 分見ても -8.230 から -8.223 秒までしか寄っていない。
    - 02:37 に Windows から `w32tm /stripchart`（管理者権限なしで動く）で測ると、ntp.nict.jp へは IPv6 でも IPv4 でもタイムアウト（0x800705B4）した。time.windows.com と time.google.com には届き、ずれは -6.07 から -5.96 秒へ縮んでいた。WSL から ntp.nict.jp へは届くので、Windows から NICT への通信だけが届いていない（原因は未調査）。
    - Windows の時計の NTP に対する進みは、02:33 に約 8.2 秒、02:37 に約 6.0 秒、02:39 に約 4.4 秒（WSL との差 -3.8 秒から逆算）と縮んでいる。`w32tm /resync` の後、少しずつ寄せていると読める。WSL の時計は 02:38 でまだ 8.21 秒進んでいて、Windows に追いついていない。
-6. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
+6. 直し終えた後の測定（2026-11-23 02:41〜02:44）:
+   - 02:41:03 に NTP とのずれが -0.79 秒になり、その 60 秒後に ntp.nict.jp、time.windows.com、time.google.com がそろって -0.12 秒前後、02:44 に -0.24 秒前後（Windows の時計が寄せている途中のゆらぎ）。
+   - `time.time()` と `time.monotonic()` を 60 秒並べて段差 0 件。tick 10000。CLOCK_MONOTONIC_RAW の 10.0 秒に CLOCK_MONOTONIC も 10.0 秒。
+7. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
 
 ## 判断の経緯
@@ -85,29 +86,25 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 
 ## いまの作業
 
-`tick` を 11000 に書き戻している者を探している。
-Ubuntu の timesyncd を止めて、時刻を書く NTP のデーモンを WSL の chronyd 一つにした。時刻の段差は消え、時計の進みも正しくなった。
-リーダーが timesyncd を disable し、Windows の時計を `w32tm /resync` で直すのを待っている。バックグラウンドの監視が両方を検出したら、NTP とのずれと時刻の段差を測り直す。
+なし（済んだ）。
 
 ## 済んだこと
 
 - 再現と原因の特定（上の「判明した事実」）。
-- `timesync_implicit` を 0 にした（2026-11-22 23:2x、リーダーの sudo）。5 秒ごとの段差は消えた。
+- `timesync_implicit` を 0 にした（2026-11-22 23:2x、リーダーの sudo）。5 秒ごとの段差は消えた。WSL を次に起動すると既定の 1 に戻るが、chronyd もホストの時計に合わせているので向きはそろう見込み。
 - tick の書き手を ftrace で WSL の chronyd と突き止めた。
-- timesyncd を止めた（2026-11-23 02:08、`stop` だけ）。段差は 0 件、進みの比は 1.000 になった。
+- timesyncd を止めて disable した（2026-11-23 02:08 と 02:28、リーダーの sudo）。段差は 0 件、進みの比は 1.000 になった。
+- Windows の時計を `w32tm /resync` で直した（リーダーの管理者の PowerShell）。WSL の時刻も NTP に 0.3 秒以内で合った。
 
 ## 残っていること
 
-- timesyncd の disable（リーダーの sudo）。
-- Windows の時計の `w32tm /resync`（リーダーの管理者の PowerShell）。WSL の時刻はいま Windows の時計に合わせていて、NTP より 8.23 秒進んでいる。
-- 直した後の測り直し。
 - ほかのマシンの WSL（2.7 以降で chronyd が動くもの）でも timesyncd との奪い合いが起きうる。そのマシンでは手で disable する（chezmoi では配らない判断）。
-- `timesync_implicit` は、chronyd もホストの時計に合わせているので、次の起動で既定の 1 に戻っても両者の向きはそろう見込み。0 を保つ仕組みは置かない案に変えた（前の問いは取り下げ）。
+- Windows から ntp.nict.jp へだけ NTP が届かない（time.windows.com と time.google.com には届く）。w32tm の同期先は ntp.nict.jp なので、Windows の時計がまたずれる原因になりうる。原因は調べていない。
+- WSL を次に起動したとき、同じ飛びが戻らないかを測って確かめる（`timesync_implicit` が 1 に戻った状態で）。
 
 ## 次に Claude がすること
 
-- 監視の結果で、timesyncd が disabled になり、NTP とのずれが 1 秒未満になり、60 秒の測定で段差が 0 件であることを確かめて、ここに書く。
-- 結果の要約を、引き継いだ送り手のセッションへ SendMessage で返す。
+- リーダーの指示があれば「残っていること」を進める。
 
 ## リーダーに決めてほしいこと
 
