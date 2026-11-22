@@ -24,8 +24,11 @@ repos:
           GIT_*) unset "$v" ;;
           esac; done;
           exec pytest -p no:cacheprovider'
-      # 追跡された .bats をソースツリーで走らせる。bats を直接呼ぶ
-      # （自作の run-bats-gate は 2026-09-13 に撤去）。
+      # 追跡された .bats（git ls-files）だけを走らせる。bats を直接呼ぶ
+      # （自作の run-bats-gate は 2026-09-13 に撤去）。bats -r . はファイルを置き場の下から
+      # たどるので、本番の作業コピーの .claude/worktrees/ の下にある別のワークツリーの
+      # テストまで拾い、3000 件を超えて走らせて push が 10 分を超えた（2026-11-22）。
+      # 一覧は GIT_* を落とす前に取る（git がフックに渡した GIT_DIR のまま読む）。
       # ワークツリーから push すると、git はフックに GIT_DIR=<本体>/.git/worktrees/<名前>
       # を渡す。テストの一時リポジトリへの git init / add がそれを継承して本体側へ
       # 書き込み、本体の core.bare を true にし、ワークツリーの index を汚した
@@ -47,6 +50,7 @@ repos:
         verbose: true
         entry: >-
           bash -c 'cd "$(git rev-parse --show-toplevel)" || exit 1;
+          mapfile -d "" files < <(git ls-files -z "*.bats");
           for v in $(compgen -e); do case "$v" in
           GIT_EXEC_PATH|GIT_SSH|GIT_SSH_COMMAND|GIT_SSL_CAINFO|GIT_SSL_NO_VERIFY) ;;
           GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) ;;
@@ -54,8 +58,8 @@ repos:
           GIT_*) unset "$v" ;;
           esac; done;
           if parallel --version 2>/dev/null | grep -q "GNU parallel"; then
-          exec bats -r --jobs "$(nproc)" .; fi;
-          exec bats -r .'
+          exec bats --jobs "$(nproc)" "${files[@]}"; fi;
+          exec bats "${files[@]}"'
       # ShellCheck の除外規則 -e SC2015,SC2016,SC2030,SC2031 の理由
       # （両リポジトリで同一内容。自己完結させるため）。
       # SC2015（`A && B || C` は if-then-else ではない）:
