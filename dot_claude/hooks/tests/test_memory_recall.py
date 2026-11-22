@@ -120,6 +120,13 @@ class TestResolveRepoMemoryDir(unittest.TestCase):
         os.rmdir(self.mem)
         self.assertIsNone(mod.resolve_repo_memory_dir(self.wt, self.base))
 
+    def test_non_utf8_repo_path_returns_none(self):
+        # git の出力が UTF-8 で読めないとき、例外を外へ出さずに None で従来の解決へ落とす。
+        import subprocess
+        raw = os.path.join(os.fsencode(os.path.realpath(self.tmp.name)), b"r\xff")
+        subprocess.run([b"git", b"init", b"-q", raw], check=True)
+        self.assertIsNone(mod.resolve_repo_memory_dir(os.fsdecode(raw), self.base))
+
     def test_rejects_bad_cwd(self):
         self.assertIsNone(mod.resolve_repo_memory_dir(None, self.base))
         self.assertIsNone(mod.resolve_repo_memory_dir("relative/dir", self.base))

@@ -189,7 +189,7 @@ def resolve_repo_memory_dir(cwd, base=None):
         done = subprocess.run(
             ["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True, text=True, timeout=GIT_TIMEOUT_SEC, check=True)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, ValueError, subprocess.SubprocessError):
         return None
     common = done.stdout.strip()
     if os.path.basename(common) != ".git":
