@@ -49,7 +49,12 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 6. 直し終えた後の測定（2026-11-23 02:41〜02:44）:
    - 02:41:03 に NTP とのずれが -0.79 秒になり、その 60 秒後に ntp.nict.jp、time.windows.com、time.google.com がそろって -0.12 秒前後、02:44 に -0.24 秒前後（Windows の時計が寄せている途中のゆらぎ）。
    - `time.time()` と `time.monotonic()` を 60 秒並べて段差 0 件。tick 10000。CLOCK_MONOTONIC_RAW の 10.0 秒に CLOCK_MONOTONIC も 10.0 秒。
-7. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
+7. 「Windows から ntp.nict.jp へ届かない」は、測るのに使った `w32tm /stripchart` の見かけだった（2026-11-23 02:5x に調べた。読み取りだけ、リーダーの指示）。
+   - `w32tm /stripchart /packetinfo` で見ると、stripchart は NTP のバージョン 1 の問い合わせ（先頭のバイト 0x0b）を送る。WSL から同じバイトを送ると、ntp.nict.jp は IPv4 でも IPv6 でもバージョン 1 にだけ答えず、バージョン 2 から 4 には答える。time.google.com はバージョン 1 にも答える。
+   - Windows の PowerShell から送ったバージョン 3 の問い合わせには、ntp.nict.jp も IPv4 と IPv6 の両方で答えた。Windows Time のサービス本体も 02:31:27 に ntp.nict.jp から有効な時刻を受け、02:31:29 に同期した（イベントログの id 37 と 35）。
+   - Windows の時計が 8 秒ずれていた理由はイベントログにあった。この PC の Windows Time はドメインの時刻源から時刻を取る設定で、ドメインの相手を見つけられないエラー（id 129）が毎日続き、「使用可能なタイム スタンプが無いので約 86,000〜117,000 秒同期していない」（id 36）が 11/20 から毎日記録されている。何日も同期しないまま時計が進んだと読める（推定。設定そのものは管理者権限が要り読めていない）。
+   - 02:58 に Windows の時計は time.google.com に対して -0.014 秒まで合っていた。
+8. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
 
 ## 判断の経緯
@@ -99,7 +104,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 ## 残っていること
 
 - ほかのマシンの WSL（2.7 以降で chronyd が動くもの）でも timesyncd との奪い合いが起きうる。そのマシンでは手で disable する（chezmoi では配らない判断）。
-- Windows から ntp.nict.jp へだけ NTP が届かない（time.windows.com と time.google.com には届く）。w32tm の同期先は ntp.nict.jp なので、Windows の時計がまたずれる原因になりうる。原因は調べていない。
+- Windows の時計がまたずれうる。Windows Time は、毎日ドメインの時刻源を見つけられずに同期しないまま過ごしている（下の「判明した事実」の 7）。直すなら Windows Time の設定の変更（Windows 側、管理者）になり、リーダーの判断が要る。
 - WSL を次に起動したとき、同じ飛びが戻らないかを測って確かめる（`timesync_implicit` が 1 に戻った状態で）。
 
 ## 次に Claude がすること
