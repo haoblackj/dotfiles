@@ -134,7 +134,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 
 ## 参照
 
-- 書き置き: `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md`（PR #120 のブランチ）
+- 書き置き: `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md`（直した後に外した。中身は git の履歴にある）
 - PR #120（pre-push のテストを速くする）
 - PR #122（この作業記録）
 - https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/
