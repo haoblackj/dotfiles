@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # statusline-context-window.sh のユニットテスト。
 set -u
+bats_require_minimum_version 1.5.0
 
 marker_of() { # session_id
     cat "$TMPDIR_TEST/claude-status-context-window/$1" 2>/dev/null || echo ''
@@ -67,3 +68,81 @@ rate_of() { # session_id
     [[ "$(rate_of rl-1 | jq -r '.sevenDay.changedAt')" =~ ^[0-9]+$ ]]
 }
 
+# 以下は herdr のタブ名同期（haoblackj/dotfiles#11）の統合テスト。
+# ソースでは2本とも executable_ 付きの名前なので、ターゲットの名前で一時ディレクトリへ写し、
+# statusline のスクリプトが同じディレクトリの herdr-tab-title-sync.sh を呼べるようにする。
+install_hooks_as_target() {
+    HOOKS="$TMPDIR_TEST/hooks"
+    mkdir -p "$HOOKS"
+    cp "$BATS_TEST_DIRNAME/executable_statusline-context-window.sh" "$HOOKS/statusline-context-window.sh"
+    cp "$BATS_TEST_DIRNAME/executable_herdr-tab-title-sync.sh" "$HOOKS/herdr-tab-title-sync.sh"
+
+    # 偽の herdr。引数を | 区切りで1行記録する。FAKE_HERDR_DELAY 秒だけ tab get を遅らせる。
+    cat > "$FAKE_BIN/herdr" <<'EOS'
+#!/bin/bash
+if [ "$1" = tab ] && [ "$2" = get ]; then
+  sleep "${FAKE_HERDR_DELAY:-0}"
+  printf '{"result":{"tab":{"pane_count":1,"label":"3"}}}'
+fi
+{ printf '%s|' "$@"; printf '\n'; } >> "$HERDR_LOG"
+exit 0
+EOS
+    chmod +x "$FAKE_BIN/herdr"
+    export XDG_STATE_HOME="$TMPDIR_TEST/state"
+    export HERDR_LOG="$TMPDIR_TEST/herdr.log"
+    : > "$HERDR_LOG"
+    export HERDR_ENV=1 HERDR_TAB_ID="w1:t1" HERDR_PANE_ID="w1:p1"
+}
+
+wait_for_rename() { # 上限5秒
+    for _ in $(seq 50); do
+        grep -q '^tab|rename|' "$HERDR_LOG" && return 0
+        sleep 0.1
+    done
+    return 1
+}
+
+@test "herdrの中 -> stdoutは入力のまま通り、バックグラウンドでtab renameが呼ばれる" {
+    install_hooks_as_target
+    input='{"session_id":"sess-h1","session_name":"同期するタイトル"}'
+    run bash "$HOOKS/statusline-context-window.sh" <<< "$input"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$input" ]
+    wait_for_rename
+    grep -qxF 'tab|rename|w1:t1|同期するタイトル|' "$HERDR_LOG"
+}
+
+@test "herdrの応答が遅い -> statuslineは待たずに返る" {
+    install_hooks_as_target
+    export FAKE_HERDR_DELAY=3
+    input='{"session_id":"sess-h2","session_name":"遅いherdr"}'
+    start=$(date +%s%N)
+    run bash "$HOOKS/statusline-context-window.sh" <<< "$input"
+    elapsed_ms=$(( ($(date +%s%N) - start) / 1000000 ))
+    [ "$status" -eq 0 ]
+    [ "$output" = "$input" ]
+    [ "$elapsed_ms" -lt 2000 ]
+    # teardown が一時ディレクトリを消した後に子が書き込まないよう、終わるのを待つ。
+    wait_for_rename
+}
+
+@test "herdrの外 -> herdrを呼ばず、stdoutは入力のまま" {
+    install_hooks_as_target
+    unset HERDR_ENV
+    input='{"session_id":"sess-h3","session_name":"外"}'
+    run bash "$HOOKS/statusline-context-window.sh" <<< "$input"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$input" ]
+    sleep 0.3
+    [ ! -s "$HERDR_LOG" ]
+}
+
+@test "herdr-tab-title-sync.shが無い -> stdoutは入力のまま、stderrも空" {
+    install_hooks_as_target
+    rm -f -- "$HOOKS/herdr-tab-title-sync.sh"
+    input='{"session_id":"sess-h4","session_name":"無い"}'
+    run --separate-stderr bash "$HOOKS/statusline-context-window.sh" <<< "$input"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$input" ]
+    [ -z "$stderr" ]
+}
