@@ -63,6 +63,12 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 - 理由: WSL の chronyd は WSL の部品で VM の最上位で動き、Ubuntu からは止められない。timesyncd は止めても再起動は要らず、`systemctl start` で戻せる。
 - 状態: 有効
 
+### 2026-11-23 採用: このマシンで timesyncd を disable し、Windows の時計は w32tm で直す
+- 出どころ: 質問のツールへの答え（会話 e6df2c15、2026-11-23 02:2x。`prts quote` では原文未確認）
+- 要旨（Claude の要約）: timesyncd はこのマシンでだけ disable する（chezmoi で全マシンに配る案は選ばなかった）。Windows の時計の約 8.2 秒のずれは、リーダーが管理者の PowerShell の `w32tm /resync` で直す。
+- 理由: 理由の提示なし（Claude の推奨の案を選んだ）。
+- 状態: 有効
+
 ### 2026-11-22 棄却: `.wslconfig` の kernelCommandLine で `timesync_implicit=0` を渡す
 - 理由: Windows 側のファイルの編集と WSL の再起動が要り、再起動しない方針に反する。
 - 状態: 有効
@@ -75,7 +81,7 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 
 `tick` を 11000 に書き戻している者を探している。
 Ubuntu の timesyncd を止めて、時刻を書く NTP のデーモンを WSL の chronyd 一つにした。時刻の段差は消え、時計の進みも正しくなった。
-残るのは、止めたままにするか（次の起動で timesyncd が戻るか）と、Windows の時計の 8.2 秒のずれの扱いで、どちらもリーダーの答えを待っている。
+リーダーが timesyncd を disable し、Windows の時計を `w32tm /resync` で直すのを待っている。バックグラウンドの監視が両方を検出したら、NTP とのずれと時刻の段差を測り直す。
 
 ## 済んだこと
 
@@ -86,8 +92,10 @@ Ubuntu の timesyncd を止めて、時刻を書く NTP のデーモンを WSL �
 
 ## 残っていること
 
-- timesyncd を次の起動でも止めたままにするか（下の問い）。
-- Windows の時計が NTP より約 8.2 秒進んでいる件（下の問い）。WSL の時刻はいまこれに合わせている。
+- timesyncd の disable（リーダーの sudo）。
+- Windows の時計の `w32tm /resync`（リーダーの管理者の PowerShell）。WSL の時刻はいま Windows の時計に合わせていて、NTP より 8.23 秒進んでいる。
+- 直した後の測り直し。
+- ほかのマシンの WSL（2.7 以降で chronyd が動くもの）でも timesyncd との奪い合いが起きうる。そのマシンでは手で disable する（chezmoi では配らない判断）。
 - `timesync_implicit` は、chronyd もホストの時計に合わせているので、次の起動で既定の 1 に戻っても両者の向きはそろう見込み。0 を保つ仕組みは置かない案に変えた（前の問いは取り下げ）。
 
 ## 次に Claude がすること
