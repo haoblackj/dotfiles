@@ -131,7 +131,7 @@ Herdr で組んでいた仕掛けを、戻せる形で外す。
 
 ## いまの作業
 
-PR #99 は main に入り（4466ce6）、本番の作業コピーを main へ移して `~/.claude` へ配った。prts の Orca への移行は済んだ（2026-11-22、別のセッションからの知らせ）。Herdr は外さないと決まった。prts の引き継ぎの手順の PR #113 は main に入った（e8939ad）。いまは、`next` のブロックの決まりを移す PR #114 に main をマージして作業記録の食い違いを解き、取り込んで本番の `~/.claude/CLAUDE.md` に配っている（2026-11-22、リーダーの指示）。
+PR #99 は main に入り（4466ce6）、本番の作業コピーを main へ移して `~/.claude` へ配った。prts の Orca への移行は済んだ（2026-11-22、別のセッションからの知らせ）。Herdr は外さないと決まった。prts の引き継ぎの手順（#113）と、`next` のブロックの決まりを前面に依らない節へ移す変更（#114）は main に入り、本番の `~/.claude/CLAUDE.md` に配った。進めている物は無く、残りは実機の確かめだけ。
 
 ## 済んだこと
 
@@ -142,15 +142,19 @@ PR #99 は main に入り（4466ce6）、本番の作業コピーを main へ移
 - 断捨離の PR #99 を main に取り込んだ（4466ce6、squash）。取り込みの前に main（#105 まで）をマージし、#105 が書き換えた `skills/session-handoff/SKILL.md` は #99 の削除の側で解いた。pytest 203 件、bats 363 件が通った。取り込みの前に、Windows のユーザーの環境変数に `ORCA_FEATURE_REMOTE_AGENT_HOOKS=0` が登録されていること（`reg.exe query`）と、ほかのセッションに取り込みを止める作業が無いことを確かめた。
 - 本番の作業コピーを main の先端（4466ce6）へ移し、`chezmoi apply --force ~/.claude` を流した。`~/.claude/settings.json` は symlink に戻り、Herdr の 4 本のスクリプトと `session-handoff` のスキルが消え、`chezmoi status ~/.claude` の違いは 0 件になった。移す前の控えは `~/.cache/orca-from-herdr/prod-before-99/`（本番の未コミットだった `settings.json`、手元の `settings.json`、差分、元の HEAD）。全体の `chezmoi apply` は流していない（`ideas/bugs/2026-11-21-zshrc-opencode-path-not-in-source.md`）。
 - prts を Orca へ移す仕事を、別のセッションに渡した。
+- prts の引き継ぎの手順の PR #113（e8939ad）と、`next` のブロックの決まりを前面に依らない節へ移す PR #114（7a5d273）を、この順に main に取り込んだ（端末からの入力（会話 3c33ee18、2026-11-22 15:34、発言 9b069b0f）の指示）。#114 には #113 の入った main をマージし、作業記録の食い違いは両方の判断を残して解いた。CLAUDE.md は自動でマージでき、199 行のまま。試験は通った。
+- 本番の作業コピーを main の先端（7a5d273）へ移し、`chezmoi apply ~/.claude/CLAUDE.md` だけを流した。配った後の `chezmoi status ~/.claude` の違いは 0 件。移す前の控えは `~/.cache/orca-from-herdr/prod-before-114/`（元の HEAD と、手元の `CLAUDE.md`）。このセッションはワークツリーに閉じ込められていて本番の作業コピーで git を打てなかったので、`ExitWorktree`（keep）で抜けてから行った。
 
 ## 残っていること
 
 - Orca の画面から起動した Claude に起動フックが効くかの確かめ（効かなくても、CLAUDE.md の指示で補われる）。
+- prts の引き継ぎを、`--prompt` で渡して受けた側で望みが結び直るかの実機の確かめ。
+- Herdr や素のターミナルの新しいセッションで、`next` のブロックが書かれ、帯にボタンが出るかの実機の確かめ。
 - Windows の Orca を起動し直して環境変数を効かせることと、`PermissionRequest` の Orca のフックの `timeout`（ソースは Windows 側の中継が書いた 10、WSL 側の orcad は 130 を書く）は、symlink の調べの作業（ワークツリー `settings-symlink`）に渡した。その作業はソースを 130 にそろえる変更を PR #100 に載せ、先に Orca を起動し直してから #100 を取り込む順にした（変数の効いていない中継が 130 を見ると 10 に書き直し、symlink をまた置き換えうるため）。
 
 ## 次に Claude がすること
 
-- PR #114 を取り込み、本番の作業コピーを main の先端へ移して `chezmoi apply ~/.claude/CLAUDE.md` で配り、結果をこの記録に書く。
+- リーダーの指示があれば、「残っていること」の実機の確かめを、本番の望みを使わず、使い捨ての作業ディレクトリで立てたセッションで行う。
 
 ## リーダーに決めてほしいこと
 
