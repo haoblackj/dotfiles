@@ -38,7 +38,11 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
    - `/sys/module/hv_utils/parameters/timesync_implicit` は 644 で、root なら実行中に書き換えられる。WSL はカーネルの起動引数で `hv_utils.timesync_implicit=1` を明示して渡している（`/proc/cmdline`）。
    - 2026-11-22 23:2x に 0 にした後は、5 秒ごとの +7.5/-8 秒の段差が消え、timesyncd が 32 秒ごとに -2.96 秒戻す段差だけになった（tick が 11000 のままなので、32 秒で約 3 秒先行する）。
 3. 二つ目だけを直しても、一つ目が残ると timesyncd は 10% のずれ（slew の上限 500ppm を超える）を段差で直すしかなく、約 32 秒ごとに数秒の段差が残る見込み。一つ目だけを直しても、ホストと NTP の 8 秒の差の綱引きが続く。両方を直す。
-4. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
+4. timesyncd を止めた結果（2026-11-23 02:08 に `systemctl stop`、リーダーの sudo）:
+   - 止めた直後から 10 分、30 秒ずつ 20 回測って時刻の段差は 0 件。chronyd は tick を 11000 から 10834 を経て、約 2 分後（02:10:58）に 10000 へ戻した。周波数の補正は -0.3ppm 前後。
+   - CLOCK_MONOTONIC_RAW の 10.0 秒に CLOCK_MONOTONIC も 10.0 秒（比 1.000）。
+   - ただし時計は NTP より 8.23 秒進んだまま安定した（ntp.nict.jp、time.windows.com、ntp.ubuntu.com、time.google.com、time.cloudflare.com の五つがそろって -8.23 秒）。chronyd の設定の `server time.windows.com` とも合っていないので、chronyd は実際には Windows のホストの時計（Hyper-V の PTP など）に合わせていて、そのホストの時計が NTP より約 8.2 秒進んでいる、と読める（推定。VM の最上位の chronyd の設定と状態は、どの distro からも読めない）。
+5. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
 
 ## 判断の経緯
@@ -70,29 +74,32 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 ## いまの作業
 
 `tick` を 11000 に書き戻している者を探している。
-書き手は WSL 自身の chronyd と分かった（「判明した事実」）。
-WSL の chronyd は WSL の部品で、この Ubuntu からは止められないので、Ubuntu の timesyncd を止めて時刻を書く NTP のデーモンを chronyd 一つにする。まず `stop`（元に戻せる）で試し、tick が 10000 に戻って段差が消えるかを測る。リーダーが sudo で止めるのを待っている。
+Ubuntu の timesyncd を止めて、時刻を書く NTP のデーモンを WSL の chronyd 一つにした。時刻の段差は消え、時計の進みも正しくなった。
+残るのは、止めたままにするか（次の起動で timesyncd が戻るか）と、Windows の時計の 8.2 秒のずれの扱いで、どちらもリーダーの答えを待っている。
 
 ## 済んだこと
 
 - 再現と原因の特定（上の「判明した事実」）。
 - `timesync_implicit` を 0 にした（2026-11-22 23:2x、リーダーの sudo）。5 秒ごとの段差は消えた。
+- tick の書き手を ftrace で WSL の chronyd と突き止めた。
+- timesyncd を止めた（2026-11-23 02:08、`stop` だけ）。段差は 0 件、進みの比は 1.000 になった。
 
 ## 残っていること
 
-- `tick` の書き手を突き止めて止める。
-- 測定で飛びが消えたことを確かめる。
-- WSL を次に起動したときにも `timesync_implicit=0` を保つか（下の問い）。`tick` は起動のたびに 10000 に戻るので、保つ仕組みは要らない（設定した者が再び動かない限り）。
+- timesyncd を次の起動でも止めたままにするか（下の問い）。
+- Windows の時計が NTP より約 8.2 秒進んでいる件（下の問い）。WSL の時刻はいまこれに合わせている。
+- `timesync_implicit` は、chronyd もホストの時計に合わせているので、次の起動で既定の 1 に戻っても両者の向きはそろう見込み。0 を保つ仕組みは置かない案に変えた（前の問いは取り下げ）。
 
 ## 次に Claude がすること
 
-- timesyncd が止まったら、tick、時刻の段差、NTP とのずれを数分測り、chronyd だけで tick が 10000 付近に戻り、段差が消えるかを見る。
-- 効いたら、timesyncd を `disable` して次の起動でも止めたままにするかをリーダーに確かめる。`timesync_implicit` を 0 に保つ要否も、chronyd だけにした後のホストの時刻とのずれを見て決め直す。
+- 下の二つの問いの答えに沿って進める。
+- 結果の要約を、引き継いだ送り手のセッションへ SendMessage で返す。
 - 書き手を止めたら、`time.time()` と `time.monotonic()` を 30 秒並べて段差が 0 件、CLOCK_MONOTONIC と RAW の比が 1.000 に近く、NTP とのずれが数十 ms に収まることを確かめる。結果をここに書いて送り手のセッションへ返す。
 
 ## リーダーに決めてほしいこと
 
-- WSL を次に起動したときにも `timesync_implicit=0` を保つ仕組みを置くか。Claude の案: 置く。chezmoi の `run_onchange` スクリプトで `/etc/tmpfiles.d/` に一行（`w /sys/module/hv_utils/parameters/timesync_implicit - - - - 0`）を配る。利点は再起動を待たずに入れられ、次の起動から自動で効くこと。欠点は常設の仕組みが一つ増え、配るときに sudo が要ること。答えで何が変わるか: 置かなければ、WSL を次に起動したとき、ホストの時計が NTP とずれていれば同じ綱引きが戻る。
+- timesyncd を次の起動でも止めたままにするか。Claude の案: `sudo systemctl disable systemd-timesyncd` で止めたままにする。利点は WSL 2.7 の chronyd との奪い合いが次の起動でも戻らないこと。欠点は WSL の時刻が NTP でなく Windows の時計に従うことと、ほかのマシンの WSL では手で同じことをする必要があること（chezmoi で配るなら sudo の要る run_once スクリプトになる）。答えで何が変わるか: 止めたままにしなければ、次の起動で同じ飛びが戻る。
+- Windows の時計の約 8.2 秒のずれを直すか。Claude の案: 管理者の PowerShell で `w32tm /resync` を打つ（再起動は要らない）。利点は WSL の時刻も NTP に合うこと。欠点は Windows 側の操作になること。答えで何が変わるか: 直さなければ、WSL の時刻は進みは正しいが、絶対の時刻が 8 秒ほど進んだままになる（経過時間を測るテストには影響しない）。
 
 ## 参照
 
