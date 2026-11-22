@@ -11,6 +11,7 @@ import math
 import os
 import re
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -37,6 +38,8 @@ DEADLINE_SEC = 4.2
 API_TIMEOUT_SEC = 3.0
 SECRETS_PATH = os.path.expanduser(
     "~/.local/share/claude-private/secrets/cloudflare-workers-ai-token")
+PROJECTS_BASE = os.path.expanduser("~/.claude/projects")
+GIT_TIMEOUT_SEC = 1.0
 LOG_PATH = os.path.expanduser("~/.claude/logs/memory-recall.log")
 LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_GENERATIONS = 3
@@ -171,6 +174,28 @@ def resolve_memory_dir(transcript_path):
     if ".." in transcript_path or not transcript_path.startswith(base):
         return None
     d = os.path.join(os.path.dirname(transcript_path), "memory")
+    return d if os.path.isdir(d) else None
+
+
+def resolve_repo_memory_dir(cwd, base=None):
+    # Claude Code の auto memory は、ワークツリーでもリポジトリ本体のパスを
+    # <project> の名前にする（transcript はワークツリーのパスの側に分かれる）。
+    # 本体は git の共通ディレクトリ（.git）の親として求める。
+    # 長いパスを Claude Code が別の形に縮める場合は合わず、None を返して
+    # transcript からの解決へ落ちる。
+    if not isinstance(cwd, str) or not os.path.isabs(cwd) or not os.path.isdir(cwd):
+        return None
+    try:
+        done = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, timeout=GIT_TIMEOUT_SEC, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    common = done.stdout.strip()
+    if os.path.basename(common) != ".git":
+        return None
+    name = re.sub(r"[^A-Za-z0-9]", "-", os.path.dirname(common))
+    d = os.path.join(base or PROJECTS_BASE, name, "memory")
     return d if os.path.isdir(d) else None
 
 
@@ -644,6 +669,7 @@ def main():
     if not isinstance(prompt, str) or len(prompt) < MIN_PROMPT_CHARS:
         return
     memory_dir = (os.environ.get("MEMORY_RECALL_DIR")
+                  or resolve_repo_memory_dir(payload.get("cwd"))
                   or resolve_memory_dir(payload.get("transcript_path")))
     if not memory_dir or not os.path.isdir(memory_dir):
         return
