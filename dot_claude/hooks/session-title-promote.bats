@@ -8,6 +8,20 @@ setup() {
     export TMPDIR="$TMPDIR_TEST"
     TRANSCRIPT="$TMPDIR_TEST/transcript.jsonl"
     : > "$TRANSCRIPT"
+    export FAKE_CLAUDE_ARGS="$TMPDIR_TEST/claude-args"
+    # 偽の claude（Haiku）。本物は 1 回 2〜5 秒かかり、push のたびに利用枠を使う。
+    # 受け取った引数を 1 行ずつ FAKE_CLAUDE_ARGS へ書き、FAKE_CLAUDE_NAME を名前として返す。
+    # FAKE_CLAUDE_HANG があれば答えずに固まる。exec で置き換えるので、timeout が止めた後に
+    # sleep が出力の管を持ち続けない。
+    mkdir -p "$TMPDIR_TEST/bin"
+    cat > "$TMPDIR_TEST/bin/claude" <<'FAKE'
+#!/bin/bash
+printf '%s\n' "$@" > "$FAKE_CLAUDE_ARGS"
+[ -n "${FAKE_CLAUDE_HANG:-}" ] && exec sleep 30
+jq -nc --arg n "${FAKE_CLAUDE_NAME-短い名前}" '{structured_output:{name:$n}}'
+FAKE
+    chmod +x "$TMPDIR_TEST/bin/claude"
+    export PATH="$TMPDIR_TEST/bin:$PATH"
 }
 
 teardown() {
@@ -37,17 +51,20 @@ ss_clear_input() { # session_id [session_title]
         '{session_id:$s,hook_event_name:"SessionStart",source:"clear",session_title:$t}'
 }
 
-# Haiku が付けた名前の性質: 空でない、20 文字以内、改行と「引き継ぎ」と「#数字」を含まない。
-short_title_ok() { # sessionTitle
-    [ -n "$1" ] && [ "$(jq -rn --arg t "$1" '$t | length')" -le 20 ] &&
-        [[ "$1" != *$'\n'* && "$1" != *引き継ぎ* && ! "$1" =~ \#[0-9] ]]
+@test "Haikuには「#数字」と「引き継ぎ」を禁じたスキーマを渡し、それを含む答えは使わない" {
+    add_ai_title "タブ名の付け方"
+    FAKE_CLAUDE_NAME="issue #91 の引き継ぎ" run bash "$SCRIPT" <<< "$(ups_input sess-u12)"
+    [ "$status" -eq 0 ]
+    [ "$(title_of "$output")" = "タブ名の付け方" ]
+    grep -qF -- '--json-schema' "$FAKE_CLAUDE_ARGS"
+    grep -qF '(?!.*引き継ぎ)(?!.*#[0-9])' "$FAKE_CLAUDE_ARGS"
 }
 
-@test "issue番号と引き継ぎの語を含むai-title -> 名前に「#数字」も「引き継ぎ」も残らない" {
-    add_ai_title "Dotfiles issue #91 タブ名の付け方の引き継ぎ"
-    run bash "$SCRIPT" <<< "$(ups_input sess-u12)"
+@test "Haikuの答えが20文字を超える -> 答えを使わず元の題を出す" {
+    add_ai_title "元の題"
+    FAKE_CLAUDE_NAME="一二三四五六七八九十一二三四五六七八九十一" run bash "$SCRIPT" <<< "$(ups_input sess-u13)"
     [ "$status" -eq 0 ]
-    short_title_ok "$(title_of "$output")"
+    [ "$(title_of "$output")" = "元の題" ]
 }
 
 title_of() { printf '%s' "$1" | jq -r '.hookSpecificOutput.sessionTitle'; }
@@ -76,25 +93,23 @@ add_ai_title() { # title
     run bash "$SCRIPT" <<< "$(ups_input sess-u1)"
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName')" = "UserPromptSubmit" ]
-    t=$(title_of "$output")
-    short_title_ok "$t"
-    [[ "$t" != *猫* ]]
+    [ "$(title_of "$output")" = "短い名前" ]
+    grep -qF "題: 専用の Ubuntu 推論サーバーの構築と性能測定" "$FAKE_CLAUDE_ARGS"
+    ! grep -qF "猫" "$FAKE_CLAUDE_ARGS" || false
+    grep -qxF -- "haiku" "$FAKE_CLAUDE_ARGS"
     marked sess-u1
 }
 
-@test "長いai-title -> 元の題より短い名前になる" {
+@test "Haikuの答えがちょうど20文字 -> その名前を出す" {
     add_ai_title "AGENTS.md (画像生成) の複数ホスト対応"
-    jq -nc '{type:"user",message:{role:"user",content:"画像生成の AGENTS.md を、複数のホストで使えるように書き直したい"}}' >> "$TRANSCRIPT"
-    run bash "$SCRIPT" <<< "$(ups_input sess-u9)"
+    FAKE_CLAUDE_NAME="一二三四五六七八九十一二三四五六七八九十" run bash "$SCRIPT" <<< "$(ups_input sess-u9)"
     [ "$status" -eq 0 ]
-    t=$(title_of "$output")
-    short_title_ok "$t"
-    [ "$(jq -rn --arg t "$t" '$t | length')" -lt 33 ]
+    [ "$(title_of "$output")" = "一二三四五六七八九十一二三四五六七八九十" ]
 }
 
 @test "Haikuが時間内に答えない -> ai-titleをそのまま出す" {
     add_ai_title "AGENTS.md (画像生成) の複数ホスト対応"
-    CLAUDE_TITLE_SHORTEN_TIMEOUT=0.1 run bash "$SCRIPT" <<< "$(ups_input sess-u10)"
+    FAKE_CLAUDE_HANG=1 CLAUDE_TITLE_SHORTEN_TIMEOUT=0.1 run bash "$SCRIPT" <<< "$(ups_input sess-u10)"
     [ "$status" -eq 0 ]
     [ "$(title_of "$output")" = "AGENTS.md (画像生成) の複数ホスト対応" ]
     marked sess-u10
@@ -147,14 +162,16 @@ add_ai_title() { # title
     printf '%s\n' '{"type":"ai-title","aiTitle":"書きかけ' >> "$TRANSCRIPT"
     run bash "$SCRIPT" <<< "$(ups_input sess-u6)"
     [ "$status" -eq 0 ]
-    short_title_ok "$(title_of "$output")"
+    [ "$(title_of "$output")" = "短い名前" ]
+    grep -qF "題: 正しいタイトル" "$FAKE_CLAUDE_ARGS"
 }
 
-@test "タイトルに引用符やバックスラッシュ -> 出力が妥当なJSONで、縮めた名前が入る" {
+@test "タイトルと名前に引用符やバックスラッシュ -> Haikuへそのまま渡り、出力が妥当なJSONで名前が入る" {
     add_ai_title 'say "hi" \ 日本語'
-    run bash "$SCRIPT" <<< "$(ups_input sess-u7)"
+    FAKE_CLAUDE_NAME='say "hi" \ 日' run bash "$SCRIPT" <<< "$(ups_input sess-u7)"
     [ "$status" -eq 0 ]
-    short_title_ok "$(title_of "$output")"
+    [ "$(title_of "$output")" = 'say "hi" \ 日' ]
+    grep -qF '題: say "hi" \ 日本語' "$FAKE_CLAUDE_ARGS"
 }
 
 @test "transcript_pathが存在しない -> exit 0、出力なし、印なし" {
@@ -191,16 +208,16 @@ add_ai_title() { # title
     run bash "$SCRIPT" <<< "$(ups_input sess-c2 "$TRANSCRIPT" "Issue12に取り掛かろう")"
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName')" = "UserPromptSubmit" ]
-    t=$(title_of "$output")
-    short_title_ok "$t"
-    [[ "$t" != *引き継いだ名前* ]]
+    [ "$(title_of "$output")" = "短い名前" ]
+    grep -qF "最初の発言: Issue12に取り掛かろう" "$FAKE_CLAUDE_ARGS"
+    ! grep -qF "引き継いだ名前" "$FAKE_CLAUDE_ARGS" || false
     marked sess-c2
 }
 
 @test "clear後の題 -> Haikuが時間内に答えなければ、最初の空でない行を、空白を詰めて先頭30文字に切る" {
     bash "$SCRIPT" <<< "$(ss_clear_input sess-c3)"
     prompt=$'\n   \n  あいうえお   かきくけこ\tさしすせそたちつてとなにぬねのはひふへほ\n二行目'
-    CLAUDE_TITLE_SHORTEN_TIMEOUT=0.1 run bash "$SCRIPT" <<< "$(ups_input sess-c3 "$TRANSCRIPT" "$prompt")"
+    FAKE_CLAUDE_HANG=1 CLAUDE_TITLE_SHORTEN_TIMEOUT=0.1 run bash "$SCRIPT" <<< "$(ups_input sess-c3 "$TRANSCRIPT" "$prompt")"
     [ "$status" -eq 0 ]
     [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.sessionTitle')" = "あいうえお かきくけこ さしすせそたちつてとなにぬねのはひふ" ]
 }

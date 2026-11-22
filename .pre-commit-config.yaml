@@ -35,6 +35,9 @@ repos:
       # GIT_CONFIG_COUNT / KEY / VALUE もここに入る）。
       # 撤去した run-bats-gate が 2026-09-12 から同じことをしていて、置き換えた
       # 2026-09-13 に落ちていた。
+      # GNU parallel があれば、コアの数だけ並列に走らせる（2026-11-22 に測って、
+      # 順に走らせると 97 秒、--jobs 16 で 20 秒）。--jobs は GNU parallel が無いと
+      # bats がエラーで止まるので、無い環境（moreutils の parallel を含む）では順に走らせる。
       - id: bats
         name: bats
         language: system
@@ -50,7 +53,9 @@ repos:
           GIT_HTTP_PROXY_AUTHMETHOD|GIT_ALLOW_PROTOCOL|GIT_ASKPASS) ;;
           GIT_*) unset "$v" ;;
           esac; done;
-          bats -r .'
+          if parallel --version 2>/dev/null | grep -q "GNU parallel"; then
+          exec bats -r --jobs "$(nproc)" .; fi;
+          exec bats -r .'
       # ShellCheck の除外規則 -e SC2015,SC2016,SC2030,SC2031 の理由
       # （両リポジトリで同一内容。自己完結させるため）。
       # SC2015（`A && B || C` は if-then-else ではない）:
