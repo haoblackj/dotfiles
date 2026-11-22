@@ -11,13 +11,10 @@ setup() {
     export FAKE_CLAUDE_ARGS="$TMPDIR_TEST/claude-args"
     # 偽の claude（Haiku）。本物は 1 回 2〜5 秒かかり、push のたびに利用枠を使う。
     # 受け取った引数を 1 行ずつ FAKE_CLAUDE_ARGS へ書き、FAKE_CLAUDE_NAME を名前として返す。
-    # FAKE_CLAUDE_HANG があれば答えずに固まる。exec で置き換えるので、timeout が止めた後に
-    # sleep が出力の管を持ち続けない。
     mkdir -p "$TMPDIR_TEST/bin"
     cat > "$TMPDIR_TEST/bin/claude" <<'FAKE'
 #!/bin/bash
 printf '%s\n' "$@" > "$FAKE_CLAUDE_ARGS"
-[ -n "${FAKE_CLAUDE_HANG:-}" ] && exec sleep 30
 jq -nc --arg n "${FAKE_CLAUDE_NAME-短い名前}" '{structured_output:{name:$n}}'
 FAKE
     chmod +x "$TMPDIR_TEST/bin/claude"
@@ -62,6 +59,8 @@ add_ai_title() { # title
     grep -qF "題: 専用の Ubuntu 推論サーバーの構築と性能測定" "$FAKE_CLAUDE_ARGS"
     ! grep -qF "猫" "$FAKE_CLAUDE_ARGS" || false
     grep -qxF -- "haiku" "$FAKE_CLAUDE_ARGS"
+    # 子の claude はフックを読まない設定で立てる（読むとこのフックが子の中で繰り返し動く）。
+    grep -A1 -xF -- "--setting-sources" "$FAKE_CLAUDE_ARGS" | sed -n 2p | grep -qx ''
     marked sess-u1
 }
 

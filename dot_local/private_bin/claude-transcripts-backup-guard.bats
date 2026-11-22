@@ -86,3 +86,31 @@ failure() {
     [[ "$(failure backup)" == *"backup のユニットが失敗"* ]]
 }
 
+@test "ok: backup の成功は backup の失敗だけを消し、成功の時刻を残す" {
+    mkdir -p "$STATE"
+    echo "前の失敗" > "$STATE/failure-backup"
+    echo "壊れている" > "$STATE/failure-check"
+    run "$SCRIPT" ok
+    [ "$status" -eq 0 ]
+    [ ! -s "$STATE/failure-backup" ]
+    [ "$(failure check)" = "壊れている" ]
+    [ -e "$STATE/last-success" ]
+}
+
+@test "check: 復元済みなら restic を呼ばない" {
+    mkdir -p "$STATE"
+    touch "$STATE/restored"
+    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
+    [ "$status" -eq 0 ]
+    [ ! -s "$RESTIC_LOG" ]
+}
+
+@test "check: backup 以外の前では戻さない" {
+    export FAKE_SNAPSHOTS='[{"id":"abc"}]'
+    for cmd in forget check; do
+        PROFILE_COMMAND=$cmd run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
+        [ "$status" -eq 0 ]
+    done
+    [ ! -s "$RESTIC_LOG" ]
+    [ ! -e "$STATE/restored" ]
+}

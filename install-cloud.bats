@@ -190,3 +190,12 @@ make_subdir_skill_repo() {
     grep -q '^yomiyasu https://github.com/nanaism/yomiyasu.git skills/yomiyasu$' \
         "$BATS_TEST_DIRNAME/cloud-skills.txt"
 }
+
+@test "chezmoi が PATH にある環境では何もしない" {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/sh\n' >"$BATS_TEST_TMPDIR/bin/chezmoi"
+    chmod +x "$BATS_TEST_TMPDIR/bin/chezmoi"
+    run env PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$SCRIPT"
+    [ "$status" -eq 1 ]
+    [ ! -e "$HOME/.claude/CLAUDE.md" ]
+}

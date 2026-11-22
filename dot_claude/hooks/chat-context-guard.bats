@@ -8,7 +8,6 @@ setup() {
     export TMPDIR="$TMPDIR_TEST"
     export XDG_STATE_HOME="$TMPDIR_TEST/state"
     LOG="$XDG_STATE_HOME/claude-chat-context-guard/decisions.log"
-    export HERDR_ENV=1
     for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT CHAT_HANDOFF_PCT CHAT_URGENT_PCT; do unset "CONTEXT_GUARD_$v"; done
 }
 

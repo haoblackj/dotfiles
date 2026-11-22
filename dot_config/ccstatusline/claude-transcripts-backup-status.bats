@@ -32,3 +32,15 @@ teardown() {
     [ "$output" = "⚠ 退避が 5 時間止まっている" ]
 }
 
+@test "検査の失敗は、backup が成功していても出す" {
+    touch "$STATE/last-success"
+    echo "restic check が失敗（終了コード 1）" > "$STATE/failure-check"
+    run "$SCRIPT"
+    [ "$output" = "⚠ 退避失敗: restic check が失敗（終了コード 1）" ]
+}
+
+@test "タイマーを入れてから一度も成功しないまま 3 時間を超えたら出す" {
+    touch -d '5 hours ago' "$CLAUDE_TRANSCRIPTS_BACKUP_TIMER"
+    run "$SCRIPT"
+    [ "$output" = "⚠ 退避がまだ一度も成功していない" ]
+}

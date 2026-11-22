@@ -35,8 +35,8 @@ repos:
       # GIT_CONFIG_COUNT / KEY / VALUE もここに入る）。
       # 撤去した run-bats-gate が 2026-09-12 から同じことをしていて、置き換えた
       # 2026-09-13 に落ちていた。
-      # GNU parallel があれば、コアの数だけ並列に走らせる（2026-11-22 に測って、
-      # 順に走らせると 97 秒、--jobs 16 で 20 秒）。--jobs は GNU parallel が無いと
+      # GNU parallel があれば、コアの数だけ並列に走らせる（2026-11-22 に 366 件で測って、
+      # 順に走らせると 97 秒、--jobs 16 で 20 秒。テストを減らした後は並列で約 4 秒）。--jobs は GNU parallel が無いと
       # bats がエラーで止まるので、無い環境（moreutils の parallel を含む）では順に走らせる。
       - id: bats
         name: bats

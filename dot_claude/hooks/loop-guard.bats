@@ -10,7 +10,7 @@ setup() {
     LOG="$XDG_STATE_HOME/claude-loop-guard/decisions.log"
     unset LOOP_GUARD_TIGHT_MIN_SECONDS; for v in STATE_TOKENS STATE_PCT HANDOFF_TOKENS HANDOFF_PCT; do unset "CONTEXT_GUARD_$v"; done
     # 繰り返しの CronCreate は既定で止める。その判定は「固定間隔のループ」の節で見る。
-    # ほかの節では、許したときの判定（stop、二段目、逼迫の間隔）を確かめるため許しておく
+    # ほかのテストでは、許したときの判定（stop）を確かめるため許しておく
     export LOOP_GUARD_ALLOW_RECURRING_CRON=1
 }
 
@@ -19,13 +19,6 @@ teardown() {
 }
 
 route() { mkdir -p "$TMPDIR/claude-usage-route" && echo "$1" > "$TMPDIR/claude-usage-route/sess"; }
-
-# ctx <使用率> [<窓の大きさ>]。窓の既定は 1000000
-ctx() {
-    mkdir -p "$TMPDIR/claude-status-context-usage" "$TMPDIR/claude-status-context-window"
-    echo "$1" > "$TMPDIR/claude-status-context-usage/sess"
-    echo "${2:-1000000}" > "$TMPDIR/claude-status-context-window/sess"
-}
 
 wakeup() {
     run bash "$SCRIPT" <<< "$(jq -nc --argjson d "${1:-1800}" --arg p "${2:-/loop check}" \
@@ -37,10 +30,6 @@ cron() {
     run bash "$SCRIPT" <<< "$(jq -nc --arg c "$1" --arg p "${2:-/loop poll}" --argjson r "${3:-true}" \
         '{session_id: "sess", hook_event_name: "PreToolUse", tool_name: "CronCreate",
           tool_input: {cron: $c, prompt: $p, recurring: $r}}')"
-}
-
-prompt() {
-    run bash "$SCRIPT" <<< "$(jq -nc --arg p "$1" '{session_id: "sess", hook_event_name: "UserPromptSubmit", prompt: $p}')"
 }
 
 decision() { jq -r '.hookSpecificOutput.permissionDecision // empty' <<< "$output"; }

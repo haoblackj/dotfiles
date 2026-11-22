@@ -91,3 +91,22 @@ check_all() {
     'gh api repos/o/r/issues/1 --input in.json' 'gh api repos/o/r/issues/1 --input=in.json'
 }
 
+@test "前置き・パス・グローバル repo オプション・境界を読む" {
+  check_all deny \
+    'cd x && gh issue comment 1 --body 02:37' \
+    'GH_TOKEN=x gh issue comment 1 --body 02:37' \
+    'env -u GH_TOKEN gh issue comment 1 --body 02:37' \
+    'env -i X=y command gh issue comment 1 --body 02:37' \
+    'exec /usr/bin/gh pr comment 1 -b02:37' \
+    'time nohup gh -R o/r issue comment 1 --body 02:37' \
+    'gh --repo o/r issue comment 1 --body 02:37' \
+    'gh --repo=o/r issue comment 1 --body 02:37' \
+    'then gh pr comment 1 -b02:37' 'do gh pr comment 1 -b02:37' \
+    '! gh pr comment 1 -b02:37' '{ gh pr comment 1 -b02:37; }' \
+    '(gh pr comment 1 -b02:37)' 'echo x | gh pr comment 1 -b02:37' \
+    $'echo x\ngh issue comment 1 --body 02:37'
+}
+
+@test "対象があればコマンド全体を検査する" {
+  check_all deny 'echo 02:37; gh issue comment 1 --body テスト'
+}

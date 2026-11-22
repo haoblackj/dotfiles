@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 # statusline-context-window.sh のユニットテスト。
 set -u
-bats_require_minimum_version 1.5.0
 
 marker_of() { # session_id
     cat "$TMPDIR_TEST/claude-status-context-window/$1" 2>/dev/null || echo ''
