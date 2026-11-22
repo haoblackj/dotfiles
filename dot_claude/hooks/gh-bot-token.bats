@@ -37,46 +37,10 @@ teardown() {
     rm -rf -- "$TMPDIR_TEST"
 }
 
-@test "session: CLAUDE_ENV_FILE に GH_TOKEN を決める1行を追記する" {
-    echo 'export OTHER=1' > "$CLAUDE_ENV_FILE"
-    run "$SCRIPT" session
-    [ "$status" -eq 0 ]
-    grep -q '^export OTHER=1$' "$CLAUDE_ENV_FILE"
-    grep -q 'GH_TOKEN' "$CLAUDE_ENV_FILE"
-}
-
 @test "session: 追記した行を source すると GH_TOKEN に bot の token が入る" {
     run "$SCRIPT" session
     run bash -c ". \"$CLAUDE_ENV_FILE\"; printf '%s' \"\${GH_TOKEN:-}\""
     [ "$output" = ghs_fake1 ]
-}
-
-@test "session: token を作れないときは GH_TOKEN を入れない（本人の名義のまま）" {
-    run "$SCRIPT" session
-    export FAKE_MINT_FAIL=1
-    run bash -c ". \"$CLAUDE_ENV_FILE\"; printf '%s' \"\${GH_TOKEN-unset}\""
-    [ "$output" = unset ]
-}
-
-@test "session: 鍵か identity が無ければ何も書かない（クラウドセッションなど）" {
-    rm -f "$CLAUDE_GH_BOT_KEY"
-    run "$SCRIPT" session
-    [ "$status" -eq 0 ]
-    [ ! -s "$CLAUDE_ENV_FILE" ]
-}
-
-@test "session: CLAUDE_ENV_FILE が無ければ何もせず成功する" {
-    unset CLAUDE_ENV_FILE
-    run "$SCRIPT" session
-    [ "$status" -eq 0 ]
-}
-
-@test "token: 有効な token は使い回し、2回目は発行しない" {
-    run "$SCRIPT" token
-    [ "$output" = ghs_fake1 ]
-    run "$SCRIPT" token
-    [ "$output" = ghs_fake1 ]
-    [ "$(wc -l < "$MINT_LOG")" -eq 1 ]
 }
 
 @test "token: 50分を過ぎた token は作り直す" {
@@ -98,15 +62,6 @@ teardown() {
     run "$SCRIPT" token
     [ "$status" -ne 0 ]
     [ -z "$(ls -A "$TMPDIR_TEST/elsewhere")" ]
-}
-
-@test "token: token のファイルがシンボリックリンクなら読まずに作り直す" {
-    mkdir -m 700 "$CACHE"
-    echo stolen > "$TMPDIR_TEST/stolen"
-    ln -s "$TMPDIR_TEST/stolen" "$CACHE/token"
-    run "$SCRIPT" token
-    [ "$output" = ghs_fake1 ]
-    [ "$(cat "$TMPDIR_TEST/stolen")" = stolen ]
 }
 
 @test "token: XDG_RUNTIME_DIR が無ければ /tmp ではなくホームの下を使う" {

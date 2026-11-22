@@ -350,13 +350,14 @@ hand_rename() { printf '%s' "$1" > "$LABEL_FILE"; }
     [ ! -s "$HERDR_LOG" ]
 }
 
-@test "tab getがハングする -> timeoutで打ち切られ8秒以内にexit 0、renameを呼ばない" {
+@test "tab getがハングする -> timeoutで打ち切られてexit 0、renameを呼ばない" {
     export FAKE_HANG=1
-    start_ns=$(date +%s%N)
-    sync "タイトル"
-    end_ns=$(date +%s%N)
-    elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
+    # 本物の 5 秒を待たないよう、偽の timeout で打ち切りの秒数だけを 0.2 秒に縮める。
+    # スクリプトが打ち切らなければ、外側の本物の timeout 3 が止めて status が 124 になる。
+    real_timeout=$(command -v timeout)
+    printf '#!/bin/bash\nshift\nexec %q 0.2 "$@"\n' "$real_timeout" > "$FAKE_BIN/timeout"
+    chmod +x "$FAKE_BIN/timeout"
+    run "$real_timeout" 3 bash "$SCRIPT" <<< "$(input_with_name "タイトル")"
     [ "$status" -eq 0 ]
-    [ "$elapsed_ms" -lt 8000 ]
     ! renamed || false
 }

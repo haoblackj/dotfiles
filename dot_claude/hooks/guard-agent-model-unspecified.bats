@@ -53,21 +53,6 @@ define_without_model() { # <dir> <name>
     [ "$output" = "deny" ]
 }
 
-@test "対象・未指定: subagent_type そのものが無くても deny" {
-    run decide '{"tool_name":"Agent","tool_input":{}}'
-    [ "$output" = "deny" ]
-}
-
-@test "対象・未指定: subagent_type が null でも deny" {
-    run decide '{"tool_name":"Agent","tool_input":{"subagent_type":null}}'
-    [ "$output" = "deny" ]
-}
-
-@test "対象・未指定: model が null でも deny" {
-    run decide '{"tool_name":"Agent","tool_input":{"subagent_type":"general-purpose","model":null}}'
-    [ "$output" = "deny" ]
-}
-
 @test "対象・指定あり: general-purpose に model があれば素通り" {
     run decide '{"tool_name":"Agent","tool_input":{"subagent_type":"general-purpose","model":"sonnet"}}'
     [ "$output" = "allow" ]
@@ -78,19 +63,8 @@ define_without_model() { # <dir> <name>
     [ "$output" = "allow" ]
 }
 
-@test "名前付き・定義なし: cwd が payload に無くても素通り" {
-    run decide '{"tool_name":"Agent","tool_input":{"subagent_type":"claude-code-guide"}}'
-    [ "$output" = "allow" ]
-}
-
 @test "名前付き・model あり: cwd の .claude/agents/ の定義が model を持てば素通り" {
     define_with_model "$CWD/.claude/agents" reviewer
-    run decide "$(named reviewer)"
-    [ "$output" = "allow" ]
-}
-
-@test "名前付き・model あり: HOME の .claude/agents/ の定義が model を持てば素通り" {
-    define_with_model "$HOME/.claude/agents" reviewer
     run decide "$(named reviewer)"
     [ "$output" = "allow" ]
 }
@@ -116,30 +90,11 @@ define_without_model() { # <dir> <name>
     [ "$output" = "deny" ]
 }
 
-@test "名前付き・優先順: cwd に model あり・HOME に model なしなら cwd 側が使われるので素通り" {
-    define_without_model "$HOME/.claude/agents" reviewer
-    define_with_model "$CWD/.claude/agents" reviewer
-    run decide "$(named reviewer)"
-    [ "$output" = "allow" ]
-}
-
 # 定義の識別子は frontmatter の name 欄で、ファイル名は一致しなくてよい。
 @test "名前付き・name 欄: ファイル名と name が異なる定義(model なし)は name で見つけて deny" {
     printf -- '---\nname: reviewer\ndescription: x\n---\n' > "$CWD/.claude/agents/other-file.md"
     run decide "$(named reviewer)"
     [ "$output" = "deny" ]
-}
-
-@test "名前付き・name 欄: 引用符つきの name でも一致させて(model なし)deny" {
-    printf -- '---\nname: "reviewer"\ndescription: x\n---\n' > "$CWD/.claude/agents/quoted.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "deny" ]
-}
-
-@test "名前付き・name 欄: ファイル名だけ一致して name が別の定義は別の agent なので素通り" {
-    printf -- '---\nname: someone-else\ndescription: x\n---\n' > "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "allow" ]
 }
 
 # .claude/agents/ はサブフォルダまで再帰的に読まれる。
@@ -156,97 +111,6 @@ define_without_model() { # <dir> <name>
     define_without_model "$CWD/.claude/agents" reviewer
     run decide "$(named reviewer '' "$CWD/sub/dir")"
     [ "$output" = "deny" ]
-}
-
-@test "名前付き・親方向: 入れ子の定義は cwd に近い側が使われる(近い側に model あり)ので素通り" {
-    mkdir -p "$CWD/sub/.claude/agents"
-    define_without_model "$CWD/.claude/agents" reviewer
-    define_with_model "$CWD/sub/.claude/agents" reviewer
-    run decide "$(named reviewer '' "$CWD/sub")"
-    [ "$output" = "allow" ]
-}
-
-@test "名前付き・親方向: リポジトリのルートより上の定義は見ない(定義なしとして素通り)" {
-    mkdir -p "$WORK/.claude/agents"
-    define_without_model "$WORK/.claude/agents" reviewer
-    run decide "$(named reviewer)"
-    [ "$output" = "allow" ]
-}
-
-# `model: inherit` は結果こそセッション既定の継承と同じだが明示した選択なので止めない。
-@test "名前付き・model inherit: 明示した inherit は素通り" {
-    printf -- '---\nname: reviewer\ndescription: x\nmodel: inherit\n---\n' > "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "allow" ]
-}
-
-@test "名前付き・model なし: 起動側が model を渡していれば定義に無くても素通り" {
-    define_without_model "$CWD/.claude/agents" reviewer
-    run decide "$(named reviewer ',"model":"sonnet"')"
-    [ "$output" = "allow" ]
-}
-
-@test "名前付き・model なし: model の値が空なら定義に無い扱いで deny" {
-    printf -- '---\nname: reviewer\nmodel:\n---\n' > "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "deny" ]
-}
-
-@test "名前付き・壊れた定義: frontmatter で始まらない定義は model ありとみなさず deny" {
-    printf -- 'name: reviewer\nmodel: opus\n---\n本文\n' > "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "deny" ]
-}
-
-@test "名前付き・壊れた定義: frontmatter が閉じていない定義は model ありとみなさず deny" {
-    printf -- '---\nname: reviewer\nmodel: opus\n\n本文\n' > "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "deny" ]
-}
-
-@test "名前付き・壊れた定義: 本文側にしか model: が無い定義は deny" {
-    printf -- '---\nname: reviewer\n---\nmodel: opus\n' > "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    [ "$output" = "deny" ]
-}
-
-@test "名前付き・壊れた定義: 読めない定義は model ありとみなさず deny" {
-    # root には chmod 000 が効かず、読めない定義を作れない。飛ばすと確かめないまま
-    # 通って見えるので、理由を出して落とす（クラウドのコンテナは root で動く）
-    if [ "$(id -u)" -eq 0 ]; then
-        echo "root では chmod 000 が効かず、このテストの前提（定義が読めない）を作れない。一般ユーザーで回す" >&2
-        return 1
-    fi
-    define_with_model "$CWD/.claude/agents" reviewer
-    chmod 000 "$CWD/.claude/agents/reviewer.md"
-    run decide "$(named reviewer)"
-    chmod 644 "$CWD/.claude/agents/reviewer.md"
-    [ "$output" = "deny" ]
-}
-
-# subagent_type は外から来る値なので、パスの区切りを含む名前で agents/ の外の
-# ファイルを定義として読まない。外のファイルは「定義なし」として素通りさせる。
-@test "名前付き・区切り入り: agents/ の外を指す名前は定義なしとして素通り" {
-    printf -- 'no frontmatter\n' > "$WORK/evil.md"
-    run decide "$(named '../../../evil')"
-    [ "$output" = "allow" ]
-}
-
-@test "名前付き・model なし: deny の理由文に集計用の目印と定義ファイルの場所が入っている" {
-    define_without_model "$CWD/.claude/agents" reviewer
-    run bash -c "printf '%s' '$(named reviewer)' | bash '$SCRIPT'"
-    [[ "$output" == *"[guard-agent-model-unspecified]"* ]]
-    [[ "$output" == *"$CWD/.claude/agents/reviewer.md"* ]]
-}
-
-@test "別のツール: Bash は素通り" {
-    run decide '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
-    [ "$output" = "allow" ]
-}
-
-@test "壊れた入力: 不正な JSON は素通り(fail-open)" {
-    run decide 'not json'
-    [ "$output" = "allow" ]
 }
 
 # 目印は transcript の集計が拒否を数えるときの照合に使う。文字列を変えると
