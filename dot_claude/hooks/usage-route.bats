@@ -144,6 +144,7 @@ codex_error() {
     call
     [ "$(route_of)" = offload ]
     [[ "$(context_of)" == *"codex-delegate.sh"* ]]
+    [[ "$(context_of)" == *"スキル codex-delegate"* ]]
     [[ "$(context_of)" == *"Claude 5時間枠 使用 70%（リセットまで 100 分）"* ]]
     [[ "$(context_of)" == *"実装でない作業"*"縮めずに続ける"* ]]
 }
