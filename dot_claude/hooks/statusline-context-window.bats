@@ -77,11 +77,14 @@ install_hooks_as_target() {
     cp "$BATS_TEST_DIRNAME/executable_statusline-context-window.sh" "$HOOKS/statusline-context-window.sh"
     cp "$BATS_TEST_DIRNAME/executable_herdr-tab-title-sync.sh" "$HOOKS/herdr-tab-title-sync.sh"
 
-    # 偽の herdr。引数を | 区切りで1行記録する。FAKE_HERDR_DELAY 秒だけ tab get を遅らせる。
+    # 偽の herdr。引数を | 区切りで1行記録する。FAKE_HERDR_HOLD があれば、そのファイルが
+    # できるまで（上限 5 秒）tab get に答えない。
     cat > "$FAKE_BIN/herdr" <<'EOS'
 #!/bin/bash
 if [ "$1" = tab ] && [ "$2" = get ]; then
-  sleep "${FAKE_HERDR_DELAY:-0}"
+  if [ -n "${FAKE_HERDR_HOLD:-}" ]; then
+    for _ in $(seq 100); do [ -e "$FAKE_HERDR_HOLD" ] && break; sleep 0.05; done
+  fi
   printf '{"result":{"tab":{"pane_count":1,"label":"3"}}}'
 fi
 { printf '%s|' "$@"; printf '\n'; } >> "$HERDR_LOG"
@@ -114,15 +117,15 @@ wait_for_rename() { # 上限5秒
 
 @test "herdrの応答が遅い -> statuslineは待たずに返る" {
     install_hooks_as_target
-    export FAKE_HERDR_DELAY=3
+    # 偽の herdr は合図のファイルができるまで答えない。statusline が herdr を待つ作りなら、
+    # 外側の timeout 2 が止めて status が 124 になる。
+    export FAKE_HERDR_HOLD="$TMPDIR_TEST/herdr-release"
     input='{"session_id":"sess-h2","session_name":"遅いherdr"}'
-    start=$(date +%s%N)
-    run bash "$HOOKS/statusline-context-window.sh" <<< "$input"
-    elapsed_ms=$(( ($(date +%s%N) - start) / 1000000 ))
+    run timeout 2 bash "$HOOKS/statusline-context-window.sh" <<< "$input"
     [ "$status" -eq 0 ]
     [ "$output" = "$input" ]
-    [ "$elapsed_ms" -lt 2000 ]
-    # teardown が一時ディレクトリを消した後に子が書き込まないよう、終わるのを待つ。
+    # teardown が一時ディレクトリを消した後に子が書き込まないよう、答えさせて終わるのを待つ。
+    : > "$FAKE_HERDR_HOLD"
     wait_for_rename
 }
 
