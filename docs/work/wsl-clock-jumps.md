@@ -100,14 +100,12 @@ Ubuntu の timesyncd を止めて、時刻を書く NTP のデーモンを WSL �
 
 ## 次に Claude がすること
 
-- 下の二つの問いの答えに沿って進める。
+- 監視の結果で、timesyncd が disabled になり、NTP とのずれが 1 秒未満になり、60 秒の測定で段差が 0 件であることを確かめて、ここに書く。
 - 結果の要約を、引き継いだ送り手のセッションへ SendMessage で返す。
-- 書き手を止めたら、`time.time()` と `time.monotonic()` を 30 秒並べて段差が 0 件、CLOCK_MONOTONIC と RAW の比が 1.000 に近く、NTP とのずれが数十 ms に収まることを確かめる。結果をここに書いて送り手のセッションへ返す。
 
 ## リーダーに決めてほしいこと
 
-- timesyncd を次の起動でも止めたままにするか。Claude の案: `sudo systemctl disable systemd-timesyncd` で止めたままにする。利点は WSL 2.7 の chronyd との奪い合いが次の起動でも戻らないこと。欠点は WSL の時刻が NTP でなく Windows の時計に従うことと、ほかのマシンの WSL では手で同じことをする必要があること（chezmoi で配るなら sudo の要る run_once スクリプトになる）。答えで何が変わるか: 止めたままにしなければ、次の起動で同じ飛びが戻る。
-- Windows の時計の約 8.2 秒のずれを直すか。Claude の案: 管理者の PowerShell で `w32tm /resync` を打つ（再起動は要らない）。利点は WSL の時刻も NTP に合うこと。欠点は Windows 側の操作になること。答えで何が変わるか: 直さなければ、WSL の時刻は進みは正しいが、絶対の時刻が 8 秒ほど進んだままになる（経過時間を測るテストには影響しない）。
+なし
 
 ## 参照
 
