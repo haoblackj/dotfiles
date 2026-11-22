@@ -21,7 +21,7 @@ bats のテストは、判断の経緯の基準で選んだ 99 件と、Herdr �
 - bats は 365 件を 1 コアで順に走らせていて、CPU の使用率は 53%。マシンは 16 コア。
 - `session-title-promote.bats` の 7 件が本物の `claude -p --model haiku` を呼び、合わせて約 22 秒かかっていた。push のたびに利用枠も使っていた。
 - 時間切れを待つ作りのテストが合わせて約 17 秒（herdr が固まる場合、codexbar の serve が応答しない場合、statusline の herdr が遅い場合、usage-route のサーバーに届かない場合と応答しない場合）。テストを減らしたときに、待つテストはすべて消した。
-- WSL の CLOCK_REALTIME が約 5.5 秒ごとに前後へ飛んでいて、`bats -T` のテストごとの時間が見かけで 7.5 秒前後になる。本題と別のバグとして `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md` に書いた。
+- WSL の CLOCK_REALTIME が約 5.5 秒ごとに前後へ飛んでいて、`bats -T` のテストごとの時間が見かけで 7.5 秒前後になる。本題と別のバグとして `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md` に書いた。別の作業（`docs/work/wsl-clock-jumps.md`、PR #122）で直し、書き置きは外した。
 - 直した後の pre-push の段は、3 回続けて 19.0 秒、22.2 秒、21.1 秒で、3 回とも全部通った。GNU parallel が無い場合（moreutils 風の `parallel` を `PATH` の先頭に置いた）は順に走って 76.4 秒で、全部通った。
 - テストを 366 件から 90 件に減らした後の pre-push の段は、3 回続けて 8.0 秒、7.0 秒、6.8 秒で、3 回とも全部通った。bats だけなら並列で 4.4 秒。GNU parallel が無い場合は 17.5 秒で、全部通った。
 - 分類はサブエージェントが全 366 件に付け（残す 87 件、消す 279 件）、Claude が消す側を読み直して、壊れると黙って害が出る 3 件（退避先のリポジトリを新しく作らない、復元に失敗したら済んだ印を付けない、data の型の間違いで黙って描かない）を残す側へ戻した。
@@ -120,6 +120,6 @@ bats のテストは、判断の経緯の基準で選んだ 99 件と、Herdr �
 ## 参照
 
 - コミット 18e2e31
-- `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md`（直す作業は別のワークツリー haoblackj/wsl-clock-jumps の作業記録 `docs/work/wsl-clock-jumps.md`）
+- 作業記録 `docs/work/wsl-clock-jumps.md`（時刻の飛びを直した作業。書き置き `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md` は直した後に外した）
 - PR #120
 - PR #121
