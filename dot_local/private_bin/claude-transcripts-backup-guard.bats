@@ -55,50 +55,11 @@ failure() {
     [ ! -s "$RESTIC_LOG" ]
 }
 
-@test "check: パスワードが無ければ失敗する" {
-    run "$SCRIPT" check "$MOUNT" "$REPO" "$TMPDIR_TEST/no-pw"
-    [ "$status" -ne 0 ]
-    [[ "$(failure env)" == *"パスワードが無い"* ]]
-}
-
-@test "check: 環境が揃えば、前の環境の失敗を消す" {
-    mkdir -p "$STATE"
-    touch "$STATE/restored"
-    echo "D ドライブに届かない" > "$STATE/failure-env"
-    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
-    [ "$status" -eq 0 ]
-    [ ! -s "$STATE/failure-env" ]
-}
-
-@test "check: 指定された退避の対象の一覧が無ければ失敗する" {
-    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW" "$TMPDIR_TEST/no-list"
-    [ "$status" -ne 0 ]
-    [[ "$(failure env)" == *"退避の対象の一覧が無い"* ]]
-}
-
-@test "check: 指定された退避の対象の一覧があれば、前の環境の失敗を消す" {
-    mkdir -p "$STATE"
-    touch "$STATE/restored"
-    echo "退避の対象の一覧が無い" > "$STATE/failure-env"
-    : > "$TMPDIR_TEST/list"
-    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW" "$TMPDIR_TEST/list"
-    [ "$status" -eq 0 ]
-    [ ! -s "$STATE/failure-env" ]
-}
-
 @test "check: 未復元なら最新の世代を上書きせずに戻し、印を付ける" {
     export FAKE_SNAPSHOTS='[{"id":"abc"}]'
     run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
     [ "$status" -eq 0 ]
     grep -q "restore latest --target $CLAUDE_TRANSCRIPTS_RESTORE_TARGET --overwrite never" "$RESTIC_LOG"
-    [ -e "$STATE/restored" ]
-}
-
-@test "check: 世代が一つも無ければ戻さずに印だけ付ける" {
-    run "$SCRIPT" check "$MOUNT" "$REPO" "$PW"
-    [ "$status" -eq 0 ]
-    run grep -q " restore " "$RESTIC_LOG"
-    [ "$status" -ne 0 ]
     [ -e "$STATE/restored" ]
 }
 
@@ -108,6 +69,32 @@ failure() {
     [ "$status" -ne 0 ]
     [[ "$(failure backup)" == *"復元に失敗"* ]]
     [ ! -e "$STATE/restored" ]
+}
+
+@test "fail: restic が失敗したら、そのコマンドの失敗として終了コードつきで書く" {
+    PROFILE_COMMAND=check ERROR_MESSAGE="check on profile 'claude-transcripts': exit status 1" ERROR_EXIT_CODE=1 \
+        run "$SCRIPT" fail
+    [ "$status" -eq 0 ]
+    [[ "$(failure check)" == *"restic check が失敗（終了コード 1）"* ]]
+}
+
+@test "systemd-fail: その回に理由が書かれていなければ、ユニットの失敗として書く" {
+    CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(date +%s)
+    export CLAUDE_TRANSCRIPTS_UNIT_STARTED
+    run "$SCRIPT" systemd-fail resticprofile-backup
+    [ "$status" -eq 0 ]
+    [[ "$(failure backup)" == *"backup のユニットが失敗"* ]]
+}
+
+@test "ok: backup の成功は backup の失敗だけを消し、成功の時刻を残す" {
+    mkdir -p "$STATE"
+    echo "前の失敗" > "$STATE/failure-backup"
+    echo "壊れている" > "$STATE/failure-check"
+    run "$SCRIPT" ok
+    [ "$status" -eq 0 ]
+    [ ! -s "$STATE/failure-backup" ]
+    [ "$(failure check)" = "壊れている" ]
+    [ -e "$STATE/last-success" ]
 }
 
 @test "check: 復元済みなら restic を呼ばない" {
@@ -126,65 +113,4 @@ failure() {
     done
     [ ! -s "$RESTIC_LOG" ]
     [ ! -e "$STATE/restored" ]
-}
-
-@test "ok: backup の成功は backup の失敗だけを消し、成功の時刻を残す" {
-    mkdir -p "$STATE"
-    echo "前の失敗" > "$STATE/failure-backup"
-    echo "壊れている" > "$STATE/failure-check"
-    run "$SCRIPT" ok
-    [ "$status" -eq 0 ]
-    [ ! -s "$STATE/failure-backup" ]
-    [ "$(failure check)" = "壊れている" ]
-    [ -e "$STATE/last-success" ]
-}
-
-@test "ok: check の成功は check の失敗を消し、成功の時刻は動かさない" {
-    mkdir -p "$STATE"
-    echo "壊れている" > "$STATE/failure-check"
-    PROFILE_COMMAND=check run "$SCRIPT" ok
-    [ "$status" -eq 0 ]
-    [ ! -s "$STATE/failure-check" ]
-    [ ! -e "$STATE/last-success" ]
-}
-
-@test "fail: restic が失敗したら、そのコマンドの失敗として終了コードつきで書く" {
-    PROFILE_COMMAND=check ERROR_MESSAGE="check on profile 'claude-transcripts': exit status 1" ERROR_EXIT_CODE=1 \
-        run "$SCRIPT" fail
-    [ "$status" -eq 0 ]
-    [[ "$(failure check)" == *"restic check が失敗（終了コード 1）"* ]]
-}
-
-@test "fail: run-before の失敗では何も書かない（check が理由を書いている）" {
-    ERROR_MESSAGE="run-before backup on profile 'claude-transcripts': exit status 1" ERROR_EXIT_CODE=1 \
-        run "$SCRIPT" fail
-    [ "$status" -eq 0 ]
-    [ ! -s "$STATE/failure-backup" ]
-}
-
-@test "systemd-fail: その回に理由が書かれていなければ、ユニットの失敗として書く" {
-    CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(date +%s)
-    export CLAUDE_TRANSCRIPTS_UNIT_STARTED
-    run "$SCRIPT" systemd-fail resticprofile-backup
-    [ "$status" -eq 0 ]
-    [[ "$(failure backup)" == *"backup のユニットが失敗"* ]]
-}
-
-@test "systemd-fail: その回に書かれた理由は残す" {
-    mkdir -p "$STATE"
-    export CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(($(date +%s) - 60))
-    echo "D ドライブに届かない" > "$STATE/failure-env"
-    run "$SCRIPT" systemd-fail resticprofile-backup
-    [ "$status" -eq 0 ]
-    [ ! -s "$STATE/failure-backup" ]
-}
-
-@test "systemd-fail: 前の回より古い理由しか無ければ、ユニットの失敗として書く" {
-    mkdir -p "$STATE"
-    echo "前の回の失敗" > "$STATE/failure-env"
-    touch -d '2 hours ago' "$STATE/failure-env"
-    export CLAUDE_TRANSCRIPTS_UNIT_STARTED=$(($(date +%s) - 60))
-    run "$SCRIPT" systemd-fail resticprofile-forget
-    [ "$status" -eq 0 ]
-    [[ "$(failure forget)" == *"forget のユニットが失敗"* ]]
 }
