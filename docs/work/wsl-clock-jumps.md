@@ -43,7 +43,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 5. timesyncd の disable と `w32tm /resync` の後（2026-11-23 02:2x〜02:3x、リーダーが打った）:
    - timesyncd は disabled、inactive。
    - Windows の時刻は WSL の時刻と 0.3 秒以内で一致し、どちらも NTP より 8.22 秒進んでいた（`powershell.exe` で読んだ。リーダーの許可）。WSL の chronyd が Windows の時計に合わせている、という推定はこれで裏付けられた。
-   - `w32tm /query /status` は、最終の正常な同期が 02:31:29（ソース ntp.nict.jp）、ルート分散 16 秒。同期には成功したのに時計は 8 秒進んだまま。Windows Time はずれが `MaxAllowedPhaseOffset`（既定 300 秒）以下なら時計を一気に合わせず少しずつ寄せるので、そのためと読める（推定。この値は管理者権限が要り読めていない）。10 分見ても -8.230 から -8.223 秒までしか寄っていない。
+   - `w32tm /query /status` は、最終の正常な同期が 02:31:29（ソース ntp.nict.jp）、ルート分散 16 秒。同期には成功したのに時計は 8 秒進んだまま。Windows Time はずれが `MaxAllowedPhaseOffset`（既定 300 秒）以下なら時計を一気に合わせず少しずつ寄せるので、そのためと読める（この PC の値も 300 秒だと、後で `w32tm /query /configuration` で確かめた）。10 分見ても -8.230 から -8.223 秒までしか寄っていない。
    - 02:37 に Windows から `w32tm /stripchart`（管理者権限なしで動く）で測ると、ntp.nict.jp へは IPv6 でも IPv4 でもタイムアウト（0x800705B4）した。time.windows.com と time.google.com には届き、ずれは -6.07 から -5.96 秒へ縮んでいた。WSL から ntp.nict.jp へは届くので、Windows から NICT への通信だけが届いていない（原因は未調査）。
    - Windows の時計の NTP に対する進みは、02:33 に約 8.2 秒、02:37 に約 6.0 秒、02:39 に約 4.4 秒（WSL との差 -3.8 秒から逆算）と縮んでいる。`w32tm /resync` の後、少しずつ寄せていると読める。WSL の時計は 02:38 でまだ 8.21 秒進んでいて、Windows に追いついていない。
 6. 直し終えた後の測定（2026-11-23 02:41〜02:44）:
@@ -59,7 +59,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
    - 11/23 02:30 ごろ、リーダーが NICT へ同期する設定に変えた（出典は「判断の経緯」）。02:31 に手で指定した同期先（`ntp.m`）の `ntp.nict.jp,0x8` と同期した。
    - いまの設定（レジストリ、管理者権限なしで読んだ）: `Parameters\Type = NTP`、`NtpServer = ntp.nict.jp,0x8`、`NtpClient\Enabled = 1`、`Config\MinPollInterval = 10`、`MaxPollInterval = 15`（1,024〜32,768 秒）、`MaxPosPhaseCorrection` と `MaxNegPhaseCorrection` は 0xFFFFFFFF（ずれの大きさで補正を拒まない）、`LargePhaseOffset = 50000000`（100ns 単位で 5 秒。急なずれを外れ値として扱う閾値で、一気に合わせるかどうかは `MaxAllowedPhaseOffset` が決める）。`w32tm /query /peers` も同期先は ntp.nict.jp だけで、状態はアクティブ。
    - グループ ポリシーの W32Time のキー（`HKLM\SOFTWARE\Policies\Microsoft\W32Time` の下）は無い。ドメインのポリシーが設定を上書きする形跡は無い。
-   - `w32tm /query /configuration` は管理者権限が要り、まだ読めていない（各値が Local か Policy かを確かめるため、リーダーに頼んでいる）。
+   - `w32tm /query /configuration`（2026-11-23 03:1x、リーダーが管理者の PowerShell で取って貼った）: 全部の値が「(ローカル)」で、ポリシーから来る値は無い。`Type: NTP`、`NtpServer: ntp.nict.jp,0x8`、`MaxAllowedPhaseOffset: 300`、`SpecialPollInterval: 3600`（`0x8` は特別な間隔を使わない印なので、間隔は `MinPollInterval` と `MaxPollInterval` で決まる）、`NtpServer` のプロバイダーは無効（この PC は時刻を配らない）。
 9. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
 
@@ -119,7 +119,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 - ほかのマシンの WSL（2.7 以降で chronyd が動くもの）でも timesyncd との奪い合いが起きうる。そのマシンでは手で disable する（chezmoi では配らない判断）。
 - Windows Time を NICT へ直接同期させる設定の確かめ（「判明した事実」の 8）。設定はリーダーが入れ済みで、再起動なしで効いている。Claude の案は次のとおり。
   1. 案の中心は、いまの設定（`Type = NTP`、`NtpServer = ntp.nict.jp,0x8`）をそのまま使うこと。足すものは無い。同じ設定を入れ直すなら、管理者の PowerShell で `w32tm /config /manualpeerlist:"ntp.nict.jp,0x8" /syncfromflags:manual /update` を打ってから `w32tm /resync` を打つ。どちらも再起動は要らない。
-  2. 確かめること: `w32tm /query /configuration /verbose` で、`Type` と `NtpServer` が `(Local)` から来ていること（`(Policy)` なら、ドメインのポリシーが後で上書きしうる）。数時間後にイベントログの id 35 か 37 が ntp.nict.jp で増えていること。
+  2. 確かめること: `Type` と `NtpServer` が手元の設定（ローカル）から来ていることは確かめ済み（ポリシーでないので、ドメインのポリシーに後から上書きされない）。残るのは、数時間後にイベントログの id 35 か 37 が ntp.nict.jp で増えていることだけ。
   3. 足してもよいもの（任意）: 同期先を NICT 一つにすると、NICT に届かないときに同期が止まる。`/manualpeerlist:"ntp.nict.jp,0x8 time.google.com,0x8"` のように二つ目を足す。利点は片方が落ちても同期が続くこと。欠点は時刻源が混ざること（どちらも stratum 1 なので差は ms 以下の見込み）。
   4. ドメインの相手が 11/19 から見つからない件そのものは、Windows Time とは別の、ドメインの側の問題として残る（ログオンやほかのドメインの機能に響きうる）。この作業では扱っていない。
 - WSL を次に起動したとき、同じ飛びが戻らないかを測って確かめる（`timesync_implicit` が 1 に戻った状態で）。
