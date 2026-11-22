@@ -145,7 +145,7 @@ PR #99 は main に入り（4466ce6）、本番の作業コピーを main へ移
 
 ## 次に Claude がすること
 
-- `next` のブロックの決まりを移す PR（ブランチ `feat/next-block-anywhere`）の取り込みを待つ。prts の引き継ぎの手順の PR（#113）と同じ CLAUDE.md と作業記録を触るので、後に入れるほうで main をマージして食い違いを解く。入ったら、本番の作業コピーを main の先端へ移し、`chezmoi apply ~/.claude/CLAUDE.md` で配る。
+- `next` のブロックの決まりを移す PR #114（ブランチ `feat/next-block-anywhere`。コードレビューは Ready、試験は通った）の取り込みを待つ。prts の引き継ぎの手順の PR（#113）と同じ CLAUDE.md と作業記録を触るので、後に入れるほうで main をマージして食い違いを解く。入ったら、本番の作業コピーを main の先端へ移し、`chezmoi apply ~/.claude/CLAUDE.md` で配る。
 
 ## リーダーに決めてほしいこと
 
