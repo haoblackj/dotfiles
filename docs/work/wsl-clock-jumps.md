@@ -100,6 +100,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 - tick の書き手を ftrace で WSL の chronyd と突き止めた。
 - timesyncd を止めて disable した（2026-11-23 02:08 と 02:28、リーダーの sudo）。段差は 0 件、進みの比は 1.000 になった。
 - Windows の時計を `w32tm /resync` で直した（リーダーの管理者の PowerShell）。WSL の時刻も NTP に 0.3 秒以内で合った。
+- PR #122（この作業記録）を main に squash で取り込んだ（コミット 9340666、2026-11-23 02:57、bot のアカウント）。変更はこの作業記録だけで、コードは変えていないので、コードレビューは受けていない。取り込んだ後の記録の直しは main に直接 push している（883b2d8）。取り込みを記録に書いたのは、別のセッション（pre-push のテストを速くする作業）の Claude で、依頼の出典は端末からの入力（会話 e649f52f、2026-11-23 03:04、発言 7eac6ee1）。
 
 ## 残っていること
 
@@ -119,4 +120,5 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 
 - 書き置き: `ideas/bugs/2026-11-22-wsl-realtime-clock-jumps.md`（PR #120 のブランチ）
 - PR #120（pre-push のテストを速くする）
+- PR #122（この作業記録）
 - https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/
