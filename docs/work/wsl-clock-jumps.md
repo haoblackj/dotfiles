@@ -14,7 +14,8 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 ## いまの方針
 
 再起動（Windows も WSL も）をしない方法で直す。
-WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要るのでリーダーが打つ）。
+WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要るのでリーダーが別の端末で打つ。`!` の欄では sudo のパスワードを読めない）。
+`timesync_implicit` は戻せた。`tick` は書き戻されるので、書き手を探している。
 戻したら、引き継ぎで使ったのと同じ並べ方（`time.time()` と `time.monotonic()` を並べて回す）で飛びが消えたことを確かめる。
 
 ## 判明した事実
@@ -24,12 +25,15 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 1. カーネルの `tick` が 11000 になっている（通常は 10000）。
    - 根拠: `adjtimex`（読み取りだけ）で `tick 11000`。CLOCK_MONOTONIC_RAW の 9.092 秒の間に CLOCK_MONOTONIC が 10.002 秒進んだ（比 1.100）。
    - 1 tick ごとに 11ms 進めるので、CLOCK_MONOTONIC と CLOCK_REALTIME の進み方が実際より 10% 速い。NTP サーバ（ntp.nict.jp）と比べても、段差の間の時計は 0.53 秒ごとに約 0.048 秒ずつ先行した。
-   - 誰が設定したかは分からない。この distro に adjtimex、chrony、ntpd は無く、コンテナは特権も CAP_SYS_TIME も持たず、過去の Claude の会話の記録にも設定した跡が無い。`tick` は一度書かれると VM が止まるまで残る（VM は 2026-11-10 から動いている）。
+   - 誰が設定したかは分からない。この distro に adjtimex、chrony、ntpd は無く、コンテナは特権も CAP_SYS_TIME も持たず、過去の Claude の会話の記録にも設定した跡が無い。
+   - 2026-11-22 23:2x に sudo で 10000 に戻すと一時は 10000 と読めたが、35 秒後の測定では CLOCK_MONOTONIC が RAW の 1.10 倍のままで、数分後には 11000 に戻っていた。何かが繰り返し 11000 を書いている。「一度書かれて残っているだけ」という最初の見立ては外れた。
+   - 書きうる候補: systemd-timesyncd は `clock_adjtime` を呼ぶ（ただし普通は tick を書かない）。WSL の `/init` は静的リンクで中身を読めない。同じカーネルを共有するほかの WSL の distro の時刻同期（chrony なら周波数の補正が 500ppm を超えると tick を上限の ±10% まで動かす）も候補だが、ここからは見えない。
 2. Hyper-V の時刻同期と systemd-timesyncd が、5 秒ごとに別々の時刻を書き合っている。
    - `hv_utils` の `timesync_implicit` が Y で、ホスト（Windows）が 5 秒ごとに送る時刻の標本でゲストの時計を書き換える。WSL の時計が 10% 速いので、ゲストの時間では約 5.5 秒ごとになる。
    - 書き換えられた直後、timesyncd が時計の変更を検知して NTP に問い合わせ、約 0.27 秒後に -8 秒戻す。根拠: `timedatectl timesync-status` が毎回 `Offset: -7.99s` を示し、timesyncd の起動（19:26）からの送信 2777 回が段差の回数の見積もり（約 2550 回）とほぼ合う。journald と systemd-resolved も 5 秒ごとに時計の変更を記録している。
    - ここから、ホストの時計は NTP より約 8 秒進んでいると読める（推定。Windows 側の時刻は直接は測っていない）。
-   - `/sys/module/hv_utils/parameters/timesync_implicit` は 644 で、root なら実行中に書き換えられる。
+   - `/sys/module/hv_utils/parameters/timesync_implicit` は 644 で、root なら実行中に書き換えられる。WSL はカーネルの起動引数で `hv_utils.timesync_implicit=1` を明示して渡している（`/proc/cmdline`）。
+   - 2026-11-22 23:2x に 0 にした後は、5 秒ごとの +7.5/-8 秒の段差が消え、timesyncd が 32 秒ごとに -2.96 秒戻す段差だけになった（tick が 11000 のままなので、32 秒で約 3 秒先行する）。
 3. 二つ目だけを直しても、一つ目が残ると timesyncd は 10% のずれ（slew の上限 500ppm を超える）を段差で直すしかなく、約 32 秒ごとに数秒の段差が残る見込み。一つ目だけを直しても、ホストと NTP の 8 秒の差の綱引きが続く。両方を直す。
 4. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
@@ -57,22 +61,24 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
 
 ## いまの作業
 
-リーダーが sudo で二つの設定を戻すのを、背景の監視で待っている。
-戻ったと見えたら、同じ並べ方の測定で飛びが消えたことを確かめる。
+`tick` を 11000 に書き戻している者を探している。
+もう一度 10000 に戻してもらい、書き戻しの瞬間を 10ms 刻みで記録して、timesyncd の同期や時刻の段差と時刻を突き合わせる。
 
 ## 済んだこと
 
 - 再現と原因の特定（上の「判明した事実」）。
+- `timesync_implicit` を 0 にした（2026-11-22 23:2x、リーダーの sudo）。5 秒ごとの段差は消えた。
 
 ## 残っていること
 
-- 二つの設定を戻す（リーダーの sudo）。
+- `tick` の書き手を突き止めて止める。
 - 測定で飛びが消えたことを確かめる。
 - WSL を次に起動したときにも `timesync_implicit=0` を保つか（下の問い）。`tick` は起動のたびに 10000 に戻るので、保つ仕組みは要らない（設定した者が再び動かない限り）。
 
 ## 次に Claude がすること
 
-- 監視が二つの設定の変化を検出したら、`time.time()` と `time.monotonic()` を 30 秒並べて段差が 0 件、両者の進みの比が 1.000 に近いことを確かめ、NTP とのずれが数十 ms に収まることも見る。結果をここに書いて送り手のセッションへ返す。
+- 背景の監視（10ms 刻みで tick、freq、status と時刻の段差を記録）の結果から、書き戻しが timesyncd の同期と同時か、周期的か、を見て書き手を絞る。
+- 書き手を止めたら、`time.time()` と `time.monotonic()` を 30 秒並べて段差が 0 件、CLOCK_MONOTONIC と RAW の比が 1.000 に近く、NTP とのずれが数十 ms に収まることを確かめる。結果をここに書いて送り手のセッションへ返す。
 
 ## リーダーに決めてほしいこと
 
