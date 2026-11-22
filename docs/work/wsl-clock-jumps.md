@@ -43,7 +43,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 5. timesyncd の disable と `w32tm /resync` の後（2026-11-23 02:2x〜02:3x、リーダーが打った）:
    - timesyncd は disabled、inactive。
    - Windows の時刻は WSL の時刻と 0.3 秒以内で一致し、どちらも NTP より 8.22 秒進んでいた（`powershell.exe` で読んだ。リーダーの許可）。WSL の chronyd が Windows の時計に合わせている、という推定はこれで裏付けられた。
-   - `w32tm /query /status` は、最終の正常な同期が 02:31:29（ソース ntp.nict.jp）、ルート分散 16 秒。同期には成功したのに時計は 8 秒進んだまま。Windows Time は既定でずれが 50 秒未満（`LargePhaseOffset`）なら時計を一気に合わせず少しずつ寄せるので、そのためと読める（推定）。10 分見ても -8.230 から -8.223 秒までしか寄っていない。
+   - `w32tm /query /status` は、最終の正常な同期が 02:31:29（ソース ntp.nict.jp）、ルート分散 16 秒。同期には成功したのに時計は 8 秒進んだまま。Windows Time はずれが `MaxAllowedPhaseOffset`（既定 300 秒）以下なら時計を一気に合わせず少しずつ寄せるので、そのためと読める（推定。この値は管理者権限が要り読めていない）。10 分見ても -8.230 から -8.223 秒までしか寄っていない。
    - 02:37 に Windows から `w32tm /stripchart`（管理者権限なしで動く）で測ると、ntp.nict.jp へは IPv6 でも IPv4 でもタイムアウト（0x800705B4）した。time.windows.com と time.google.com には届き、ずれは -6.07 から -5.96 秒へ縮んでいた。WSL から ntp.nict.jp へは届くので、Windows から NICT への通信だけが届いていない（原因は未調査）。
    - Windows の時計の NTP に対する進みは、02:33 に約 8.2 秒、02:37 に約 6.0 秒、02:39 に約 4.4 秒（WSL との差 -3.8 秒から逆算）と縮んでいる。`w32tm /resync` の後、少しずつ寄せていると読める。WSL の時計は 02:38 でまだ 8.21 秒進んでいて、Windows に追いついていない。
 6. 直し終えた後の測定（2026-11-23 02:41〜02:44）:
@@ -57,7 +57,7 @@ WSL の CLOCK_REALTIME が約 5.5 秒ごとに +7.5 秒進んで直後に -8 秒
 8. Windows Time の同期先の経緯（2026-11-23 03:0x に読んだ。読み取りだけ）:
    - イベントログの 14 日分: 11/18 まではドメインの階層の相手（`ntp.d`）から毎日有効な時刻を受けて同期していた。11/19 からドメインの相手を見つけられないエラー（id 129）が続き、同期は 11/23 02:31 まで一度も無かった。
    - 11/23 02:30 ごろ、リーダーが NICT へ同期する設定に変えた（出典は「判断の経緯」）。02:31 に手で指定した同期先（`ntp.m`）の `ntp.nict.jp,0x8` と同期した。
-   - いまの設定（レジストリ、管理者権限なしで読んだ）: `Parameters\Type = NTP`、`NtpServer = ntp.nict.jp,0x8`、`NtpClient\Enabled = 1`、`Config\MinPollInterval = 10`、`MaxPollInterval = 15`（1,024〜32,768 秒）、`MaxPosPhaseCorrection` と `MaxNegPhaseCorrection` は 0xFFFFFFFF（ずれの大きさで補正を拒まない）、`LargePhaseOffset = 50000000`（5 秒。これを超えるずれは一気に合わせる）。`w32tm /query /peers` も同期先は ntp.nict.jp だけで、状態はアクティブ。
+   - いまの設定（レジストリ、管理者権限なしで読んだ）: `Parameters\Type = NTP`、`NtpServer = ntp.nict.jp,0x8`、`NtpClient\Enabled = 1`、`Config\MinPollInterval = 10`、`MaxPollInterval = 15`（1,024〜32,768 秒）、`MaxPosPhaseCorrection` と `MaxNegPhaseCorrection` は 0xFFFFFFFF（ずれの大きさで補正を拒まない）、`LargePhaseOffset = 50000000`（100ns 単位で 5 秒。急なずれを外れ値として扱う閾値で、一気に合わせるかどうかは `MaxAllowedPhaseOffset` が決める）。`w32tm /query /peers` も同期先は ntp.nict.jp だけで、状態はアクティブ。
    - グループ ポリシーの W32Time のキー（`HKLM\SOFTWARE\Policies\Microsoft\W32Time` の下）は無い。ドメインのポリシーが設定を上書きする形跡は無い。
    - `w32tm /query /configuration` は管理者権限が要り、まだ読めていない（各値が Local か Policy かを確かめるため、リーダーに頼んでいる）。
 9. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
