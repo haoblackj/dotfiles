@@ -5,6 +5,8 @@
 set -u
 
 setup() {
+    # 外から GIT_DIR などを受け継ぐと、一時のリポジトリでなく本体へ書き込む（2026-10-01）。
+    unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
     REPO="$BATS_TEST_TMPDIR/repo"
     mkdir -p "$REPO"
     git -C "$REPO" init -q
