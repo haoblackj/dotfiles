@@ -42,7 +42,11 @@ WSL の中で二つのカーネルの設定を実行中に戻す（sudo が要�
    - 止めた直後から 10 分、30 秒ずつ 20 回測って時刻の段差は 0 件。chronyd は tick を 11000 から 10834 を経て、約 2 分後（02:10:58）に 10000 へ戻した。周波数の補正は -0.3ppm 前後。
    - CLOCK_MONOTONIC_RAW の 10.0 秒に CLOCK_MONOTONIC も 10.0 秒（比 1.000）。
    - ただし時計は NTP より 8.23 秒進んだまま安定した（ntp.nict.jp、time.windows.com、ntp.ubuntu.com、time.google.com、time.cloudflare.com の五つがそろって -8.23 秒）。chronyd の設定の `server time.windows.com` とも合っていないので、chronyd は実際には Windows のホストの時計（Hyper-V の PTP など）に合わせていて、そのホストの時計が NTP より約 8.2 秒進んでいる、と読める（推定。VM の最上位の chronyd の設定と状態は、どの distro からも読めない）。
-5. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
+5. timesyncd の disable と `w32tm /resync` の後（2026-11-23 02:2x〜02:3x、リーダーが打った）:
+   - timesyncd は disabled、inactive。
+   - Windows の時刻は WSL の時刻と 0.3 秒以内で一致し、どちらも NTP より 8.22 秒進んでいた（`powershell.exe` で読んだ。リーダーの許可）。WSL の chronyd が Windows の時計に合わせている、という推定はこれで裏付けられた。
+   - `w32tm /query /status` は、最終の正常な同期が 02:31:29（ソース ntp.nict.jp）、ルート分散 16 秒。同期には成功したのに時計は 8 秒進んだまま。Windows Time は既定でずれが 50 秒未満（`LargePhaseOffset`）なら時計を一気に合わせず少しずつ寄せるので、そのためと読める（推定）。10 分見ても -8.230 から -8.223 秒までしか寄っていない。
+6. 環境: WSL2、カーネル 6.18.33.2-microsoft-standard-WSL2、systemd 255、chrony は無い。
 5. Ubuntu の WSL の文書は、ゲストで NTP を使うときに `hv_utils.timesync_implicit=0` を勧めている（https://documentation.ubuntu.com/wsl/stable/explanation/time-sync/ ）。
 
 ## 判断の経緯
