@@ -422,7 +422,8 @@ Claude からは引き継がず、ターンも止めない。
 
 Orca は、`~/.claude/settings.json` に Claude Code のフック（`~/.orca/agent-hooks/` を呼ぶ物。エージェントの状態を Orca へ知らせる）を、`~/.claude/keybindings.json` に `ctrl+alt+g`（Orca のチャット画面）を書く。
 ソースに無いと `chezmoi apply` で消えるので、`linked/claude/settings.json` と `dot_claude/keybindings.json` に取り込んである。手で直さず、Orca を上げて書き換わったら取り込み直す。
-`env` の `CLAUDE_CODE_ENABLE_TODO_TOOLS` と CLAUDE.md の「Orca のサイドバーへのタスクと次の作業の候補」は、Orca のプラグイン Milestone がタスクの進捗と次の作業のカードを出すための物。
+`env` の `CLAUDE_CODE_ENABLE_TODO_TOOLS` と CLAUDE.md の「Orca のサイドバーへのタスク」は、Orca のプラグイン Milestone がタスクの進捗のカードを出すための物。
+次の作業の候補（`next` のブロック）の決まりは、Orca の外でも Claude Code の Mod が読んで帯のボタンにするので、CLAUDE.md の「コミュニケーション」の節に置いてある。
 
 ### クラウドセッション（Claude Code on the web）
 
