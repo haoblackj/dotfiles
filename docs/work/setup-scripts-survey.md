@@ -1,6 +1,6 @@
 ---
 title: 本番で未実行のまま残っているセットアップスクリプトの調査
-status: waiting
+status: done
 ---
 
 ## 目的
@@ -25,6 +25,7 @@ status: waiting
 - 92 の現状との差: unit は `~/.config/systemd/user/imozuru-serve.service` に 11/19 16:38 に配済みで、`enabled`、`active`（2026-11-19 16:38:23 から稼働）。つまり手で、または別経路で有効化されている。unit の ExecStart は `/usr/bin/python3` と `~/.claude/skills/imozuru/scripts/dashboard.py` で、brew の PATH に依らない。走らせると `restart` で常駐が一度落ちて再起動する（127.0.0.1:8765、履歴のページが数秒切れる）。
 - 99_remove-bootstrap-sudo: `run_after_` なので毎回走る。ドロップインが無ければ先頭の `[ -f "$DROPIN" ] || exit 0` で終わる。ドロップインは今は無いので、単体で走らせても何も起きず、sudo も呼ばれない。ただし 10 が走るとドロップインを作るので、99 は 10 の後ろで撤去する役になる。
 - `.claude/worktrees/` に古いワークツリーが 7 つ残っている。この調査の `chezmoi execute-template` は、10 と 80 が `.chezmoitemplates` を使わないかほとんど使わないので、結果に影響した形跡は見ていない（80 の `brew-env.sh` は使うが、描画された出力に異常は見えなかった）。
+- apply の結果（2026-11-22、Claude が読み取りで確かめた）: scriptState に 10_system-base（12:18:22Z）、80_cli-tools（12:19:01Z）、92_imozuru-serve、89、99（12:19:03Z）の実行記録が入った。`/etc/sudoers.d/` は README だけで、ドロップインは残っていない。imozuru-serve は active で、ActiveEnterTimestamp は 2026-11-22 21:19:03 JST（再起動が入った）。別の Claude セッションも同じ内容を確かめた（chezmoi diff に残るのは毎回走る 89 と 99 だけ）。
 - 注意: `chezmoi diff --no-pager` を grep した限りでは、スクリプトの「added」の行が出なかった（出力形式が違うため）。「added」の根拠は scriptState とハッシュの突き合わせで確かめた。
 
 ## 判断の経緯
@@ -34,17 +35,24 @@ status: waiting
 - 理由: 本番データの保護の決まりと、依頼の条件に合うため。
 - 状態: 有効
 
+### 2026-11-22 採用: 名指しなしの `chezmoi apply` で 5 本を走らせる
+- 出どころ: 未確認（リーダーの発言は別の Claude セッションから SendMessage で届いた伝聞。この会話の「打ってくるね」の発言も、`prts quote` が記録に見つけられなかった）
+- 要旨（Claude の要約）: Claude の案（走らせる）に対し、リーダーが自分の端末で名指しなしの apply を走らせた。
+- 理由: 10 と 80 が現状と一致する内容で実害が無く、記録が揃って `chezmoi diff` が整うため（Claude の案の理由。リーダーは理由を言っていない）。
+- 状態: 有効
+
 ## いまの作業
-調査は済んだ。依頼元のセッションへ結論を返し、リーダーの指示を待つ。
+なし。調査と、リーダーによる apply の結果の確認まで済んだ。
 
 ## 済んだこと
+- リーダーが自分の端末で名指しなしの `chezmoi apply` を走らせ、結果を確かめた（下の判断の経緯と判明した事実）。
 - 5 本のソースの読み取り、scriptState との突き合わせ、git 履歴の確認、本番の現状（ドロップイン、earlyoom、resolv.conf、imozuru-serve、restored）の確認。
 
 ## 残っていること
-- 名指しなしの `chezmoi apply` を打つかの判断は、リーダーの持ち分。
+- なし。
 
 ## 次に Claude がすること
-- リーダーの指示があるまで何もしない。走らせると決まったら、下の推奨の順を渡す。
+- なし（done）。
 
 ## 5 本ごとの結論と推奨
 
@@ -59,7 +67,7 @@ status: waiting
 走らせる順番の補足: chezmoi は `before` の付くスクリプト、ファイルの配布（`before` も `after` も付かないスクリプトは名前順でここに混ざる）、`after` の付くスクリプトの順に走らせる。10 と 80 は中ほど、89、92、99 は最後に回る。10 が途中で失敗して apply が止まると、99 が走らずドロップインが残る。次に完走した apply の 99 が撤去するので、急ぐなら失敗の後に `sudo rm -f /etc/sudoers.d/00-chezmoi-bootstrap` を打つ。
 
 ## リーダーに決めてほしいこと
-- 名指しなしの `chezmoi apply` で 5 本を走らせるか。Claude の案: 走らせる。理由は、10 と 80 が現状と一致する内容で実害が無く、記録が揃って `chezmoi diff` がきれいになるため。条件は sudo のパスワードを打てること。トレードオフ: 10 が 50 パッケージの確認で数分かかり、92 の再起動で履歴のページが数秒切れる。答えで何が変わるか: 走らせないなら、次の apply のたびに 10 と 80 と 92 が「added」と出続ける。
+なし
 
 ## 参照
 - 973c846（#81 earlyoom）、30f61a1（#105 コメントの言い換え）、bfaa558（imozuru の常駐）、5752929（run_after_99 の導入）、e8e11b1（run_after_89 の導入）
