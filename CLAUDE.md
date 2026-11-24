@@ -43,6 +43,17 @@ dot_zshrc.tmpl / dot_gitconfig.tmpl
 `book-to-skill` は git external で upstream から clone し、機密のものは private repo に置いて sync hook が `~/.claude/skills/` へ symlink する。
 開発の流れは README「公開の自作スキル」。
 
+## 本番の作業コピーのブランチ
+
+本番の作業コピー（`~/.local/share/chezmoi`）は `main` に乗せたままにする。
+本番の作業コピーが別のブランチか切り離した HEAD に移ると `main` が空き、Orca のワークスペースの作成で `main` を選ぶだけで、そのワークツリーが `main` を取り出せる。
+git は 1 つのブランチを 2 つのワークツリーで取り出せないので、本番の作業コピーが `main` に戻れなくなる。
+
+- 作業のブランチは、本番の作業コピーで切り替えず、ワークツリーで切る。
+- 本番の作業コピーは `git pull --ff-only` で進める。
+- `main` をほかのワークツリーが取り出していて戻れないときは、切り離した HEAD で進めず、`git worktree list` で取り出しているワークツリーを探し、そちらをブランチから外す。ブランチから外すのは、そのワークツリーで動いている Claude Code と未コミットの変更を確かめてから。
+- 出来事: 2026-11-21 に、本番の作業コピーが作業のブランチに乗っている間に Orca のワークツリー `main-2` が `main` を取り出し、2026-11-25 まで本番の作業コピーが切り離した HEAD で進んだ（`docs/work/orca-main-held.md`）。
+
 ## push の最中の作業コピー
 
 pre-push（pre-commit の pytest と bats、数分かかる）は、コミットしていない変更を一度よけて、終わったら戻す。
