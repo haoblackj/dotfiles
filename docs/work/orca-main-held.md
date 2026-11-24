@@ -66,7 +66,7 @@ Orca は、ほかのワークツリーが取り出しているブランチの再
 
 ## 残っていること
 
-- PR を main に取り込み、本番の作業コピーを `git pull --ff-only` で進める。
+- PR #131 を main に取り込み、本番の作業コピーを `git pull --ff-only` で進める。
 
 ## 次に Claude がすること
 
@@ -78,4 +78,5 @@ Orca は、ほかのワークツリーが取り出しているブランチの再
 
 ## 参照
 
+- PR: https://github.com/haoblackj/dotfiles/pull/131
 - [pre-push-speed.md](pre-push-speed.md)、[claude-ops-records.md](claude-ops-records.md)
