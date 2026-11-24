@@ -153,7 +153,7 @@ Claude が報告の中で、決まった技術の用語（サブエージェン�
 - 2026-12-14 以降に同じ集計を回し、判明した事実の判定の基準で判定してリーダーに報告する。
 - 試しの結果を見て、Stop フックや pre-commit の判定を足すかを決める（リーダーの判断）。
 - 戻すときは main で `git revert 2b04d35` を打ち、本番の作業コピーへ取り込んで `chezmoi apply ~/.claude/CLAUDE.md` を打つ（2026-11-24 に PR #128 がこの行を referent-first の rule へまとめたので、今は referent-first の変更を戻す側になる）。
-- referent-first の本文をエクシアの output style へ移す PR を main へ取り込むか（リーダーの判断）。本番へは配ってあり、控えは `~/.cache/exusiai.md.bak-261124` と `~/.cache/CLAUDE.md.bak-261124`。
+- referent-first の本文をエクシアの output style へ移す PR #130 を main へ取り込むか（リーダーの判断）。取り込んだら、上の「このブランチ」を PR #130 に直す。本番へは配ってあり、控えは `~/.cache/exusiai.md.bak-261124` と `~/.cache/CLAUDE.md.bak-261124`。
 
 ## 次に Claude がすること
 - 2026-12-14 以降に、まず本番に変更が残っているか（`~/.claude/output-styles/exusiai.md` に「名前より先に実体を決める」の節があり、「LLM っぽい表現の禁止」が無いこと）を確かめる。次に `python3 -I ~/.cache/term-names/count_claude_go.py 2026-09-22` を回し、11-30 の週と 12-07 の週の値で判定して、リーダーに報告する。
