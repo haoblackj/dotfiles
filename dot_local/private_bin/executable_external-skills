@@ -166,10 +166,10 @@ rea_register() { # パッケージ 版
   json="$(jq -cn --arg spec "$pkg@$ver" --argjson env "$env" \
     '{type: "stdio", command: "npx", args: ["-y", $spec, "mcp"]} + (if $env == {} then {} else {env: $env} end)')"
   # 消してから足すので、足すのに失敗したら元の登録（環境変数を含む）を戻す。
-  # 戻せなかったときのために、元の登録を状態の置き場にも残す。
+  # 戻せなかったときのために、元の登録を状態の置き場にも残す。env に秘密が入りうるので
+  # 本人だけが読める形で書き、登録が通ったら消す。
   if [ -n "$old" ]; then
-    mkdir -p "$STATE"
-    printf '%s\n' "$old" >"$STATE/rea-mcp.before.json"
+    (umask 077 && mkdir -p "$STATE" && printf '%s\n' "$old" >"$STATE/rea-mcp.before.json")
   fi
   claude mcp remove rea -s user >/dev/null 2>&1 </dev/null || true
   if ! claude mcp add-json rea "$json" -s user >&2 </dev/null; then
@@ -178,6 +178,7 @@ rea_register() { # パッケージ 版
     fi
     return 1
   fi
+  rm -f "$STATE/rea-mcp.before.json"
   if [ "$env" = '{}' ]; then
     log "MCP の登録 rea に環境変数が無い。Ghidra を使うなら GHIDRA_INSTALL_DIR と JAVA_HOME を足す（claude mcp add-json rea ... -s user）"
   fi

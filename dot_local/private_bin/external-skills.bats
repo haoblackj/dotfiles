@@ -398,3 +398,18 @@ EOS
   [ "$status" -eq 0 ]
   grep -q 'skills add MaryCache/imozuru' "$LOG"
 }
+
+@test "rea: MCP の登録の控えは本人だけが読める 600 で、登録が通ったら残さない" {
+  fake_npm 6.9.0; fake_claude
+  echo '{"mcpServers":{"rea":{"type":"stdio","command":"npx","args":["-y","rea-agents@6.7.0","mcp"],"env":{"TOKEN":"s"}}}}' >"$HOME/.claude.json"
+  decl "reverse-engineer-anything rea rea-agents 6.9.0"
+  run_es install
+  [ "$status" -eq 0 ]
+  [ ! -e "$HOME/.local/state/external-skills/rea-mcp.before.json" ]
+  sed -i 's|"mcp add-json") |"mcp add-json") [ "${FAKE_ADD_FAIL:-}" = 1 ] \&\& exit 1; |' "$FAKE/claude"
+  echo '{"mcpServers":{"rea":{"type":"stdio","command":"npx","args":["-y","rea-agents@6.7.0","mcp"],"env":{"TOKEN":"s"}}}}' >"$HOME/.claude.json"
+  echo 6.7.0 >"$HOME/.local/state/external-skills/rea-reverse-engineer-anything.version"
+  FAKE_ADD_FAIL=1 run_es install
+  [ "$status" -eq 1 ]
+  [ "$(stat -c %a "$HOME/.local/state/external-skills/rea-mcp.before.json")" = 600 ]
+}
