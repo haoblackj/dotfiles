@@ -1,6 +1,6 @@
 ---
 title: 退役スキルの削除、report-skills の Codex との共有、古い chezmoi の worktree の片付け
-status: waiting
+status: active
 ---
 
 ## 目的
@@ -14,9 +14,9 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 
 ## いまの方針
 
-1 と 2 は済んだ。
-3 は、未コミットも未マージのコミットも無い worktree だけを外し、ブランチは消さずに残した。
-未マージのコミットが残る worktree 4 つは、リーダーの答えを待っている。
+1 から 3 まで済んだ。
+3 は、PR #96 の worktree だけを残し、ほかの 7 つの worktree を外した。ブランチはどれも消していない。
+残りは PR #132 の取り込み後の確かめだけ。
 
 ## 判明した事実
 
@@ -42,6 +42,12 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 - 理由: `dot_claude/skills/symlink_<名前>.tmpl` と同じ型で、`chezmoi apply` でほかのマシンにも再現できる。正本を直接指すので、`~/.claude/skills/` の symlink を同期フックが張り直すかどうかに依らない。
 - 状態: 有効
 
+### 2026-11-28 採用: 未マージのコミットが残る worktree は PR #96 のものだけ残し、ほかの 3 つを外す
+- 出どころ: 質問のツールへの回答（会話 61805cba、2026-11-28）
+- 要旨（Claude の要約）: Claude の推奨のとおり、開いている PR #96 の worktree は残し、PR の無い 3 つは worktree だけ外してブランチは残す。
+- 理由: 理由の提示なし（Claude の推奨を選んだ）。
+- 状態: 有効
+
 ### 2026-11-28 採用: 外した worktree のブランチは消さない
 - 出どころ: Claude の判断
 - 理由: どのブランチを残すか消すかはリーダーの判断（グローバルの CLAUDE.md の指示範囲の厳守）。依頼は worktree の片付けで、ブランチの削除は含まない。
@@ -49,7 +55,7 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 
 ## いまの作業
 
-リーダーの答え待ち。
+PR #132 の取り込み待ち。
 
 ## 済んだこと
 
@@ -57,20 +63,21 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 - `~/.codex/skills/mulmoterminal-*` 10 本を `trash-put` でごみ箱へ移した。
 - `~/.codex/skills/report-skills` の旧版の写しを `trash-put` でごみ箱へ移し、`dot_codex/skills/symlink_report-skills.tmpl` を足してこのワークツリーをソースに `chezmoi apply` した。
 - 本番の chezmoi の worktree のうち、未コミットも未マージも無い 4 つ（`.claude/worktrees/` の `herdr-remnants`、`herdr-tab-restore-label`、`imozuru-serve` と、`~/.mulmoterminal/worktrees/chezmoi-1fae523b/10-task`）を `git worktree remove` で外した。
+- 未マージのコミットが残る 3 つ（`.claude/worktrees/` の `issue86-work-ownership`、`example-text`、`public-private-names`）を `git worktree remove` で外した。ブランチ `worktree-issue86-work-ownership`、`fix/example-text`、`fix/public-names-after-98` は残っている。
+- session-handoff の残骸は、残した PR #96 の worktree の中だけになった。
+- PR #132 を作った。
 
 ## 残っていること
 
-- 未マージのコミットが残る worktree 4 つの扱い。
-- この PR の取り込み後、本番の作業コピーで `chezmoi apply ~/.codex/skills/report-skills` が差を出さないことを確かめる。
+- PR #132 の取り込み後、本番の作業コピーで `chezmoi diff ~/.codex/skills` が空であることを確かめる。
 
 ## 次に Claude がすること
 
-- リーダーの答えに従って、未マージの worktree 4 つを外すか残す。
-- 取り込み後に、本番の作業コピーをソースに `chezmoi diff ~/.codex/skills` が空であることを確かめる。
+- PR #132 が取り込まれたら、本番の作業コピーで `chezmoi diff ~/.codex/skills` が空であることを確かめ、記録を done にする。
 
 ## リーダーに決めてほしいこと
 
-- 未マージのコミットが残る worktree 4 つ（上の「判明した事実」）をどうするか。Claude の案: PR #96 のブランチの worktree は PR が開いている間は残し、ほかの 3 つは worktree だけ `git worktree remove` で外してブランチは残す（コミットはブランチに残るので失われず、ワークツリー内の古い `.chezmoitemplates` の衝突も消える）。トレードオフ: ブランチを残すので、ブランチの一覧には古いものが残る。答えで何が変わるか: 外す worktree の数。
+- PR #132 を取り込むか。
 
 ## 参照
 
