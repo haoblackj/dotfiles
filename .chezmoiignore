@@ -8,9 +8,9 @@ LICENSE
 install.sh
 # クラウドセッション用の配布スクリプトとそのテスト。ホームへは配らない
 install-cloud.sh
-install-cloud.bats
-# マシンごとのパスをローカルの data から読むテンプレートの試験。ホームへは配らない
-local-paths.bats
+# リポジトリ直下のテスト（install-cloud.bats、local-paths.bats、pre-commit-config.bats など）。
+# ホームへは配らない。名指しで並べると新しいテストが漏れる（2026-11-28、pre-commit-config.bats）
+*.bats
 docs
 # bug-note スキルの書き置き。リポジトリ内の記録であってホームへ配るものではない
 ideas
