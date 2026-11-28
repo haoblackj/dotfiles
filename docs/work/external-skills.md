@@ -58,22 +58,24 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 
 ## いまの作業
 
-宣言ファイルと `external-skills` のスクリプトをテストから作っている。
+dotfiles の変更をコードレビューに出している（superpowers:requesting-code-review）。
 
 ## 済んだこと
 
 - 既に着手したワークツリーやセッションが無いことを確かめた（判明した事実の 1 行目）。
-- 現状を調べ、設計書に 2026-11-28 の追補を書いた。
+- 現状を調べ、設計書に 2026-11-28 の追補を書いた（3f2d7df）。
+- 宣言ファイル、`external-skills`、`run_onchange_83` を足し、`run_once_83` を消した（0ebc9ef）。
+- 同期フックの除外と先の無いリンクの掃除、`install-cloud.sh` の宣言の読み、`cloud-skills.txt` の削除、`syncClaudeAiSkills: false`、文書（7c45ab9）。
+- bats は全 181 件が通った。使い捨ての HOME で、本物の skills CLI、npm、herdr、claude を使って `external-skills install` を流し、4 行とも入り、二度目は全部「変わらず」、`npx skills check -g` は「up to date」、入れた REA のスキルは claude-private の写しと同じ中身だった。使い捨ての HOME で `install-cloud.sh` を流し、宣言の `cloud` の行から yomiyasu が配られた。
 
 ## 残っていること
 
-- 宣言ファイル、`external-skills`、`run_onchange_83`、同期フックの直し、`install-cloud.sh` の直し、`settings.json` の `syncClaudeAiSkills`、文書、bats のテスト。
 - コードレビュー、PR、リーダーによる main への取り込み。
-- 取り込みの後: claude-private から `skills/imozuru`、`skills/tsuzuri`、`skills/referent-first`、`skills/reverse-engineer-anything`、`skills/synced` を `git rm` して push し、手元へ配って `external-skills install` で入れ直す。imozuru の常駐のページが動くことを確かめる。
+- 取り込みの後: 設計書の追補の「移行の順序」の 2 から 5（claude-private からの `git rm`、`~/.claude/skills/synced` のリンクを外す、`chezmoi apply`、確かめ）。
 
 ## 次に Claude がすること
 
-- 設計書の追補の「実装の手順」の順に作る。
+- レビューの指摘を superpowers:receiving-code-review で受け、PR を開く。
 
 ## リーダーに決めてほしいこと
 
