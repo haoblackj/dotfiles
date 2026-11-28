@@ -4,7 +4,7 @@
 # ~/pre-commit-config.bats として配られる対象になった（2026-11-28）。
 #
 # 一時の設定ファイルと置き場を渡し、この作業ツリーをソースにして配る対象を並べる。
-# 本番の ~/.config/chezmoi/chezmoi.toml とホームは読まない。
+# 本番の ~/.config/chezmoi/chezmoi.toml とホームは読まない。このファイル自身も直下の .bats なので配らない。
 set -u
 
 setup() {
@@ -37,9 +37,13 @@ managed() {
     [ "$status" -ne 0 ]
 }
 
-@test "直下に足した新しい .bats も配らない（名指しに頼らない）" {
+@test "追跡している直下の .bats を一つずつ見ても、どれも配る対象に無い" {
     run managed
+    [ "$status" -eq 0 ]
     for f in $(git -C "$SRC" ls-files '*.bats' | grep -v /); do
-        [[ "$output" != *"$f"* ]]
+        if grep -qxF "$f" <<<"$output"; then
+            echo "配る対象に入っている: $f"
+            return 1
+        fi
     done
 }
