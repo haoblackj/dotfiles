@@ -105,6 +105,6 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 
 ## 参照
 
-- issue #90
+- issue #90（2026-11-28 に PR #134 と作業記録へのリンクを添えて閉じた）
 - PR #134
 - 設計書: `docs/superpowers/specs/2026-11-13-external-skills-design.md`（2026-11-28 の追補を含む）
