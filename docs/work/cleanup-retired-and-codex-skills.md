@@ -1,6 +1,6 @@
 ---
 title: 退役スキルの削除、report-skills の Codex との共有、古い chezmoi の worktree の片付け
-status: active
+status: done
 ---
 
 ## 目的
@@ -14,9 +14,8 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 
 ## いまの方針
 
-1 から 3 まで済んだ。
-3 は、PR #96 の worktree だけを残し、ほかの 7 つの worktree を外した。ブランチはどれも消していない。
-残りは PR #132 の取り込み後の確かめだけ。
+1 から 3 まで済み、PR #132 を取り込んで本番に配ったことも確かめた。この作業は終わり。
+3 では PR #96 の worktree だけを残し、ほかの 7 つの worktree を外した。ブランチはどれも消していない。
 
 ## 判明した事実
 
@@ -24,6 +23,7 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 - 置き換える前の Codex のプロンプトには、旧版の広いトリガーの description が載っていた（同じく `codex debug prompt-input`）。
 - Codex の写しの `agents/openai.yaml` は正本と同じ中身だった（`diff -r`）。
 - `install-cloud.sh` は `dot_codex/` を配らないので、クラウドセッションには影響しない。Windows では `.chezmoiignore` の Windows の条件の中の `.codex` が `~/.codex` を対象外にする。
+- 2026-11-28 に本番の作業コピーの main に、origin に無い tsuzuri の校正辞書の 1 行のコミット（2026-11-25 に別のセッションが作ったもの）があり、`git pull --ff-only` が通らなかった。`git pull --rebase origin main` で origin/main の上へ載せ直した。そのコミットは push しておらず、本番の main は origin より 1 つ先にある。
 - `~/.codex/skills/report-skills` に実ディレクトリが残っているとき、非対話の `chezmoi apply` は確認せず終了コード 0 で symlink に置き換える（2026-11-28 に scratchpad の使い捨てのソースと置き場で確かめた）。
 - 未マージのコミットが残る worktree 4 つの内訳（2026-11-28 に `git log origin/main..<ブランチ>` と `git cherry` で数えた。どれも未コミットの変更は無い）。
   - `.claude/worktrees/gh-guard-data-path`: 開いている PR #96 のブランチ。main に無いコミットが 4 つ（バグの書き置きの足し外しなど）。
@@ -56,7 +56,7 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 
 ## いまの作業
 
-PR #132 の取り込み待ち。
+なし。
 
 ## 済んだこと
 
@@ -68,18 +68,19 @@ PR #132 の取り込み待ち。
 - session-handoff の残骸は、残した PR #96 の worktree の中だけになった。
 - PR #132 を作った。
 - PR #132 を superpowers:requesting-code-review でレビューした。Critical と Important は無く、設計の前提（chezmoi の symlink テンプレートで、ほかのマシンでも Codex が正本を読む）を崩す指摘も無かった。Minor の指摘のうち、README の `dot_codex/` の説明の古さを直し、README に「Codex と共有するスキル」の節を足した（置き方、実ディレクトリの写しが残るマシンでの置き換え、claude-private が無いマシンでの先の無い symlink）。「実ディレクトリが残ると非対話の apply が失敗するかもしれない」という推定は、試して失敗しないことを確かめ、置き換えると README に書いた。
+- PR #132 が main に取り込まれた（マージのコミット f50ab9b）。本番の作業コピーで `chezmoi diff ~/.codex/skills` と `chezmoi status ~/.codex/skills` がどちらも空で、`codex debug prompt-input` に正本の description が載ることを確かめた。
 
 ## 残っていること
 
-- PR #132 の取り込み後、本番の作業コピーで `chezmoi diff ~/.codex/skills` が空であることを確かめる。
+- なし。
 
 ## 次に Claude がすること
 
-- PR #132 が取り込まれたら、本番の作業コピーで `chezmoi diff ~/.codex/skills` が空であることを確かめ、記録を done にする。
+- なし。
 
 ## リーダーに決めてほしいこと
 
-- PR #132 を取り込むか。
+- なし。
 
 ## 参照
 
