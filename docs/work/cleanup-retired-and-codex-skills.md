@@ -23,7 +23,8 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 - Codex 0.171.0 は `~/.codex/skills/` の下の symlink のスキルを読む（根拠: `codex debug prompt-input` の出力に、symlink の先の正本の description が載った）。
 - 置き換える前の Codex のプロンプトには、旧版の広いトリガーの description が載っていた（同じく `codex debug prompt-input`）。
 - Codex の写しの `agents/openai.yaml` は正本と同じ中身だった（`diff -r`）。
-- `install-cloud.sh` は `dot_codex/` を配らないので、クラウドセッションには影響しない。
+- `install-cloud.sh` は `dot_codex/` を配らないので、クラウドセッションには影響しない。Windows では `.chezmoiignore` の Windows の条件の中の `.codex` が `~/.codex` を対象外にする。
+- `~/.codex/skills/report-skills` に実ディレクトリが残っているとき、非対話の `chezmoi apply` は確認せず終了コード 0 で symlink に置き換える（2026-11-28 に scratchpad の使い捨てのソースと置き場で確かめた）。
 - 未マージのコミットが残る worktree 4 つの内訳（2026-11-28 に `git log origin/main..<ブランチ>` と `git cherry` で数えた。どれも未コミットの変更は無い）。
   - `.claude/worktrees/gh-guard-data-path`: 開いている PR #96 のブランチ。main に無いコミットが 4 つ（バグの書き置きの足し外しなど）。
   - `.claude/worktrees/issue86-work-ownership`: PR の無いブランチ。main に無いコミットが 1 つ（判断の持ち主の節のまとめ、Refs #86）。
@@ -66,6 +67,7 @@ PR #132 の取り込み待ち。
 - 未マージのコミットが残る 3 つ（`.claude/worktrees/` の `issue86-work-ownership`、`example-text`、`public-private-names`）を `git worktree remove` で外した。ブランチ `worktree-issue86-work-ownership`、`fix/example-text`、`fix/public-names-after-98` は残っている。
 - session-handoff の残骸は、残した PR #96 の worktree の中だけになった。
 - PR #132 を作った。
+- PR #132 を superpowers:requesting-code-review でレビューした。Critical と Important は無く、設計の前提（chezmoi の symlink テンプレートで、ほかのマシンでも Codex が正本を読む）を崩す指摘も無かった。Minor の指摘のうち、README の `dot_codex/` の説明の古さを直し、README に「Codex と共有するスキル」の節を足した（置き方、実ディレクトリの写しが残るマシンでの置き換え、claude-private が無いマシンでの先の無い symlink）。「実ディレクトリが残ると非対話の apply が失敗するかもしれない」という推定は、試して失敗しないことを確かめ、置き換えると README に書いた。
 
 ## 残っていること
 
