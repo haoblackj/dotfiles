@@ -24,6 +24,7 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 - Codex の写しの `agents/openai.yaml` は正本と同じ中身だった（`diff -r`）。
 - `install-cloud.sh` は `dot_codex/` を配らないので、クラウドセッションには影響しない。Windows では `.chezmoiignore` の Windows の条件の中の `.codex` が `~/.codex` を対象外にする。
 - 2026-11-28 に本番の作業コピーの main に、origin に無い tsuzuri の校正辞書の 1 行のコミット（2026-11-25 に別のセッションが作ったもの）があり、`git pull --ff-only` が通らなかった。`git pull --rebase origin main` で origin/main の上へ載せ直した。そのコミットは push しておらず、本番の main は origin より 1 つ先にある。
+  - 2026-11-28 に調べた。元の会話の端末からの入力（会話 e5468ff9、2026-11-25 00:16、発言 c93e6888）で、リーダーが「圧縮」を Claude語だと指摘していた。同じ会話の #129 のコミット `33d4250` は origin に入っていて、この行だけが抜けていた。origin/main から切ったブランチに cherry-pick して PR #133 にした。
 - `~/.codex/skills/report-skills` に実ディレクトリが残っているとき、非対話の `chezmoi apply` は確認せず終了コード 0 で symlink に置き換える（2026-11-28 に scratchpad の使い捨てのソースと置き場で確かめた）。
 - 未マージのコミットが残る worktree 4 つの内訳（2026-11-28 に `git log origin/main..<ブランチ>` と `git cherry` で数えた。どれも未コミットの変更は無い）。
   - `.claude/worktrees/gh-guard-data-path`: 開いている PR #96 のブランチ。main に無いコミットが 4 つ（バグの書き置きの足し外しなど）。
