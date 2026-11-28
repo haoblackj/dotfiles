@@ -90,6 +90,7 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 - 確かめた: `~/.claude/skills/` の 6 つのリンクはどれも `../../.agents/skills/<名前>` を指す。MCP の登録 `rea` は 6.9.0 で、環境変数（`GHIDRA_INSTALL_DIR`、`JAVA_HOME`）が残っている。入れた REA の SKILL.md は claude-private の写しと同じ。`npx skills check -g` は imozuru と herdr を出さず、yomiyasu だけを「更新あり」と出した（上流が進んでいる。`external-skills update` の役割なので触っていない）。
 - imozuru の常駐のページは、`systemctl --user restart imozuru-serve` の後、新しい置き場の `~/.claude/skills/imozuru/scripts/dashboard.py` で起動し、合言葉つきの要求に 200 で「imozuru 調査記録」を返した。
 - 関係ない所で見つけた `chezmoi status` の 2 件を `ideas/bugs/2026-11-28-pre-commit-config-bats-deployed.md` に書いた。
+- その 2 件を直した（端末からの入力（会話 3eac4129、2026-11-28 20:08、発言 971f13b2）の依頼）。`pre-commit-config.bats` は `.chezmoiignore` の直下の `.bats` の名指しから漏れていたので、`*.bats` で外す形にして PR #135 にした。`~/.config/tsuzuri/words.tsv` は PR #133 のソースの版が配られていなかっただけなので、控え（`~/.cache/external-skills-migration/words.tsv.before-apply`）を取って配った。
 
 ## 残っていること
 
