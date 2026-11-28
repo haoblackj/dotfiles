@@ -12,7 +12,7 @@ WSL を初期化した直後にこの README だけ読めば同じ環境に戻�
 | シェル | `dot_zshrc.tmpl` / `zsh/` / `dot_bashrc` ほか | zi + powerlevel10k。プラグインは初回起動時に zi が clone する |
 | git / gh | `dot_gitconfig.tmpl` / `dot_config/gh/` | github.com の認証は `gh auth git-credential`、それ以外は Windows 側 scoop の GCM |
 | Claude Code | `dot_claude/` | settings / hooks / keybindings / CLAUDE.md / output-styles。境界は下記「Claude Code」 |
-| Codex | `dot_codex/` | 委譲スクリプトと設定 |
+| Codex | `dot_codex/` | 委譲スクリプトと設定、Claude 側の正本と共有するスキルの symlink（下記「Codex と共有するスキル」） |
 | CLI ツール類 | `run_once_NN_*.sh.tmpl` | 導入スクリプト。中身は下記「自動で入るもの」 |
 | systemd user unit | `dot_config/systemd/user/` | Bitwarden SSH agent ブリッジ、herdr の umask override、CodexBar の usage サーバー（`codexbar-serve`）と、brew upgrade の後にそれを再起動するタイマー（`codexbar-serve-refresh`） |
 | その他 `~/.config` | `dot_config/{herdr,nvim,lazygit,rtk,ccstatusline,fontconfig}` | |
@@ -240,6 +240,21 @@ Mod のテストは `claude plugin test skills/<名前>`、読み込みの検査
 | Stop | 新しく生えた実ディレクトリの memory / skills を private repo へ移して commit と push（自動コミットの対象は memory 配下のみ） |
 
 他マシンの memory やスキルを取り込む手順、マージ衝突の解消手順は `docs/claude-code.md`。
+
+#### Codex と共有するスキル
+
+Codex にも使わせるスキルは、Codex 用の写しを持たず、Claude 側の正本への symlink を `dot_codex/skills/symlink_<名前>.tmpl` に置く。
+claude-private のスキルなら、中身は次の1行にする（今は `report-skills`）。
+
+```
+{{ .chezmoi.homeDir }}/.local/share/claude-private/skills/<名前>
+```
+
+`chezmoi apply` で `~/.codex/skills/<名前>` がその symlink になる。
+Codex 0.171.0 が symlink の先を読むことは、`codex debug prompt-input` に正本の description が載ることで確かめた。
+`~/.codex/skills/<名前>` に実ディレクトリの写しが残っているマシンでは、非対話の `chezmoi apply` は確認せずに写しを symlink に置き換える（使い捨ての置き場で確かめた）。写しに手で直した中身があれば、apply の前に正本へ移す。
+claude-private を clone していないマシンでは、symlink は先の無いまま張られる。
+Windows では `.chezmoiignore` が `~/.codex` を対象外にし、クラウドの `install-cloud.sh` も `dot_codex/` を配らない。
 
 ### ソースとターゲットの往復
 
