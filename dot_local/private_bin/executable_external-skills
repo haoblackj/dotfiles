@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# 外から取ってくるスキルを、宣言ファイル（~/.claude/external-skills.txt）どおりに入れ、最新へ上げる。
+#
+#   external-skills install   宣言の各行を宣言どおりの状態にする（冪等。run_onchange_83 が呼ぶ）
+#   external-skills update    プラグインと宣言の各行を最新へ上げる（頼まれたときだけ走らせる）
+#
+# 設計: docs/superpowers/specs/2026-11-13-external-skills-design.md（2026-11-28 の追補を含む）。
+# 宣言に載ったスキルは claude-private に置かない。同期フック（claude-private-sync.sh）は
+# 宣言の名前を取り込まない。
+#
+# 終了コード: 失敗した行があれば 1、無ければ 0（道具が無くて飛ばした行は失敗に数えない）。
+set -u
+
+DECL="${EXTERNAL_SKILLS_FILE:-$HOME/.claude/external-skills.txt}"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/external-skills"
+LOCK="$HOME/.agents/.skill-lock.json"
+CLAUDE_JSON="$HOME/.claude.json"
+# skills CLI に渡すエージェント。Codex へも委譲するので codex を含める。
+AGENTS=(claude-code codex)
+
+SUMMARY=()
+FAILED=0
+REA_BUMPED=0
+
+log() { echo "[external-skills] $*" >&2; }
+note() { SUMMARY+=("$1: $2"); }
+fail() {
+  SUMMARY+=("$1: 失敗（$2）")
+  FAILED=1
+}
+skip() { SUMMARY+=("$1: 飛ばした（$2）"); }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# ~/.claude/skills/<名前> を ~/.agents/skills/<名前> へのリンクにしてよいかを見る。
+# 0: 無い（先の無いリンクは外した）、1: すでに ~/.agents へのリンク、2: 触ってはいけない物がある
+check_slot() {
+  local slot="$HOME/.claude/skills/$1"
+  if [ -L "$slot" ]; then
+    if [ "$(readlink "$slot")" = "../../.agents/skills/$1" ] || [ "$(readlink -f "$slot")" = "$(readlink -f "$HOME/.agents/skills/$1" 2>/dev/null)" ]; then
+      return 1
+    fi
+    if [ ! -e "$slot" ]; then
+      # claude-private から外したスキルの残り。ensure_symlinks も同じものを消す。
+      rm -f "$slot"
+      return 0
+    fi
+    return 2
+  fi
+  [ -e "$slot" ] && return 2
+  return 0
+}
+
+link_agents() {
+  mkdir -p "$HOME/.claude/skills"
+  ln -sfn "../../.agents/skills/$1" "$HOME/.claude/skills/$1"
+}
+
+lock_get() { # 名前 フィールド
+  [ -f "$LOCK" ] && jq -r --arg n "$1" --arg f "$2" '.skills[$n][$f] // empty' "$LOCK" 2>/dev/null
+}
+
+# ---- skills（GitHub の owner/repo から skills CLI で入れる） -----------------
+
+skills_install() { # 名前 取得元
+  local name="$1" src="$2" slot_state
+  have npx || { skip "$name" "npx が無い"; return; }
+  check_slot "$name"; slot_state=$?
+  if [ "$slot_state" = 2 ]; then
+    fail "$name" "~/.claude/skills/$name に ~/.agents 以外の物がある。外してから入れ直す"
+    return
+  fi
+  if [ "$slot_state" = 1 ] && [ "$(lock_get "$name" source)" = "$src" ] &&
+    [ -f "$HOME/.agents/skills/$name/SKILL.md" ]; then
+    note "$name" "変わらず（$(lock_get "$name" skillFolderHash | cut -c1-7)）"
+    return
+  fi
+  if ! npx -y skills add "$src" --skill "$name" -g -y -a "${AGENTS[@]}" </dev/null >&2; then
+    fail "$name" "skills add が失敗した"
+    return
+  fi
+  if [ ! -L "$HOME/.claude/skills/$name" ]; then
+    log "警告: ~/.claude/skills/$name がリンクでない（skills CLI が写した）。同期フックは宣言の名前を取り込まない"
+  fi
+  note "$name" "入れた（$src、$(lock_get "$name" skillFolderHash | cut -c1-7)）"
+}
+
+skills_update() { # 名前 取得元
+  local name="$1" before after
+  have npx || { skip "$name" "npx が無い"; return; }
+  before="$(lock_get "$name" skillFolderHash | cut -c1-7)"
+  if ! npx -y skills update "$name" -g -y </dev/null >&2; then
+    fail "$name" "skills update が失敗した"
+    return
+  fi
+  after="$(lock_get "$name" skillFolderHash | cut -c1-7)"
+  if [ "$before" = "$after" ]; then
+    note "$name" "変わらず（$after）"
+  else
+    note "$name" "$before -> $after"
+  fi
+}
+
+# ---- herdr（入っている本体の herdr --skill の出力を正本にする） --------------
+
+herdr_install() { # 名前
+  local name="$1" dir="$HOME/.agents/skills/$1" tmp slot_state
+  have herdr || { skip "$name" "herdr が無い"; return; }
+  check_slot "$name"; slot_state=$?
+  if [ "$slot_state" = 2 ]; then
+    fail "$name" "~/.claude/skills/$name に ~/.agents 以外の物がある。外してから入れ直す"
+    return
+  fi
+  mkdir -p "$dir"
+  tmp="$(mktemp)"
+  if ! herdr --skill >"$tmp" 2>/dev/null || [ ! -s "$tmp" ]; then
+    rm -f "$tmp"
+    fail "$name" "herdr --skill が何も出さなかった"
+    return
+  fi
+  if cmp -s "$tmp" "$dir/SKILL.md"; then
+    rm -f "$tmp"
+    note "$name" "変わらず"
+  else
+    mv "$tmp" "$dir/SKILL.md"
+    note "$name" "書き直した（herdr --skill）"
+  fi
+  link_agents "$name"
+  # skills CLI に上流の先端と比べさせない（本体の版と食い違うため）
+  if [ -f "$LOCK" ] && [ "$(jq --arg n "$name" '.skills | has($n)' "$LOCK")" = true ]; then
+    jq --arg n "$name" 'del(.skills[$n])' "$LOCK" >"$LOCK.tmp" && mv "$LOCK.tmp" "$LOCK"
+  fi
+}
+
+# ---- rea（npm の rea-agents の版とスキルと MCP の登録を揃える） ---------------
+
+rea_mcp_version() {
+  [ -f "$CLAUDE_JSON" ] || return 0
+  jq -r '.mcpServers.rea.args // [] | map(select(startswith("rea-agents@"))) | .[0] // empty | sub("^rea-agents@"; "")' "$CLAUDE_JSON" 2>/dev/null
+}
+
+rea_register() { # パッケージ 版
+  local pkg="$1" ver="$2" env json
+  env='{}'
+  if [ -f "$CLAUDE_JSON" ]; then
+    env="$(jq -c '.mcpServers.rea.env // {}' "$CLAUDE_JSON" 2>/dev/null || echo '{}')"
+  fi
+  json="$(jq -cn --arg spec "$pkg@$ver" --argjson env "$env" \
+    '{type: "stdio", command: "npx", args: ["-y", $spec, "mcp"]} + (if $env == {} then {} else {env: $env} end)')"
+  claude mcp remove rea -s user >/dev/null 2>&1 || true
+  if ! claude mcp add-json rea "$json" -s user >&2; then
+    return 1
+  fi
+  if [ "$env" = '{}' ]; then
+    log "MCP の登録 rea に環境変数が無い。Ghidra を使うなら GHIDRA_INSTALL_DIR と JAVA_HOME を足す（claude mcp add-json rea ... -s user）"
+  fi
+}
+
+rea_install() { # 名前 パッケージ 版
+  local name="$1" pkg="$2" ver="$3" slot_state have_ver work tgz
+  if [ -z "$ver" ]; then
+    fail "$name" "宣言に版が無い"
+    return
+  fi
+  have npm || { skip "$name" "npm が無い"; return; }
+  have claude || { skip "$name" "claude が無い"; return; }
+  check_slot "$name"; slot_state=$?
+  if [ "$slot_state" = 2 ]; then
+    fail "$name" "~/.claude/skills/$name に ~/.agents 以外の物がある。外してから入れ直す"
+    return
+  fi
+  have_ver="$(cat "$STATE/rea-$name.version" 2>/dev/null)"
+  if [ "$slot_state" = 1 ] && [ "$have_ver" = "$ver" ] && [ "$(rea_mcp_version)" = "$ver" ] &&
+    [ -f "$HOME/.agents/skills/$name/SKILL.md" ]; then
+    note "$name" "変わらず（$ver）"
+    return
+  fi
+  work="$(mktemp -d)"
+  tgz="$(cd "$work" && npm pack -q "$pkg@$ver" 2>/dev/null | tail -1)"
+  if [ -z "$tgz" ] || ! tar xzf "$work/$tgz" -C "$work" 2>/dev/null ||
+    [ ! -f "$work/package/skills/$name/SKILL.md" ]; then
+    rm -rf "$work"
+    fail "$name" "$pkg@$ver のパッケージからスキルを取れなかった"
+    return
+  fi
+  rm -rf "$HOME/.agents/skills/$name"
+  mkdir -p "$HOME/.agents/skills"
+  cp -R "$work/package/skills/$name" "$HOME/.agents/skills/$name"
+  rm -rf "$work"
+  link_agents "$name"
+  mkdir -p "$STATE"
+  echo "$ver" >"$STATE/rea-$name.version"
+  if [ "$(rea_mcp_version)" != "$ver" ]; then
+    if ! rea_register "$pkg" "$ver"; then
+      fail "$name" "MCP の登録 rea を $ver にできなかった"
+      return
+    fi
+  fi
+  note "$name" "${have_ver:-なし} -> $ver"
+}
+
+rea_update() { # 名前 パッケージ 版
+  local name="$1" pkg="$2" ver="$3" latest src
+  have npm || { skip "$name" "npm が無い"; return; }
+  latest="$(npm view "$pkg" version 2>/dev/null | tail -1)"
+  if [ -z "$latest" ]; then
+    fail "$name" "npm view $pkg version が失敗した"
+    return
+  fi
+  if [ "$(printf '%s\n%s\n' "$ver" "$latest" | sort -V | tail -1)" = "$ver" ]; then
+    note "$name" "変わらず（$ver が最新）"
+    return
+  fi
+  # 宣言の版を書き換える。ソース（chezmoi の管理下）と配置先の両方を直し、続けて入れ直す。
+  src=""
+  have chezmoi && src="$(chezmoi source-path "$DECL" 2>/dev/null)"
+  for f in "$src" "$DECL"; do
+    [ -n "$f" ] && [ -f "$f" ] || continue
+    awk -v n="$name" -v v="$latest" '$1 == n && $2 == "rea" { $4 = v } { print }' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+  done
+  [ -n "$src" ] && REA_BUMPED=1
+  rea_install "$name" "$pkg" "$latest"
+}
+
+# ---- 本体 ---------------------------------------------------------------------
+
+each_line() { # サブコマンド
+  local name how src extra
+  if [ ! -f "$DECL" ]; then
+    log "宣言ファイルが無い: $DECL"
+    exit 1
+  fi
+  while read -r name how src extra _; do
+    case "$name" in "" | "#"*) continue ;; esac
+    case "$how" in
+      skills) "skills_$1" "$name" "$src" ;;
+      herdr) herdr_install "$name" ;;
+      rea) "rea_$1" "$name" "$src" "$extra" ;;
+      *) fail "$name" "取り方 $how を知らない" ;;
+    esac
+  done <"$DECL"
+}
+
+update_plugins() {
+  local id
+  have claude || { skip "プラグイン" "claude が無い"; return; }
+  if ! claude plugin marketplace update >&2; then
+    fail "プラグインの目録" "claude plugin marketplace update が失敗した"
+  fi
+  while read -r id; do
+    [ -n "$id" ] || continue
+    if claude plugin update "$id" >&2; then
+      note "プラグイン $id" "更新を確かめた"
+    else
+      fail "プラグイン $id" "claude plugin update が失敗した"
+    fi
+  done < <(claude plugin list --json 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+}
+
+case "${1:-}" in
+  install) each_line install ;;
+  update)
+    update_plugins
+    each_line update
+    ;;
+  *)
+    echo "使い方: external-skills install|update" >&2
+    exit 2
+    ;;
+esac
+
+echo "外から取ってくるスキル（$DECL）:"
+for line in "${SUMMARY[@]}"; do echo "  $line"; done
+if [ "$REA_BUMPED" = 1 ]; then
+  echo "rea の版を上げたので、chezmoi のソースの dot_claude/external-skills.txt をコミットする"
+fi
+exit "$FAILED"
