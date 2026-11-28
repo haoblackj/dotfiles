@@ -33,6 +33,8 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 - Claude.ai から同期されたスキルは Claude Code の機能「Skills synced from claude.ai」で、claude.ai にログインしたセッションの開始時と、動いている間およそ 10 分（何もしていなければ 40 分）ごとに `~/.claude/skills/synced/` へ落とされる。消しても、claude.ai で有効なうちは次の同期で戻る。ユーザーの設定 `"syncClaudeAiSkills": false` で止まり、止めると次の起動で同期済みのスキルが `~/.claude/skills/.trash/` へ移される。claude.ai の画面（`claude.ai/customize/skills/yours`）でスキルを切ると、次の同期で手元から消える。Cowork とクラウドのセッションは手元の `~/.claude/skills/` を読まず、claude.ai で有効なスキルを読む（根拠: https://code.claude.com/docs/en/skills.md の「Skills synced from claude.ai」、手元の `claude` の本体に `syncClaudeAiSkills` の文字列がある）。
 - claude-private の `skills/synced/` は 2026-09-18 の自動コミット（d3bc47b）で取り込まれた。`~/.claude/skills/synced` は claude-private へのリンクなので、Claude Code の同期は claude-private の中へ書いている。
 - 同期フックの `migrate_new` は `"$HOME"/.claude/skills/*/` を回すので、ドットで始まる `.trash` は bash の既定でもともと拾わない。
+- skills CLI の `update` と `add` は、`~/.claude/skills/<名前>` が実体のディレクトリなら消し、リンクなら外して張り替える（コードレビューが skills CLI 1.9.1 のソースで確かめた）。リンクの先へは書かない。
+- `syncClaudeAiSkills: false` が効くと、Claude Code は次の起動で同期済みのスキルを `~/.claude/skills/.trash/` へ移す。`~/.claude/skills/synced` は claude-private へのリンクなので、移し方によっては claude-private の作業ツリーに `skills/synced` の削除が未コミットで残りうる（コードレビューの指摘。まだ確かめていない）。
 
 ## 判断の経緯
 
@@ -51,6 +53,11 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 - 理由: 依頼は同期されたスキルを全部（Anthropic の docx、pdf、pptx、xlsx、skill-creator、morning、import-memory と、claude.ai に上げた自作のスキル一つ）外すこと。claude.ai の画面では pdf と xlsx を切れない（公式の説明）ので、手元から全部を外せるのはこの設定だけ。止めないと、`synced` を消しても次の同期で戻る。claude.ai の画面での操作は手元を外すのには要らないが、Cowork とクラウドのセッションから自作のスキルを消すにはリーダーが claude.ai で消す必要がある。
 - 状態: 有効
 
+### 2026-11-28 採用: コードレビューの指摘のうち、rea の取り方の `~/.agents/skills/<名前>` の削除は直さない
+- 出どころ: Claude の判断
+- 理由: 末尾に `/` の無い `rm -rf` は、`~/.agents/skills/<名前>` がリンクならリンクだけを外し、リンクの先（claude-private など）は消さない。ほかの指摘（`update` の置き場の確かめ、MCP の登録の戻し、宣言の読みの標準入力、skills CLI の記録の場所、SKILL.md の権限、版の書き換えの順、brew の環境のテンプレート、先の無いリンクの比べ方）は直した。
+- 状態: 有効
+
 ### 2026-11-28 採用: REA のスキルは npm のパッケージから写し、版は 6.9.0 のまま宣言する
 - 出どころ: Claude の判断
 - 理由: いまの claude-private の写しと MCP の登録がどちらも 6.9.0 で、版を上げるのは更新のコマンド（`external-skills update`）の役割。公式の `setup --skill-client` は `~/.claude/skills/` に直接置いて Codex の置き場とずれるので、パッケージの `skills/reverse-engineer-anything` を `~/.agents/skills/` へ写して `~/.claude/skills/` からリンクを張る（設計書が許す代わりの方法）。
@@ -58,7 +65,7 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 
 ## いまの作業
 
-dotfiles の変更をコードレビューに出している（superpowers:requesting-code-review）。
+コードレビューの指摘を直し、PR を開く。
 
 ## 済んだこと
 
@@ -66,16 +73,17 @@ dotfiles の変更をコードレビューに出している（superpowers:reque
 - 現状を調べ、設計書に 2026-11-28 の追補を書いた（3f2d7df）。
 - 宣言ファイル、`external-skills`、`run_onchange_83` を足し、`run_once_83` を消した（0ebc9ef）。
 - 同期フックの除外と先の無いリンクの掃除、`install-cloud.sh` の宣言の読み、`cloud-skills.txt` の削除、`syncClaudeAiSkills: false`、文書（7c45ab9）。
-- bats は全 181 件が通った。使い捨ての HOME で、本物の skills CLI、npm、herdr、claude を使って `external-skills install` を流し、4 行とも入り、二度目は全部「変わらず」、`npx skills check -g` は「up to date」、入れた REA のスキルは claude-private の写しと同じ中身だった。使い捨ての HOME で `install-cloud.sh` を流し、宣言の `cloud` の行から yomiyasu が配られた。
+- 使い捨ての HOME で、本物の skills CLI、npm、herdr、claude を使って `external-skills install` を流し、4 行とも入り、二度目は全部「変わらず」、`npx skills check -g` は「up to date」、入れた REA のスキルは claude-private の写しと同じ中身だった。使い捨ての HOME で `install-cloud.sh` を流し、宣言の `cloud` の行から yomiyasu が配られた。
+- コードレビュー（superpowers:requesting-code-review、前提を崩す指摘なし、「直せば取り込み可」）を受け、指摘を直してテストを 8 件足した。
 
 ## 残っていること
 
-- コードレビュー、PR、リーダーによる main への取り込み。
-- 取り込みの後: 設計書の追補の「移行の順序」の 2 から 5（claude-private からの `git rm`、`~/.claude/skills/synced` のリンクを外す、`chezmoi apply`、確かめ）。
+- PR をリーダーが main へ取り込む。
+- 取り込みの後: 設計書の追補の「移行の順序」の 2 から 5。2 の `git rm` の前に `git -C ~/.local/share/claude-private status -- skills/synced` を見て、Claude Code が `.trash` へ移したことによる未コミットの削除が無いかを確かめる（あれば、自動の「sync:」のコミットに飲まれる前に名指しでコミットする）。
 
 ## 次に Claude がすること
 
-- レビューの指摘を superpowers:receiving-code-review で受け、PR を開く。
+- PR を開いてリーダーに取り込みを頼み、取り込まれたら「残っていること」の移行を進める。
 
 ## リーダーに決めてほしいこと
 

@@ -13,7 +13,12 @@ set -u
 
 DECL="${EXTERNAL_SKILLS_FILE:-$HOME/.claude/external-skills.txt}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/external-skills"
-LOCK="$HOME/.agents/.skill-lock.json"
+# skills CLI と同じ規則で記録の場所を決める（XDG_STATE_HOME があればその下）
+if [ -n "${XDG_STATE_HOME:-}" ]; then
+  LOCK="$XDG_STATE_HOME/skills/.skill-lock.json"
+else
+  LOCK="$HOME/.agents/.skill-lock.json"
+fi
 CLAUDE_JSON="$HOME/.claude.json"
 # skills CLI に渡すエージェント。Codex へも委譲するので codex を含める。
 AGENTS=(claude-code codex)
@@ -36,7 +41,8 @@ have() { command -v "$1" >/dev/null 2>&1; }
 check_slot() {
   local slot="$HOME/.claude/skills/$1"
   if [ -L "$slot" ]; then
-    if [ "$(readlink "$slot")" = "../../.agents/skills/$1" ] || [ "$(readlink -f "$slot")" = "$(readlink -f "$HOME/.agents/skills/$1" 2>/dev/null)" ]; then
+    if [ -e "$slot" ] && { [ "$(readlink "$slot")" = "../../.agents/skills/$1" ] ||
+      [ "$(readlink -f "$slot")" = "$(readlink -f "$HOME/.agents/skills/$1")" ]; }; then
       return 1
     fi
     if [ ! -e "$slot" ]; then
@@ -85,8 +91,19 @@ skills_install() { # 名前 取得元
 }
 
 skills_update() { # 名前 取得元
-  local name="$1" before after
+  local name="$1" before after slot_state
   have npx || { skip "$name" "npx が無い"; return; }
+  # skills CLI の update は ~/.claude/skills/<名前> の実体やリンクを消して張り替えるので、
+  # install と同じく ~/.agents 以外の物があれば触らない。入っていなければ入れる。
+  check_slot "$name"; slot_state=$?
+  if [ "$slot_state" = 2 ]; then
+    fail "$name" "~/.claude/skills/$name に ~/.agents 以外の物がある。外してから入れ直す"
+    return
+  fi
+  if [ "$slot_state" = 0 ] || [ "$(lock_get "$name" source)" != "$2" ]; then
+    skills_install "$name" "$2"
+    return
+  fi
   before="$(lock_get "$name" skillFolderHash | cut -c1-7)"
   if ! npx -y skills update "$name" -g -y </dev/null >&2; then
     fail "$name" "skills update が失敗した"
@@ -112,7 +129,7 @@ herdr_install() { # 名前
   fi
   mkdir -p "$dir"
   tmp="$(mktemp)"
-  if ! herdr --skill >"$tmp" 2>/dev/null || [ ! -s "$tmp" ]; then
+  if ! herdr --skill >"$tmp" 2>/dev/null </dev/null || [ ! -s "$tmp" ]; then
     rm -f "$tmp"
     fail "$name" "herdr --skill が何も出さなかった"
     return
@@ -121,6 +138,7 @@ herdr_install() { # 名前
     rm -f "$tmp"
     note "$name" "変わらず"
   else
+    chmod 644 "$tmp"
     mv "$tmp" "$dir/SKILL.md"
     note "$name" "書き直した（herdr --skill）"
   fi
@@ -139,15 +157,25 @@ rea_mcp_version() {
 }
 
 rea_register() { # パッケージ 版
-  local pkg="$1" ver="$2" env json
+  local pkg="$1" ver="$2" env json old=""
   env='{}'
   if [ -f "$CLAUDE_JSON" ]; then
     env="$(jq -c '.mcpServers.rea.env // {}' "$CLAUDE_JSON" 2>/dev/null || echo '{}')"
+    old="$(jq -c '.mcpServers.rea // empty' "$CLAUDE_JSON" 2>/dev/null)"
   fi
   json="$(jq -cn --arg spec "$pkg@$ver" --argjson env "$env" \
     '{type: "stdio", command: "npx", args: ["-y", $spec, "mcp"]} + (if $env == {} then {} else {env: $env} end)')"
-  claude mcp remove rea -s user >/dev/null 2>&1 || true
-  if ! claude mcp add-json rea "$json" -s user >&2; then
+  # 消してから足すので、足すのに失敗したら元の登録（環境変数を含む）を戻す。
+  # 戻せなかったときのために、元の登録を状態の置き場にも残す。
+  if [ -n "$old" ]; then
+    mkdir -p "$STATE"
+    printf '%s\n' "$old" >"$STATE/rea-mcp.before.json"
+  fi
+  claude mcp remove rea -s user >/dev/null 2>&1 </dev/null || true
+  if ! claude mcp add-json rea "$json" -s user >&2 </dev/null; then
+    if [ -n "$old" ] && ! claude mcp add-json rea "$old" -s user >&2 </dev/null; then
+      log "MCP の登録 rea を戻せなかった。元の登録は $STATE/rea-mcp.before.json にある"
+    fi
     return 1
   fi
   if [ "$env" = '{}' ]; then
@@ -175,7 +203,7 @@ rea_install() { # 名前 パッケージ 版
     return
   fi
   work="$(mktemp -d)"
-  tgz="$(cd "$work" && npm pack -q "$pkg@$ver" 2>/dev/null | tail -1)"
+  tgz="$(cd "$work" && npm pack -q "$pkg@$ver" 2>/dev/null </dev/null | tail -1)"
   if [ -z "$tgz" ] || ! tar xzf "$work/$tgz" -C "$work" 2>/dev/null ||
     [ ! -f "$work/package/skills/$name/SKILL.md" ]; then
     rm -rf "$work"
@@ -201,7 +229,7 @@ rea_install() { # 名前 パッケージ 版
 rea_update() { # 名前 パッケージ 版
   local name="$1" pkg="$2" ver="$3" latest src
   have npm || { skip "$name" "npm が無い"; return; }
-  latest="$(npm view "$pkg" version 2>/dev/null | tail -1)"
+  latest="$(npm view "$pkg" version 2>/dev/null </dev/null | tail -1)"
   if [ -z "$latest" ]; then
     fail "$name" "npm view $pkg version が失敗した"
     return
@@ -210,15 +238,17 @@ rea_update() { # 名前 パッケージ 版
     note "$name" "変わらず（$ver が最新）"
     return
   fi
-  # 宣言の版を書き換える。ソース（chezmoi の管理下）と配置先の両方を直し、続けて入れ直す。
+  # 入れ直しが通ってから、宣言の版を書き換える（ソースの chezmoi の管理下と配置先の両方）
+  local failed_before="$FAILED"
+  rea_install "$name" "$pkg" "$latest"
+  [ "$FAILED" = "$failed_before" ] || return
   src=""
-  have chezmoi && src="$(chezmoi source-path "$DECL" 2>/dev/null)"
+  have chezmoi && src="$(chezmoi source-path "$DECL" 2>/dev/null </dev/null)"
   for f in "$src" "$DECL"; do
     [ -n "$f" ] && [ -f "$f" ] || continue
     awk -v n="$name" -v v="$latest" '$1 == n && $2 == "rea" { $4 = v } { print }' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
   done
   [ -n "$src" ] && REA_BUMPED=1
-  rea_install "$name" "$pkg" "$latest"
 }
 
 # ---- 本体 ---------------------------------------------------------------------
@@ -229,7 +259,8 @@ each_line() { # サブコマンド
     log "宣言ファイルが無い: $DECL"
     exit 1
   fi
-  while read -r name how src extra _; do
+  # 子のコマンドが標準入力を読んでも宣言の残りの行を失わないよう、宣言は fd 3 から読む
+  while read -r -u 3 name how src extra _; do
     case "$name" in "" | "#"*) continue ;; esac
     case "$how" in
       skills) "skills_$1" "$name" "$src" ;;
@@ -237,7 +268,7 @@ each_line() { # サブコマンド
       rea) "rea_$1" "$name" "$src" "$extra" ;;
       *) fail "$name" "取り方 $how を知らない" ;;
     esac
-  done <"$DECL"
+  done 3<"$DECL"
 }
 
 update_plugins() {

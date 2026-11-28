@@ -305,3 +305,96 @@ EOF
   run_es
   [ "$status" -eq 2 ]
 }
+
+# =========================================================================
+# レビューで見つかった抜け
+# =========================================================================
+
+@test "update: claude-private への生きたリンクがあれば skills CLI を呼ばず失敗にする" {
+  fake_npx; fake_claude
+  mkdir -p "$HOME/.local/share/claude-private/skills/imozuru"
+  ln -s "$HOME/.local/share/claude-private/skills/imozuru" "$HOME/.claude/skills/imozuru"
+  decl "imozuru skills MaryCache/imozuru"
+  run_es update
+  [ "$status" -eq 1 ]
+  nogrep 'skills update imozuru' "$LOG"
+  nogrep 'skills add' "$LOG"
+  [ -L "$HOME/.claude/skills/imozuru" ]
+}
+
+@test "update: まだ入っていない skills の行は入れる" {
+  fake_npx; fake_claude
+  decl "imozuru skills MaryCache/imozuru"
+  run_es update
+  [ "$status" -eq 0 ]
+  grep -q 'skills add MaryCache/imozuru' "$LOG"
+}
+
+@test "宣言を読むループの標準入力を子のコマンドが食っても、残りの行を読む" {
+  fake_npx
+  cat >"$FAKE/herdr" <<'EOS'
+#!/bin/bash
+echo "herdr $*" >>"$LOG"
+cat >/dev/null
+printf -- '---\nname: herdr\n---\n'
+EOS
+  chmod +x "$FAKE/herdr"
+  decl "herdr herdr herdr" "imozuru skills MaryCache/imozuru"
+  run_es install
+  [ "$status" -eq 0 ]
+  grep -q 'skills add MaryCache/imozuru' "$LOG"
+}
+
+@test "rea: MCP の登録の作り直しに失敗したら、元の登録（環境変数を含む）を戻す" {
+  fake_npm 6.9.0; fake_claude
+  sed -i 's|"mcp add-json") |"mcp add-json") [ "$4" != "${RESTORE_JSON:-}" ] \&\& [ "${FAKE_ADD_FAIL:-}" = 1 ] \&\& exit 1; |' "$FAKE/claude"
+  echo '{"mcpServers":{"rea":{"type":"stdio","command":"npx","args":["-y","rea-agents@6.7.0","mcp"],"env":{"JAVA_HOME":"/j"}}}}' >"$HOME/.claude.json"
+  RESTORE_JSON="$(jq -c '.mcpServers.rea' "$HOME/.claude.json")"
+  export RESTORE_JSON
+  decl "reverse-engineer-anything rea rea-agents 6.9.0"
+  FAKE_ADD_FAIL=1 run_es install
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.mcpServers.rea.env.JAVA_HOME' "$HOME/.claude.json")" = /j ]
+  [ "$(jq -c '.mcpServers.rea.args' "$HOME/.claude.json")" = '["-y","rea-agents@6.7.0","mcp"]' ]
+}
+
+@test "XDG_STATE_HOME があれば skills CLI と同じく \$XDG_STATE_HOME/skills/.skill-lock.json を読む" {
+  fake_npx
+  export XDG_STATE_HOME="$T/state"
+  mkdir -p "$XDG_STATE_HOME/skills"
+  sed -i 's|"$HOME/.agents/.skill-lock.json"|"${XDG_STATE_HOME:-$HOME/.agents}/${XDG_STATE_HOME:+skills/}.skill-lock.json"|g' "$FAKE/npx"
+  echo '{"version":3,"skills":{}}' >"$XDG_STATE_HOME/skills/.skill-lock.json"
+  decl "imozuru skills MaryCache/imozuru"
+  bash "$SCRIPT" install >/dev/null 2>&1
+  : >"$LOG"
+  run_es install
+  [ "$status" -eq 0 ]
+  nogrep 'skills add' "$LOG"
+}
+
+@test "herdr: 書いた SKILL.md はほかの利用者も読める 644" {
+  fake_herdr
+  decl "herdr herdr herdr"
+  run_es install
+  [ "$(stat -c %a "$HOME/.agents/skills/herdr/SKILL.md")" = 644 ]
+}
+
+@test "update: rea の入れ直しに失敗したら宣言の版を書き換えない" {
+  fake_npm 6.10.1; fake_claude
+  decl "reverse-engineer-anything rea rea-agents 6.9.0"
+  bash "$SCRIPT" install >/dev/null 2>&1
+  sed -i 's|if \[ "\$1" = pack \]; then|if [ "$1" = pack ]; then [ "${FAKE_PACK_FAIL:-}" = 1 ] \&\& exit 1;|' "$FAKE/npm"
+  FAKE_PACK_FAIL=1 run_es update
+  [ "$status" -eq 1 ]
+  grep -qx 'reverse-engineer-anything rea rea-agents 6.9.0' "$EXTERNAL_SKILLS_FILE"
+}
+
+@test "check: 先の無いリンクで ~/.agents/skills も無いとき、入っているとみなさない" {
+  fake_npx
+  rmdir "$HOME/.agents/skills"
+  ln -s "$T/nowhere/x/imozuru" "$HOME/.claude/skills/imozuru"
+  decl "imozuru skills MaryCache/imozuru"
+  run_es install
+  [ "$status" -eq 0 ]
+  grep -q 'skills add MaryCache/imozuru' "$LOG"
+}

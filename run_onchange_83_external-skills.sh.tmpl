@@ -9,8 +9,7 @@ set -eu
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh"
 fi
-if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
+# brew 導入の herdr と claude を PATH に載せる
+{{ template "brew-env.sh" }}
 
 EXTERNAL_SKILLS_FILE="$HOME/.claude/external-skills.txt" "$HOME/.local/bin/external-skills" install
