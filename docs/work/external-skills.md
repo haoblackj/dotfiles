@@ -1,6 +1,6 @@
 ---
 title: 外から取ってくるスキルを claude-private から外し、Claude.ai から同期されたスキルを外す
-status: active
+status: waiting
 ---
 
 ## 目的
@@ -65,7 +65,7 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 
 ## いまの作業
 
-コードレビューの指摘を直し、PR を開く。
+PR #134 の取り込みを待っている。取り込まれたら移行（設計書の追補の「移行の順序」の 2 から 5）へ進む。
 
 ## 済んだこと
 
@@ -87,9 +87,10 @@ dotfiles の変更を PR にし、リーダーが main へ取り込んだ後に�
 
 ## リーダーに決めてほしいこと
 
-なし
+- PR #134 を main へ取り込むか。Claude の案: 取り込む（テストと使い捨ての HOME での確かめが通り、レビューの指摘も直した）。トレードオフ: 取り込むと、`settings.json` が本番の作業コピーへのリンクなので、Claude.ai からのスキルの同期がすぐ止まる（docx、pdf などの Anthropic のスキルも手元の Claude Code から消える）。答えで何が変わるか: 取り込まれれば、Claude が claude-private からの `git rm` と手元での入れ直しを進める。
 
 ## 参照
 
 - issue #90
+- PR #134
 - 設計書: `docs/superpowers/specs/2026-11-13-external-skills-design.md`（2026-11-28 の追補を含む）
