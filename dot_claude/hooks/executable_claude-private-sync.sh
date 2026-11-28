@@ -26,6 +26,14 @@ ensure_symlinks() {
       ln -s "${sk_src%/}" "$sk_dst"
     fi
   done
+  # claude-private の中を指して先が無いリンクを消す。claude-private からスキルを
+  # 外した（git rm した）とき、ほかの機械に残るリンクを片付けるため。
+  local link
+  for link in "$HOME"/.claude/skills/*; do
+    [ -L "$link" ] || continue
+    [ -e "$link" ] && continue
+    case "$(readlink "$link")" in "$ROOT"/*) rm -f "$link" ;; esac
+  done
   # per-project memory dirs present in the private repo
   local d proj link
   for d in "$ROOT"/memory/*/; do
@@ -43,6 +51,17 @@ ensure_symlinks() {
   done
 }
 
+# 取り込まないスキルの名前。外から取ってくるスキル（~/.claude/external-skills.txt に
+# 載ったもの。上流の手段で更新するので写さない。dotfiles#90）と、Claude Code が
+# Claude.ai から同期する synced（同期は settings.json の syncClaudeAiSkills で止めてある）。
+is_excluded_skill() {
+  case "$1" in
+    synced | .*) return 0 ;;
+  esac
+  [ -f "$HOME/.claude/external-skills.txt" ] || return 1
+  awk -v n="$1" '$1 !~ /^#/ && $1 == n { found = 1 } END { exit !found }' "$HOME/.claude/external-skills.txt"
+}
+
 migrate_new() {
   # Capture real (non-symlinked) skill dirs into the private repo.
   local sk name dest
@@ -53,6 +72,7 @@ migrate_new() {
     # .git and are managed publicly via .chezmoiexternal.toml, not the private repo.
     [ -d "${sk}.git" ] && continue
     name="$(basename "$sk")"
+    is_excluded_skill "$name" && continue
     dest="$ROOT/skills/$name"
     mkdir -p "$dest"
     cp -a "$sk". "$dest"/ 2>/dev/null || true

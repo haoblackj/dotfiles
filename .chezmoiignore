@@ -9,7 +9,6 @@ install.sh
 # クラウドセッション用の配布スクリプトとそのテスト。ホームへは配らない
 install-cloud.sh
 install-cloud.bats
-cloud-skills.txt
 # マシンごとのパスをローカルの data から読むテンプレートの試験。ホームへは配らない
 local-paths.bats
 docs
