@@ -74,4 +74,5 @@ report-skills を Claude 側の正本に一本化し、Codex の古い実体の�
 
 ## 参照
 
-- PR（このブランチ、作成後に足す）
+- PR #132（report-skills の symlink と、この記録）
+- PR #96（未マージの worktree の一つが持つブランチ。gh のフックが、データファイルを読むだけの python を GitHub API の呼び出しとして止める誤りの直し）
