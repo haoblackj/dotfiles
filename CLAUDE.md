@@ -29,6 +29,7 @@ dot_claude/                           — chezmoi source → ~/.claude/
   hooks/
     executable_claude-private-sync.sh — SessionStart/Stop: private repo同期
     executable_chezmoi-auto-apply.sh  — PostToolUse: dot_claude/ 編集時に自動apply
+dot_codex/skills/symlink_<名前>.tmpl   — ~/.codex/skills/<名前> を Claude 側の正本（claude-private/skills/<名前>）への symlink にし、Codex と共有する
 linked/claude/settings.json           — グローバルClaude Code設定の実体（Claude Code が直接書き戻す。README「ソースとターゲットの往復」）
 skills/<名前>/SKILL.md                — 公開の自作スキルの実体（.chezmoiignore でホームへは配らない）
 run_once_NN_*.sh.tmpl                 — 環境セットアップ（.claude/rules/run_once.md 参照）
