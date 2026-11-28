@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+
+# 外から取ってくるスキルを宣言ファイルどおりに入れる。宣言が変わったら走り直す。
+# 失敗した行があれば 1 で終わり、chezmoi が次の apply で走り直させる（|| true を付けない）。
+# external-skills.txt hash: {{ include "dot_claude/external-skills.txt" | sha256sum }}
+# external-skills hash: {{ include "dot_local/private_bin/executable_external-skills" | sha256sum }}
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  . "$HOME/.nvm/nvm.sh"
+fi
+# brew 導入の herdr と claude を PATH に載せる
+{{ template "brew-env.sh" }}
+
+EXTERNAL_SKILLS_FILE="$HOME/.claude/external-skills.txt" "$HOME/.local/bin/external-skills" install

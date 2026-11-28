@@ -78,3 +78,58 @@ teardown() {
     [ "$(printf '%s' "$stat_b2" | grep -c 'memory/proj/note.md')" = "1" ]
     [ "$(printf '%s' "$stat_b2" | grep -c 'palettes.json')" = "0" ]
 }
+
+# =========================================================================
+# C. 取り込まないスキルと、claude-private から外したスキルの残りのリンク
+# =========================================================================
+
+@test "C1. 宣言ファイルに載った名前の実体は取り込まない" {
+    H="$(setup_fake_home)"; R="$H/.local/share/claude-private"
+    printf '# c\nimozuru skills MaryCache/imozuru\n' > "$H/.claude/external-skills.txt"
+    mkdir -p "$H/.claude/skills/imozuru"
+    echo up > "$H/.claude/skills/imozuru/SKILL.md"
+    run_push "$H" >/dev/null
+    [ ! -L "$H/.claude/skills/imozuru" ]
+    [ -f "$H/.claude/skills/imozuru/SKILL.md" ]
+    [ ! -e "$R/skills/imozuru" ]
+}
+
+@test "C2. 宣言に無い新しい私的なスキルは今までどおり取り込む" {
+    H="$(setup_fake_home)"; R="$H/.local/share/claude-private"
+    printf 'imozuru skills MaryCache/imozuru\n' > "$H/.claude/external-skills.txt"
+    mkdir -p "$H/.claude/skills/mine"
+    echo mine > "$H/.claude/skills/mine/SKILL.md"
+    run_push "$H" >/dev/null
+    [ -L "$H/.claude/skills/mine" ]
+    [ -f "$R/skills/mine/SKILL.md" ]
+}
+
+@test "C3. Claude.ai から同期された synced は取り込まない" {
+    H="$(setup_fake_home)"; R="$H/.local/share/claude-private"
+    mkdir -p "$H/.claude/skills/synced/org_acct/pdf"
+    echo pdf > "$H/.claude/skills/synced/org_acct/pdf/SKILL.md"
+    run_push "$H" >/dev/null
+    [ ! -L "$H/.claude/skills/synced" ]
+    [ ! -e "$R/skills/synced" ]
+}
+
+@test "C4. ドットで始まる .trash は dotglob でも取り込まない" {
+    H="$(setup_fake_home)"; R="$H/.local/share/claude-private"
+    mkdir -p "$H/.claude/skills/.trash/x"
+    echo x > "$H/.claude/skills/.trash/x/manifest.json"
+    { HOME="$H" bash -O dotglob "$SCRIPT" push >/dev/null; } 2>/dev/null
+    [ ! -L "$H/.claude/skills/.trash" ]
+    [ ! -e "$R/skills/.trash" ]
+}
+
+@test "C5. claude-private の中を指して先が無いリンクを pull で消し、ほかのリンクは残す" {
+    H="$(setup_fake_home)"; R="$H/.local/share/claude-private"
+    ln -s "$R/skills/gone" "$H/.claude/skills/gone"
+    ln -s "../../.agents/skills/yomiyasu" "$H/.claude/skills/yomiyasu"
+    mkdir -p "$R/skills/kept"
+    echo k > "$R/skills/kept/SKILL.md"
+    HOME="$H" bash "$SCRIPT" pull
+    [ ! -L "$H/.claude/skills/gone" ]
+    [ -L "$H/.claude/skills/yomiyasu" ]
+    [ -L "$H/.claude/skills/kept" ]
+}

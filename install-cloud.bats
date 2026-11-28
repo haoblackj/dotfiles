@@ -15,6 +15,8 @@ setup() {
     mkdir -p "$SRC/linked/claude"
     cp -R "$BATS_TEST_DIRNAME/dot_claude" "$SRC/dot_claude"
     cp "$BATS_TEST_DIRNAME/linked/claude/settings.json" "$SRC/linked/claude/settings.json"
+    # 宣言の cloud の行は GitHub から clone するので、空にしてネットワークを使わせない
+    : >"$SRC/dot_claude/external-skills.txt"
     export DOTFILES_SRC="$SRC"
     # PATH 上の chezmoi を隠す（スクリプトは chezmoi が PATH にあると何もしない）。
     # 同じディレクトリの jq や python3 を残すため、ディレクトリごと外さずに
@@ -159,23 +161,24 @@ EOF
     diff -r "$SRC/skills/japanese-guard" "$HOME/.claude/skills/japanese-guard"
 }
 
-# cloud-skills.txt のテストに使う、サブディレクトリにスキルを持つ git リポジトリ。
-# 一時ディレクトリに作り、file:// で clone させる（ネットワークを使わない）。
+# 宣言ファイルの cloud の行のテストに使う、サブディレクトリにスキルを持つ git リポジトリ。
+# 一時ディレクトリに GitHub の owner/repo の形で作り、EXTERNAL_SKILLS_GITHUB で
+# file:// から clone させる（ネットワークを使わない）。引数: スキルを置くリポジトリ内の親
 make_subdir_skill_repo() {
-    UP="$BATS_TEST_TMPDIR/upstream"
-    mkdir -p "$UP/skills/demo/references"
-    echo '---' >"$UP/skills/demo/SKILL.md"
-    echo ref >"$UP/skills/demo/references/a.md"
+    export EXTERNAL_SKILLS_GITHUB="file://$BATS_TEST_TMPDIR/gh"
+    UP="$BATS_TEST_TMPDIR/gh/owner/repo.git"
+    mkdir -p "$UP/$1/demo/references"
+    echo '---' >"$UP/$1/demo/SKILL.md"
+    echo ref >"$UP/$1/demo/references/a.md"
     echo top >"$UP/README.md"
     git -C "$UP" init -q
     git -C "$UP" add -A
     git -C "$UP" -c user.name=t -c user.email=t@example.invalid commit -q -m init
 }
 
-@test "cloud-skills.txt のスキルをサブディレクトリだけ ~/.claude/skills へ写す" {
-    make_subdir_skill_repo
-    echo "# コメント" >"$SRC/cloud-skills.txt"
-    echo "demo file://$UP skills/demo" >>"$SRC/cloud-skills.txt"
+@test "宣言の skills で cloud の行のスキルを、サブディレクトリだけ ~/.claude/skills へ写す" {
+    make_subdir_skill_repo skills
+    printf '# コメント\ndemo skills owner/repo cloud\n' >"$SRC/dot_claude/external-skills.txt"
     run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
     [ "$status" -eq 0 ]
     diff -r "$UP/skills/demo" "$HOME/.claude/skills/demo"
@@ -183,12 +186,34 @@ make_subdir_skill_repo() {
     [ ! -e "$HOME/.claude/skills/demo/.git" ]
 }
 
-@test "本物の cloud-skills.txt の行はすべて「名前 URL パス」の形" {
-    run awk '!/^[[:space:]]*(#|$)/ && NF != 3' "$BATS_TEST_DIRNAME/cloud-skills.txt"
+@test "skills/ に無ければ .agents/skills/ のスキルを写す" {
+    make_subdir_skill_repo .agents/skills
+    echo "demo skills owner/repo cloud" >"$SRC/dot_claude/external-skills.txt"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
-    grep -q '^yomiyasu https://github.com/nanaism/yomiyasu.git skills/yomiyasu$' \
-        "$BATS_TEST_DIRNAME/cloud-skills.txt"
+    diff -r "$UP/.agents/skills/demo" "$HOME/.claude/skills/demo"
+}
+
+@test "cloud の無い行と、skills 以外の取り方の行は配らない" {
+    make_subdir_skill_repo skills
+    printf 'demo skills owner/repo\nherdr herdr herdr\nrea-x rea rea-agents 1.0.0\n' >"$SRC/dot_claude/external-skills.txt"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/skills/demo" ]
+    [ ! -e "$HOME/.claude/skills/herdr" ]
+    [[ "$output" != *"clone"* ]]
+}
+
+@test "取得元が owner/repo の形でない行は飛ばす" {
+    echo "demo skills ../evil cloud" >"$SRC/dot_claude/external-skills.txt"
+    run bash -c 'bash "$1" 2>&1' _ "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/skills/demo" ]
+    [[ "$output" == *"飛ばす"* ]]
+}
+
+@test "本物の宣言ファイルで yomiyasu をクラウドへ配る" {
+    grep -qx 'yomiyasu skills nanaism/yomiyasu cloud' "$BATS_TEST_DIRNAME/dot_claude/external-skills.txt"
 }
 
 @test "chezmoi が PATH にある環境では何もしない" {

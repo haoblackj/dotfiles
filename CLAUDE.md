@@ -14,6 +14,7 @@ haoblackj のdotfilesをchezmoiで管理するリポジトリ。Claude Code設�
 | `dot_claude/` (このrepo) | settings / hooks / keybindings |
 | リポジトリ直下の `skills/` (このrepo) | 公開の自作スキル。`dot_claude/skills/symlink_<名前>.tmpl` で `~/.claude/skills/<名前>` へ symlink する |
 | `.chezmoiexternal.toml` の git external | `book-to-skill`（公開・upstream追跡。著作権はupstream） |
+| `dot_claude/external-skills.txt`（宣言） | 外部のメンテナが作る公開スキル（`imozuru`、REA のスキルなど）。`~/.local/bin/external-skills` が skills CLI などの上流の手段で `~/.agents/skills/` へ入れる。claude-private に置かない |
 | `~/.local/share/claude-private/` | memory 全体 / 機密・自作改変スキル（書籍のスキル、`report-skills` など） |
 
 **非公開データ（memory内容・書籍スキル・自作改変したスキル）を `dot_claude/` に書いてはいけない。**
@@ -34,13 +35,15 @@ linked/claude/settings.json           — グローバルClaude Code設定の実
 skills/<名前>/SKILL.md                — 公開の自作スキルの実体（.chezmoiignore でホームへは配らない）
 run_once_NN_*.sh.tmpl                 — 環境セットアップ（.claude/rules/run_once.md 参照）
 install-cloud.sh                      — Claude Code on the web の Setup script 用。dot_claude/ の一部を ~/.claude/ へ写す（README「クラウドセッション」）
-cloud-skills.txt                      — install-cloud.sh がクラウドにだけ配る第三者の公開スキルの一覧（サブディレクトリを写す）
+dot_claude/external-skills.txt        — 外から取ってくるスキルの宣言（README「外から取ってくるスキル」）。cloud の行は install-cloud.sh がクラウドへも配る
+dot_local/private_bin/executable_external-skills — 宣言どおりに入れる（install）、最新へ上げる（update）
 dot_zshrc.tmpl / dot_gitconfig.tmpl
 .chezmoiexternal.toml                 — book-to-skill (公開external) + claude-private clone定義
 ```
 
 スキルの実体は `dot_claude/skills/` に実ディレクトリとして置かない（同期フックの `migrate_new` が claude-private へ吸い込む）。
 公開の自作スキルはリポジトリ直下の `skills/` に置き、`dot_claude/skills/` には symlink テンプレートだけを置く。
+外部のメンテナが作るスキルは `dot_claude/external-skills.txt` に宣言し、同期フックは宣言の名前と `synced`（Claude.ai から同期されたスキル。`syncClaudeAiSkills: false` で止めてある）を取り込まない。
 `book-to-skill` は git external で upstream から clone し、機密のものは private repo に置いて sync hook が `~/.claude/skills/` へ symlink する。
 開発の流れは README「公開の自作スキル」。
 

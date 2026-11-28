@@ -570,6 +570,7 @@
     "type": "command"
   },
   "switchModelsOnFlag": true,
+  "syncClaudeAiSkills": false,
   "tui": "fullscreen",
   "worktree": {
     "baseRef": "head"

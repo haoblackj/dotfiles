@@ -173,32 +173,37 @@ EOF
   done <<<"$targets"
 fi
 
-# 3b. cloud-skills.txt に挙げた第三者の公開スキル（リポジトリのサブディレクトリにあるもの）。
-#     clone して、指定のディレクトリに SKILL.md があるときだけ差し替える
-#     （clone の失敗や上流の配置の変化で既存を失わない）。
-list="$SRC/cloud-skills.txt"
+# 3b. 宣言ファイル dot_claude/external-skills.txt のうち、取り方が skills で追加の値が
+#     cloud の行（第三者の公開スキル）。GitHub の owner/repo を浅く clone し、
+#     skills/<名前>/、無ければ .agents/skills/<名前>/ に SKILL.md があるときだけ差し替える
+#     （clone の失敗や上流の配置の変化で既存を失わない）。手元では external-skills が入れる。
+GITHUB="${EXTERNAL_SKILLS_GITHUB:-https://github.com}"
+list="$SRC/dot_claude/external-skills.txt"
 if [ -f "$list" ]; then
-  while read -r name url path _; do
+  while read -r name how src extra _; do
     case "$name" in "" | "#"*) continue ;; esac
-    if [ -z "$url" ] || [ -z "$path" ]; then
-      log "cloud-skills.txt の行の形が違うので飛ばす: $name"
-      continue
-    fi
-    # 名前とパスで ~/.claude/skills の外や clone の外を指させない
-    if [[ "$name" == */* || "$name" == .* || "/$path/" == */../* ]]; then
-      log "cloud-skills.txt の名前かパスが不正なので飛ばす: $name $path"
+    [ "$how" = skills ] && [ "$extra" = cloud ] || continue
+    # 名前と取得元で ~/.claude/skills の外や GitHub の外を指させない
+    if [[ "$name" == */* || "$name" == .* || ! "$src" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ || "$src" == *..* ]]; then
+      log "external-skills.txt の名前か取得元が不正なので飛ばす: $name $src"
       continue
     fi
     staging=$(mktemp -d)
-    if ! git clone -q --depth 1 "$url" "$staging/repo" </dev/null; then
-      log "clone に失敗したので飛ばす: $url"
-    elif [ ! -f "$staging/repo/$path/SKILL.md" ]; then
-      log "SKILL.md が無いので飛ばす: $url の $path"
+    if ! git clone -q --depth 1 "$GITHUB/$src.git" "$staging/repo" </dev/null; then
+      log "clone に失敗したので飛ばす: $GITHUB/$src.git"
     else
-      mkdir -p "$HOME/.claude/skills"
-      rm -rf "${HOME:?}/.claude/skills/$name"
-      cp -R "$staging/repo/$path" "$HOME/.claude/skills/$name"
-      log "配置: ~/.claude/skills/$name（$url の $path）"
+      path=""
+      for p in "skills/$name" ".agents/skills/$name"; do
+        [ -f "$staging/repo/$p/SKILL.md" ] && { path="$p"; break; }
+      done
+      if [ -z "$path" ]; then
+        log "SKILL.md が無いので飛ばす: $src の skills/$name と .agents/skills/$name"
+      else
+        mkdir -p "$HOME/.claude/skills"
+        rm -rf "${HOME:?}/.claude/skills/$name"
+        cp -R "$staging/repo/$path" "$HOME/.claude/skills/$name"
+        log "配置: ~/.claude/skills/$name（$src の $path）"
+      fi
     fi
     rm -rf "$staging"
   done <"$list"

@@ -140,3 +140,60 @@ dotfiles の `README.md` の「公開と非公開の境界」と `CLAUDE.md` の
 - `skills` の取り方で、skills CLI に渡すエージェントの指定（`-a`）。今の記録（`lastSelectedAgents`）は 14 のエージェントで、Codex への委譲もあるので、少なくとも `claude-code` と `codex` を含める。
 - `rea` のスキルの入れ方。公式の `npx rea-agents@<版> setup --skill-client claude_code -y` が非対話で通るならそれを使う（実体は `~/.claude/skills/reverse-engineer-anything` に直接置かれ、同期フックの除外で守られる）。通らなければ、パッケージの `skills/reverse-engineer-anything` を `~/.agents/skills/` へ写してリンクを張る。公式の `setup` の MCP の登録の部分（`--client`）は使わない。MCP の登録を npx のキャッシュの中の絶対パスへ書き換え、キャッシュが消えると起動しなくなるため（2026-11-13 に dry-run で確かめた）。
 - テスト。`external-skills` と同期フックの変更に bats を書き、`npx`、`herdr`、`claude`、`npm` は偽物のコマンドで置き換える。偽物の出力の形は本物に合わせて確かめる。
+
+## 追補（2026-11-28）
+
+実装の前に、2026-11-24 に claude-private へ加わった外部のスキルと、Claude.ai から同期されたスキルの扱いを足した。
+判断の理由は作業記録 `docs/work/external-skills.md` にある。
+
+### 宣言の中身
+
+```
+yomiyasu skills nanaism/yomiyasu cloud
+imozuru skills MaryCache/imozuru
+tsuzuri skills MaryCache/tsuzuri
+referent-first skills u-ichi/agent-plugins
+herdr herdr herdr
+reverse-engineer-anything rea rea-agents 6.9.0
+```
+
+- `referent-first` はプラグインでなく skills CLI で入れる（skills CLI は上流の `plugins/referent-first/skills/referent-first/` を見つける）。
+- skills CLI へ渡すエージェントは `claude-code` と `codex`。
+
+### `external-skills install` の置き場の扱い
+
+`~/.claude/skills/<名前>` が既にあるときの扱いを次のとおりにする。
+claude-private の写しを上書きして中を書き換えないため。
+
+| `~/.claude/skills/<名前>` の状態 | 扱い |
+|---|---|
+| 無い | 入れる |
+| 先の無いリンク | リンクを外して入れる |
+| `~/.agents/skills/<名前>` へのリンク | 入っているとみなす（`skills` は skills CLI の記録の取得元が宣言と同じとき、`rea` は記録した版が宣言と同じとき）。違えば入れ直す |
+| それ以外（実体のディレクトリ、claude-private などへの生きたリンク） | 触らずに失敗として一覧に出す |
+
+`rea` の取り方は、`npm pack rea-agents@<版>` で取ったパッケージの `skills/<名前>` を `~/.agents/skills/<名前>` へ写し、`~/.claude/skills/<名前>` を `../../.agents/skills/<名前>` へのリンクにする。
+入れた版は `~/.local/state/external-skills/rea-<名前>.version` に書く（スキルの中にファイルを足さない）。
+
+### Claude.ai から同期されたスキル
+
+- `linked/claude/settings.json` に `"syncClaudeAiSkills": false` を足し、Claude Code の同期を止める。
+- 同期フックの `migrate_new` は、名前が `synced` のものと、ドットで始まるもの（`.trash` など）を取り込まない。
+- 移行で claude-private の `skills/synced` を `git rm` し、`~/.claude/skills/synced` のリンクを外す。設定が手元に届いた後に行う（先に外すと、動いているセッションの同期が実体のディレクトリを作り直す）。
+
+### 移行の順序（設計書の「移行」を置き換える）
+
+1. dotfiles の PR を main へ取り込み、本番の作業コピーを main へ進める（`settings.json` は本番の作業コピーへのリンクなので、ここで同期が止まる）。
+2. claude-private から `skills/imozuru`、`skills/tsuzuri`、`skills/referent-first`、`skills/reverse-engineer-anything`、`skills/synced` を名指しで `git rm` してコミットし、push する。手元のリンクは先の無いリンクになる。
+3. `~/.claude/skills/synced` のリンクを外す。
+4. `chezmoi apply` で宣言とスクリプトを配る。`run_onchange_83` の `external-skills install` が先の無いリンクを外して入れ直す。
+5. `npx skills check -g`、`claude mcp get rea`、`~/.claude/skills/<名前>` のリンク先、imozuru の常駐のページの応答を確かめる。
+
+### 実装の手順
+
+1. `dot_local/private_bin/external-skills.bats` に偽の `npx`、`npm`、`herdr`、`claude` でテストを書き、`dot_local/private_bin/executable_external-skills` と `dot_claude/external-skills.txt` を作る。
+2. `run_onchange_83_external-skills.sh.tmpl` を足し、`run_once_83_herdr-skill.sh.tmpl` を消す。
+3. 同期フックの `migrate_new` と `ensure_symlinks` を直し、`claude-private-sync.bats` にテストを足す。
+4. `install-cloud.sh` を宣言ファイルを読む形にし、`cloud-skills.txt` を消し、`install-cloud.bats` を直す。
+5. `settings.json` に `syncClaudeAiSkills` を足す。
+6. `README.md`、`CLAUDE.md`、`.chezmoiignore` を直す。

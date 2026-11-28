@@ -1,0 +1,19 @@
+# 外から取ってくるスキルの宣言。~/.local/bin/external-skills が読んで入れ、最新へ上げる。
+# ここに載せたスキルは claude-private に置かない（同期フックが取り込まない）。
+# 設計: docs/superpowers/specs/2026-11-13-external-skills-design.md
+#
+# 書式: <名前> <取り方> <取得元> [<追加の値>]   # で始まる行はコメント
+#   skills  GitHub の owner/repo から skills CLI で入れる。追加の値 cloud でクラウドセッションへも配る（install-cloud.sh）
+#   herdr   入っている herdr 本体の `herdr --skill` の出力を正本にする
+#   rea     npm の rea-agents の指定の版からスキルを写し、MCP の登録 rea を同じ版にする
+
+# AI が書いた日本語の推敲。MIT
+yomiyasu skills nanaism/yomiyasu cloud
+# 芋づる式の調べもの。imozuru-serve.service が ~/.claude/skills/imozuru/scripts/dashboard.py を使う
+imozuru skills MaryCache/imozuru
+# 執筆意図つきの一文ずつの執筆。利用者の校正辞書はスキルの外（~/.config/tsuzuri/words.tsv）
+tsuzuri skills MaryCache/tsuzuri
+# 名前より先に実体を決める。output style「エクシア（能天使）」が名指しする
+referent-first skills u-ichi/agent-plugins
+herdr herdr herdr
+reverse-engineer-anything rea rea-agents 6.9.0

@@ -133,7 +133,8 @@ D ドライブへ退避してあるトランスクリプトは、手順 4 の `c
 | `run_once_70_editors-containers` | neovim（AppImage） |
 | `run_once_80_cli-tools` | **brew の Brewfile。CLI ツールの一覧はここを見る**（claude-code は `cask "claude-code@latest"`） |
 | `run_once_82_npm-global` | nvm の LTS と npm グローバル（ccstatusline は pin、yarn、commitizen） |
-| `run_once_83` / `84` / `86` | herdr の agent skill、プラグイン、Claude Code 統合 |
+| `run_onchange_83_external-skills` | 外から取ってくるスキル（`dot_claude/external-skills.txt`。herdr の agent skill を含む）を入れる。宣言かスクリプトを変えたら再実行 |
+| `run_once_84` / `86` | herdr のプラグイン、Claude Code 統合 |
 | `run_once_85_gh-setup` | `gh auth login` と gh 拡張 |
 | `run_onchange_after_90` | herdr の umask override を変えたら service を restart |
 | `run_onchange_after_87_codexbar-serve` | `codexbar-serve`（利用枠の JSON を返す常駐。`usage-route.sh` が読む）の enable と restart、`codexbar-serve-refresh.timer` の enable。unit を変えたら再実行 |
@@ -194,6 +195,18 @@ Windows 側の環境構築手順（scoop 本体や chezmoi の導入）は `haob
 `dot_claude/` に置くのは settings / hooks / keybindings / CLAUDE.md / rules / output-styles / agents だけ。
 memory と機密スキル（自作改変分を含む）は private repo `claude-private` に置き、`~/.local/share/claude-private` へ clone したものを hook が `~/.claude/` へ symlink する。
 `book-to-skill` だけは公開スキルなので git external で upstream から直接 clone する。
+外部のメンテナが作るほかの公開スキルは、下の「外から取ってくるスキル」の宣言で上流から入れ、claude-private に置かない。
+
+#### 外から取ってくるスキル
+
+上流のリポジトリや npm のパッケージから入れるスキルは、`dot_claude/external-skills.txt`（配置先は `~/.claude/external-skills.txt`）に 1 行ずつ「名前 取り方 取得元 [追加の値]」で宣言する（dotfiles#90、設計は `docs/superpowers/specs/2026-11-13-external-skills-design.md`）。
+取り方は `skills`（GitHub の owner/repo から skills CLI で `claude-code` と `codex` へ入れる）、`herdr`（入っている本体の `herdr --skill` の出力を正本にする）、`rea`（npm の `rea-agents` の指定の版からスキルを写し、MCP の登録 `rea` を同じ版にする）の三つ。
+実体は `~/.agents/skills/<名前>` に置き、`~/.claude/skills/<名前>` はそこへのリンクになる。
+
+- `run_onchange_83_external-skills.sh.tmpl` が、宣言かスクリプトが変わった apply で `external-skills install` を走らせる。`~/.claude/skills/<名前>` に `~/.agents` 以外の物（実体のディレクトリや claude-private への生きたリンク）があれば触らずに失敗にするので、外してから apply し直す。
+- 最新へ上げるときは `external-skills update` を打つ。プラグインの目録と入っている全プラグインも更新する。`rea` の版を上げたときは chezmoi のソースの宣言を書き換えるので、コミットする。
+- 同期フックの `migrate_new` は宣言の名前を取り込まない。`ensure_symlinks` は claude-private の中を指して先の無いリンクを消すので、claude-private からスキルを外すと、ほかの機械のリンクも次のセッションの開始で消える。
+- Claude.ai から同期されるスキル（`~/.claude/skills/synced/`）は、`settings.json` の `syncClaudeAiSkills: false` で止めてある。同期フックは `synced` とドットで始まる名前（`.trash`）も取り込まない。
 
 #### 公開の自作スキル
 
@@ -458,7 +471,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 | settings.json の `outputStyle` / `language` / `spinnerVerbs` | 配る | 既存の `~/.claude/settings.json` があればキー単位でマージ |
 | settings.json の `effortLevel` | 配らない（手元でも持たない） | ユーザー設定の最上位の `effortLevel` は Opus 5.5 以降のモデルで無視される（公式の settings reference）。モデルの既定値（Opus 5.5 / Sonnet 5.5 は `medium`）に任せる |
 | `.chezmoiexternal.toml` のうち `.claude/` 配下の git-repo external（`book-to-skill`） | 配る | 公開リポジトリなので認証なしで clone できる |
-| `cloud-skills.txt` に挙げた第三者の公開スキル（`yomiyasu`） | 配る（クラウドだけ） | 既定のブランチの最新を浅く clone し、挙げたサブディレクトリ（`SKILL.md` を持つもの）を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` がリポジトリの直下に無く、git-repo の external では形が合わないスキルのため。手元へは配らない |
+| `dot_claude/external-skills.txt` の取り方が `skills` で追加の値が `cloud` の行（`yomiyasu`） | 配る | GitHub の owner/repo の既定のブランチの最新を浅く clone し、`skills/<名前>/`（無ければ `.agents/skills/<名前>/`）を `~/.claude/skills/<名前>/` へ写す。クラウドには skills CLI の記録が要らないので写しで足りる |
 | リポジトリ直下の `skills/<名前>/`（公開の自作スキル） | 配る | 実体を `~/.claude/skills/<名前>/` へ写す。`SKILL.md` を持たないディレクトリは写さない。写したスキルがクラウドのセッションのスキル一覧に出ることは、`research-design` で確かめた（dotfiles#48） |
 | リポジトリ直下の `skills/bg-progress/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドでは背景で長いダウンロードや推論を回すことがほぼ無く、帯を出す入力欄も手元の端末とは違う |
 | リポジトリ直下の `skills/issue-link/`（Mod） | 配らない | `SKILL.md` を持たないので `install-cloud.sh` が写さない。クラウドの画面は Herdr の端末ではなく、`FORCE_HYPERLINK` の前提も違う |
@@ -475,7 +488,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 - `dot_claude/CLAUDE.md` に手元専用の道具（chezmoi / herdr / codex / memory など）を前提にした節を足したら、冒頭の「クラウドセッションでの読み替え」節にも足す。
 - `.chezmoiexternal.toml` で `.claude/` 配下に足した `type = "git-repo"` の external と、`.claude/hooks/` 配下に足した `type = "file"` の external は自動で配られる（`archive` とそれ以外の `file` は飛ばし、`clone.args` などのオプションは読まない）。
 - クラウドへも配る hook を足すときは、本体を `.claude/hooks/` 配下の file external にし、command を `install-cloud.sh` の `CLOUD_HOOK_COMMANDS` に足す（今は `hooks.Stop` だけを扱う）。非公開のものを `.claude/` 配下の external にしない（認証なしの clone が失敗するうえ、境界を越える）。
-- クラウドにだけ入れたい第三者の公開スキルは、`cloud-skills.txt` に「名前 URL リポジトリ内のパス」の 1 行を足す。clone の失敗やパスに `SKILL.md` が無いときは、既存のものを残して飛ばす。
+- クラウドへも配りたい第三者の公開スキルは、`dot_claude/external-skills.txt` の `skills` の行の末尾に `cloud` を付ける。clone の失敗や `SKILL.md` が見つからないときは、既存のものを残して飛ばす。
 - `skills/` に足したスキルは、`install-cloud.sh` が自動で写す。非公開のスキルを `skills/` に置かない（公開リポジトリなので境界を越える）。
 - `skills/` に足した Mod（`SKILL.md` が無く `.claude-plugin/plugin.json` があるもの）は写さない。クラウドへも配るなら `install-cloud.sh` の `CLOUD_MODS` に名前を足し、この表と `install-cloud.bats` を合わせる。
 - 反映の遅れ: Setup script の結果はスナップショットとしてキャッシュされ、作り直されるのは約 7 日ごとか Setup script を書き換えたとき。dotfiles の変更をすぐ届けたいときは、Setup script のコメント（例: `# rev 2026-09-30`）を書き換える。
@@ -489,7 +502,7 @@ chezmoi は使わない（`.chezmoi.toml.tmpl` が powershell か対話を要し
 
 ## herdr
 
-`run_once_80`（本体）、`run_once_83`（agent skill）、`run_once_84`（プラグイン: reviewr、herdr-plus、command-palette、equalize-splits、file-viewer、hunk、ローカルの open-project）、`run_once_86`（Claude Code 統合 hook）で自動導入される。
+`run_once_80`（本体）、`run_onchange_83_external-skills`（agent skill。本体の `herdr --skill` の出力を書く）、`run_once_84`（プラグイン: reviewr、herdr-plus、command-palette、equalize-splits、file-viewer、hunk、ローカルの open-project）、`run_once_86`（Claude Code 統合 hook）で自動導入される。
 キーバインドは `dot_config/herdr/config.toml` の `[[keys.command]]`（`prefix+a` でコマンドパレット、`prefix+s` / `prefix+d` で分割して Claude Code 起動など）。
 
 ローカルの `open-github`（`prefix+g` でブランチ名の Issue と PR を開く）は撤去し、Mod の `issue-link` に置き換えた。
